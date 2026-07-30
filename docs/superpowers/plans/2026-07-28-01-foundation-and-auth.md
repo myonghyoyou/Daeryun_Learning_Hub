@@ -385,7 +385,7 @@ CREATE TABLE IF NOT EXISTS attempt_blank_answers (
 CREATE TABLE IF NOT EXISTS excel_upload_logs (
     id BIGSERIAL PRIMARY KEY,
     uploaded_by BIGINT NOT NULL REFERENCES users(id),
-    department_id BIGINT NOT NULL REFERENCES departments(id),
+    department_id BIGINT REFERENCES departments(id), -- nullable: 계정 엑셀 업로드(Plan 2)는 총괄관리자가 여러 부서를 한 파일에 섞어 등록할 수 있어 단일 부서로 강제하지 않는다
     file_name VARCHAR(255) NOT NULL,
     total_rows INT NOT NULL,
     success_rows INT NOT NULL,
