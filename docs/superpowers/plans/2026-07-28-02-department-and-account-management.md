@@ -904,15 +904,14 @@ git commit -m "feat: add user account CRUD API with company email delivery"
 - Consumes: Plan 1 Task 2의 `excel_upload_logs` 테이블
 - Produces: `ExcelUploadLogDao.insert(ExcelUploadLog)`, `ExcelUploadLogDao.findAll(UploadTargetType, Long departmentId)`. Task 4(계정 업로드), Plan 3(문제 업로드)이 공유해서 사용한다.
 
-- [ ] **Step 1: schema.sql에 컬럼 추가 및 department_id nullable 전환**
+- [ ] **Step 1: schema.sql에 target_type 컬럼 추가**
 
 `backend/src/main/resources/schema.sql` 파일 맨 끝에 추가:
 ```sql
 ALTER TABLE excel_upload_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) NOT NULL DEFAULT 'PROBLEM'
     CHECK (target_type IN ('ACCOUNT', 'PROBLEM'));
-ALTER TABLE excel_upload_logs ALTER COLUMN department_id DROP NOT NULL;
 ```
-(계정 업로드는 총괄관리자가 여러 부서를 대상으로 수행할 수 있어 `department_id`를 단일 값으로 강제하지 않는다.)
+(`department_id`는 Plan 1 Task 2의 `schema.sql`에서 이미 nullable로 정의되어 있으므로 별도 `ALTER COLUMN`이 필요 없다 — 계정 업로드는 총괄관리자가 여러 부서를 한 파일에 섞어 등록할 수 있어 단일 부서로 강제하지 않기 때문이다. 여기서는 `target_type` 컬럼만 추가한다.)
 
 - [ ] **Step 2: 도메인/Dao/Mapper 작성**
 
@@ -1591,6 +1590,7 @@ export default function DepartmentListPage() {
         ],
       },
 ```
+> 이 index 리다이렉트는 임시 값이다. Plan 5 Task 5가 관리자 대시보드 화면을 추가하면서 `index`의 대상을 `/admin/departments`에서 `/admin/dashboard`로 교체한다. `/admin/departments`는 총괄 관리자 전용 API이므로, 이 임시 상태에서 부서 관리자가 PC로 로그인하면 403을 만나게 된다 — Plan 5까지 마쳐야 이 문제가 해소된다.
 파일 상단 import를 교체:
 ```javascript
 import AdminLayout from "@/pages/admin/AdminLayout.jsx";
