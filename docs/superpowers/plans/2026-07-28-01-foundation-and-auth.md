@@ -8,6 +8,15 @@
 
 **Tech Stack:** Spring Boot 2.7(Java 8) · MyBatis 2.2.2 · PostgreSQL · Apache POI(이후 Plan에서 사용) · spring-security-crypto(BCrypt) · spring-boot-starter-mail · Lombok / React 19 · Vite · Tailwind CSS 4(`@tailwindcss/vite`) · react-router-dom 7 · Zustand · react-toastify
 
+## 구현 진행 상황 (2026-07-31 기준)
+
+- **완료:** Task 1(Gradle+Spring Boot 골격), Task 2(DB 스키마 12개 테이블), Task 3(공통 응답/에러 처리 + CORS). 각 Task는 subagent-driven-development 방식(구현 서브에이전트 → 별도 리뷰어 검증)으로 진행되었고 전부 커밋 완료.
+- **다음 시작점:** Task 3-A(DB 감사 로그 저장 인프라)부터 이어서 진행. 이 파일의 `- [x]` 체크박스가 완료된 Step, `- [ ]`가 남은 Step이다.
+- **작업 브랜치:** `worktree-plan1-foundation-auth` (git worktree). 이 브랜치의 커밋 로그가 실제 코드 산출물이다. `superpowers:subagent-driven-development`로 재개할 경우 `.superpowers/sdd/2026-07-28-01-foundation-and-auth/progress.md`(git-ignored 워크스페이스 ledger)를 먼저 확인할 것 — 단, 그 ledger는 커밋되지 않으므로 다른 환경에서 새로 받으면 존재하지 않는다. 이 섹션과 git 커밋 로그가 진짜 진실의 원천이다.
+- **DB 준비 (다른 환경에서 이어서 할 때):** 저장소 루트의 `docker-compose.yml`로 PostgreSQL을 띄우는 것을 권장한다 — `docker compose up -d`. 컨테이너는 호스트 포트 `5434`(로컬에 이미 설치된 Postgres의 기본 5432, `trend_one`의 Docker Postgres가 쓰는 5433과 겹치지 않도록 선택)에 `probank`/`probank_dev`(비밀번호 `probank_dev`) 계정과 DB를 자동 생성한다. 백엔드 실행 시 `DB_URL=jdbc:postgresql://localhost:5434/probank_dev` 환경변수로 이 컨테이너를 가리키면 된다(스키마는 앱이 `spring.sql.init.mode=always`로 기동 시 자동 적용하므로 별도 초기화 스크립트가 필요 없다). 로컬에 이미 5432로 Postgres를 설치해 쓰는 경우 Docker 없이 `docker-compose.yml`의 기본값과 동일한 계정(`probank`/`probank_dev`, DB `probank_dev`)만 직접 만들어도 된다 — 이 경우 `DB_URL` 재정의 없이 `application.yml` 기본값(`localhost:5432`)이 그대로 맞는다.
+- **환경변수 유의:** Java(Temurin 8)·Gradle 관련 `JAVA_HOME`/`PATH`는 이 세션에서 사용한 셸이 세션 중간의 영구 환경변수 변경을 자동 반영하지 않는 문제가 있었다 — 다른 환경/새 셸에서는 보통 정상 동작하지만, 안 될 경우 매 gradle 명령 앞에 `export JAVA_HOME=<jdk8-path>; export PATH="$JAVA_HOME/bin:$PATH"`를 직접 붙이면 된다.
+- **보안 유의:** Task 2 진행 중 한 구현 서브에이전트가 DB 인증 실패를 진단하다가 슈퍼유저 비밀번호를 추측 시도한 사고가 있었다(상세는 위 ledger 참고, 실제 시스템 변경은 없었음). 향후 이 Plan을 재개하는 누구든 DB 접속 문제가 나면 자격증명을 추측/무작위 대입하지 말고 사람에게 확인할 것.
+
 ## Global Constraints
 
 (PRD `docs/PRD.md` 기준, 모든 Task에 암묵적으로 적용됨)
@@ -120,7 +129,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 - Consumes: (없음 — 최초 Task)
 - Produces: 실행 가능한 Spring Boot 애플리케이션 컨텍스트. 이후 모든 Task는 `com.daeryun.probank` 패키지 하위에 클래스를 추가한다.
 
-- [ ] **Step 1: 디렉터리와 Gradle 파일 작성**
+- [x] **Step 1: 디렉터리와 Gradle 파일 작성**
 
 `backend/settings.gradle`:
 ```gradle
@@ -251,7 +260,7 @@ build/
 *.iml
 ```
 
-- [ ] **Step 2: Gradle Wrapper 생성**
+- [x] **Step 2: Gradle Wrapper 생성**
 
 Run (로컬에 Gradle이 설치되어 있어야 함):
 ```bash
@@ -259,7 +268,7 @@ cd backend && gradle wrapper --gradle-version 7.5
 ```
 Expected: `backend/gradlew`, `backend/gradlew.bat`, `backend/gradle/wrapper/` 생성됨
 
-- [ ] **Step 3: 컨텍스트 로드 스모크 테스트 작성**
+- [x] **Step 3: 컨텍스트 로드 스모크 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/ProbankApplicationTests.java`:
 ```java
@@ -277,12 +286,12 @@ class ProbankApplicationTests {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행 (사전 준비의 DB가 떠 있어야 함)**
+- [x] **Step 4: 테스트 실행 (사전 준비의 DB가 떠 있어야 함)**
 
 Run: `cd backend && ./gradlew test --tests ProbankApplicationTests`
 Expected: `BUILD SUCCESSFUL`, 1 test 통과 (DB 연결 실패 시 사전 준비 섹션의 DB 생성 여부 확인)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend
@@ -300,7 +309,7 @@ git commit -m "chore: bootstrap Spring Boot backend project"
 - Consumes: Task 1의 `spring.sql.init.mode=always` 설정 (앱 기동 시 자동 실행됨)
 - Produces: `departments`, `users`, `problems`, `problem_choices`, `problem_answers`, `problem_blanks`, `attempts`, `attempt_blank_answers`, `excel_upload_logs`, `tags`, `problem_tags`, `audit_logs` 12개 테이블. 이후 모든 Dao/Mapper Task가 이 스키마를 전제로 한다.
 
-- [ ] **Step 1: 전체 테이블 DDL 작성**
+- [x] **Step 1: 전체 테이블 DDL 작성**
 
 `backend/src/main/resources/schema.sql`:
 ```sql
@@ -417,7 +426,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 ```
 
-- [ ] **Step 2: 앱 기동으로 스키마 반영 확인**
+- [x] **Step 2: 앱 기동으로 스키마 반영 확인**
 
 Run: `cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'` 실행 후 Ctrl+C로 종료, 이어서:
 ```bash
@@ -425,7 +434,7 @@ psql -U probank -d probank_dev -c "\dt"
 ```
 Expected: 12개 테이블 목록 출력
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/src/main/resources/schema.sql
@@ -449,7 +458,7 @@ git commit -m "feat: add initial database schema"
 - Consumes: (없음)
 - Produces: `ResponseDto.ok()` / `ResponseDto.ok(data)` / `ResponseDto.ok(code, message)`, `ErrorCode` enum(`getCode()`, `getMessage()`), `BizException(ErrorCode)` / `BizException(ErrorCode, String)`. 이후 모든 컨트롤러/서비스 Task가 이 클래스들을 사용한다.
 
-- [ ] **Step 1: ResponseDto 작성**
+- [x] **Step 1: ResponseDto 작성**
 
 `backend/src/main/java/com/daeryun/probank/common/ResponseDto.java`:
 ```java
@@ -486,7 +495,7 @@ public class ResponseDto<T> {
 }
 ```
 
-- [ ] **Step 2: ErrorCode 작성**
+- [x] **Step 2: ErrorCode 작성**
 
 `backend/src/main/java/com/daeryun/probank/common/ErrorCode.java`:
 ```java
@@ -516,7 +525,7 @@ public enum ErrorCode {
 }
 ```
 
-- [ ] **Step 3: ErrorResponse, BizException, GlobalExceptionHandler 작성**
+- [x] **Step 3: ErrorResponse, BizException, GlobalExceptionHandler 작성**
 
 `backend/src/main/java/com/daeryun/probank/common/ErrorResponse.java`:
 ```java
@@ -691,7 +700,7 @@ public class CorsConfig implements WebMvcConfigurer {
 }
 ```
 
-- [ ] **Step 4: BizException → ResponseDto 변환 단위 테스트 작성**
+- [x] **Step 4: BizException → ResponseDto 변환 단위 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/exception/GlobalExceptionHandlerTest.java`:
 ```java
@@ -720,12 +729,12 @@ class GlobalExceptionHandlerTest {
 }
 ```
 
-- [ ] **Step 5: 테스트 실행**
+- [x] **Step 5: 테스트 실행**
 
 Run: `cd backend && ./gradlew test --tests GlobalExceptionHandlerTest`
 Expected: `BUILD SUCCESSFUL`, 1 test 통과
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/common backend/src/main/java/com/daeryun/probank/exception backend/src/main/java/com/daeryun/probank/config backend/src/test
