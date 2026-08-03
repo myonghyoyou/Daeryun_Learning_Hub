@@ -1,6 +1,7 @@
 package com.daeryun.probank.controller;
 
 import com.daeryun.probank.common.ResponseDto;
+import com.daeryun.probank.dto.auth.ChangePasswordRequest;
 import com.daeryun.probank.dto.auth.LoginRequest;
 import com.daeryun.probank.service.AuthService;
 import org.springframework.http.ResponseEntity;
@@ -33,5 +34,12 @@ public class AuthController {
     @GetMapping("/session")
     public ResponseEntity<ResponseDto<?>> getSession(HttpServletRequest request) {
         return ResponseEntity.ok(ResponseDto.ok(authService.getSessionStatus(request)));
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ResponseDto<?>> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest,
+                                                           HttpServletRequest request) {
+        authService.changePassword(changePasswordRequest.getNewPassword(), request);
+        return ResponseEntity.ok(ResponseDto.ok());
     }
 }

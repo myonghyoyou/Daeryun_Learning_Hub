@@ -12,4 +12,6 @@ public interface AuthService {
     void logout(HttpServletRequest request);
 
     SessionStatusResponse getSessionStatus(HttpServletRequest request);
+
+    void changePassword(String newPassword, HttpServletRequest request);
 }

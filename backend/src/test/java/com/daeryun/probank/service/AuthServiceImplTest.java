@@ -222,4 +222,31 @@ class AuthServiceImplTest {
 
         assertNull(request.getSession(false));
     }
+
+    @Test
+    void changePassword_updatesHashAndSessionFlag() {
+        User user = activeUser("correct-password");
+        user.setMustChangePassword(true);
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        authService.changePassword("new-password-123", request);
+
+        Mockito.verify(userDao).updatePassword(Mockito.eq(1L), Mockito.anyString());
+        AuthUser sessionUser = (AuthUser) request.getSession().getAttribute(SessionKeys.LOGIN_USER);
+        assertFalse(sessionUser.isMustChangePassword());
+    }
+
+    @Test
+    void changePassword_tooShort_rejectsBeforeUpdating() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession(true);
+
+        assertThrows(BizException.class, () -> authService.changePassword("short", request));
+        Mockito.verify(userDao, Mockito.never()).updatePassword(Mockito.anyLong(), Mockito.anyString());
+    }
 }

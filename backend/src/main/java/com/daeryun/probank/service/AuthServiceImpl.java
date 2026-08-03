@@ -21,6 +21,8 @@ import java.time.LocalDateTime;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+    private static final int MIN_PASSWORD_LENGTH = 8;
+
     private final UserDao userDao;
     private final PasswordEncoder passwordEncoder;
     private final int maxFailedAttempts;
@@ -85,6 +87,25 @@ public class AuthServiceImpl implements AuthService {
         return new SessionStatusResponse(
                 true, authUser.getEmployeeNo(), authUser.getName(), authUser.getRole(),
                 authUser.getDepartmentId(), authUser.isMustChangePassword());
+    }
+
+    @Override
+    public void changePassword(String newPassword, HttpServletRequest request) {
+        if (isBlank(newPassword) || newPassword.length() < MIN_PASSWORD_LENGTH) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "비밀번호는 8자 이상이어야 합니다.");
+        }
+        HttpSession session = request.getSession(false);
+        AuthUser current = session == null ? null : (AuthUser) session.getAttribute(SessionKeys.LOGIN_USER);
+        if (current == null) {
+            throw new BizException(ErrorCode.EMPTY_SESSION);
+        }
+
+        userDao.updatePassword(current.getUserId(), passwordEncoder.encode(newPassword));
+
+        AuthUser updated = new AuthUser(
+                current.getUserId(), current.getEmployeeNo(), current.getName(), current.getRole(),
+                current.getDepartmentId(), false);
+        session.setAttribute(SessionKeys.LOGIN_USER, updated);
     }
 
     private void handleFailedAttempt(User user) {
