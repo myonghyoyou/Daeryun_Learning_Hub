@@ -3,6 +3,8 @@ package com.daeryun.probank.exception;
 import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.common.ErrorResponse;
 import com.daeryun.probank.common.ResponseDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -22,6 +24,8 @@ import java.util.stream.Collectors;
 @ControllerAdvice
 @ResponseBody
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BizException.class)
     public ResponseEntity<ResponseDto<?>> handleBizException(BizException exception) {
@@ -50,8 +54,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.ok(ResponseDto.ok(ErrorCode.FILE_REQUIRED.getCode(), "파일을 업로드할 수 없습니다."));
     }
 
+    /**
+     * 예상하지 못한 예외를 처리한다. 응답(HTTP 상태/바디)은 이전과 동일하게 유지한다.
+     * 프런트엔드가 resultCode 로 분기하고 있어 응답 형태를 바꾸는 것은 별도 논의 대상이다.
+     * 다만 이전에는 스택 트레이스가 어디에도 남지 않아 장애가 조용히 사라졌으므로,
+     * 여기서 ERROR 레벨로 스택 트레이스를 남긴다.
+     */
     @ExceptionHandler(Exception.class)
-    public ErrorResponse handleUnexpectedException() {
+    public ErrorResponse handleUnexpectedException(Exception exception) {
+        log.error("처리되지 않은 예외가 발생했습니다.", exception);
         return buildFieldErrors(ErrorCode.MSG_PROC_FAIL, null);
     }
 
