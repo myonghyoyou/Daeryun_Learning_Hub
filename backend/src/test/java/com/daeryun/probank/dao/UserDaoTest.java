@@ -7,6 +7,7 @@ import com.daeryun.probank.domain.UserRole;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,9 @@ class UserDaoTest {
 
     @Autowired
     private UserDao userDao;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void insertAndFindByEmployeeNo() {
@@ -121,6 +125,11 @@ class UserDaoTest {
 
     @Test
     void existsSuperAdmin_falseThenTrueAfterInsertingSuperAdmin() {
+        // 이 테스트는 개발 DB를 공유한다. 앱을 dev 프로파일로 한 번이라도 띄우면
+        // SuperAdminBootstrapRunner가 SUPER_ADMIN 행을 남기므로 "아직 없다"는 전제가 깨진다.
+        // @Transactional 롤백 범위 안에서만 지우므로 개발 DB의 실제 데이터는 보존된다.
+        jdbcTemplate.update("DELETE FROM users WHERE role = 'SUPER_ADMIN'");
+
         assertFalse(userDao.existsSuperAdmin());
 
         Department department = insertDepartment();
