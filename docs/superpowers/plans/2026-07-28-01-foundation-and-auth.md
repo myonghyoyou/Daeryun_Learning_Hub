@@ -24,6 +24,29 @@
 - **미해결 — 회사 로고 자산 없음.** 디자인 시스템 8.1은 CSS/텍스트로 로고를 재현하는 것을 금지한다. `LoginPage`에 TODO만 남겨둔 상태이며, 실제 로고 파일이 제공되어야 채울 수 있다.
 - **미해결 — 로그인 감사 로그 누락.** Task 3-A가 감사 로그 인프라를 만들었지만 Plan 1의 어떤 Task도 로그인 성공/실패/계정잠금을 기록하지 않는다. 필요하다면 Plan 2 이후에 별도로 추가해야 한다.
 - **Plan 4 주의:** `routes.jsx`의 `/solve`는 `children` 없는 단일 leaf라서, 하위 라우트를 추가하려면 컴포넌트 교체가 아니라 해당 엔트리 구조 자체를 바꿔야 한다(`/admin`은 이미 `children` 배열이 있음).
+
+### 최종 전체 리뷰에서 수정된 보안 사항 (2026-08-03)
+
+전체 브랜치 리뷰에서 개별 Task 리뷰가 구조상 볼 수 없던 문제 2건(Critical)과 보안/운영 이슈들이 발견되어 수정 완료했다. 이후 Plan은 아래를 전제로 한다.
+
+- **로그인·비밀번호 변경 시 세션 ID를 교체한다** (세션 고정 공격 방어, CWE-384). `AuthServiceImpl.rotateSession()`. 세션에 값을 저장하는 코드를 추가할 때는 이 교체 시점에 값이 유실되지 않는지 확인할 것 — 현재 세션에 담기는 것은 `SessionKeys.LOGIN_USER` 하나뿐이다.
+- **로그인 실패 카운터는 DB 안에서 원자적으로 증가한다** (`UPDATE ... RETURNING`). Java에서 `현재값+1`을 계산하던 방식은 병렬 요청 시 잠금이 우회되어 폐기했다. ⚠️ **이 문은 MyBatis `<select>`로 실행되므로, 로그인 경로를 `@Transactional(readOnly = true)`로 감싸면 런타임에 깨진다.**
+- **`UserDao.lockAccount`는 더 이상 로그인 경로에서 쓰이지 않는다** (관리자 수동 잠금용으로만 남겨둠). 카운터를 0으로 리셋하는 옛 의미를 그대로 갖고 있어 새 방식과 다르므로 재사용 전 확인할 것.
+- **잠금 해제 후 재실패는 즉시 재잠금된다** — 성공 로그인 전까지 `failed_login_count`가 5 이상으로 남기 때문이다. 의도된 동작이지만 사용자 경험상 완화가 필요하면 Plan 2에서 다룬다.
+- **새 비밀번호가 현재 비밀번호와 같으면 거부한다** (`INPUT_VALUE_INVALID`). 임시 비밀번호를 그대로 재입력해 강제 변경을 회피하는 것을 막는다. 비강제 변경 시 `currentPassword`를 요구하는 것은 UI 변경이 필요해 Plan 2로 미뤘다.
+- **프론트엔드가 `setOnSessionExpired`/`setOnPasswordChangeRequired`를 실제로 등록한다** (`frontend/src/routers/sessionRedirects.js`, `main.jsx`에서 1회 호출). 각각 `/login?reason=session-expired`, `/change-password`로 보낸다. `PrivateRoute`에 `mustChangePassword` 리다이렉트도 추가되어 강제 변경 대상자가 `/solve`·`/admin`에 진입할 수 없다.
+- **`GlobalExceptionHandler`가 예상 못한 예외의 스택 트레이스를 ERROR로 남긴다.** HTTP 상태·응답 본문은 기존 그대로다.
+- ⚠️ **운영 배포 시 `SESSION_COOKIE_SECURE=true`를 반드시 설정해야 한다.** 로컬 HTTP 개발을 위해 기본값이 `false`이므로, 설정하지 않으면 세션 쿠키가 평문 전송된다.
+
+### Plan 2 시작 전 권장 정비
+
+전체 리뷰에서 "다음 Plan이 부딪힐 지점"으로 지목된 항목들이다. 결함은 아니지만 엔드포인트가 늘어나기 전에 잡는 편이 싸다.
+
+1. **세션에서 현재 사용자를 꺼내는 공용 접근자가 없다.** 현재 4곳에서 같은 캐스팅이 복붙되어 있다. `@LoginUser` 인자 리졸버나 `SessionUtils.currentUser()`를 Plan 2 첫 컨트롤러 전에 만들 것.
+2. **부서 범위 제한 패턴이 아직 없다.** `@RequireRole`은 역할만 다루고, 부서관리자가 자기 부서 데이터만 보게 하는 것은 각 쿼리의 몫이다. 패턴을 먼저 정하지 않으면 엔드포인트마다 재발명되고, 한 곳만 빠뜨려도 fail-open이 된다.
+3. **테스트가 개발 DB를 직접 쓴다.** `application-test.yml`과 전용 데이터소스가 없어 `gradle test`가 실행 중인 PostgreSQL을 요구하고 실제로 변경한다.
+4. **재사용 UI 컴포넌트 계층이 없다.** 디자인 토큰(`tokens.css`)은 완성됐지만 버튼·입력 스타일이 페이지에 인라인되어 있다.
+5. **로그인 감사 로그 미연결** (위 참조), **로그아웃 UI 없음** — 로그아웃 버튼을 만들 때 `logout()` 후 `refetchSession()` 호출을 잊지 말 것.
 - **작업 브랜치:** `worktree-plan1-foundation-auth` (git worktree). 이 브랜치의 커밋 로그가 실제 코드 산출물이다. `superpowers:subagent-driven-development`로 재개할 경우 `.superpowers/sdd/2026-07-28-01-foundation-and-auth/progress.md`(git-ignored 워크스페이스 ledger)를 먼저 확인할 것 — 단, 그 ledger는 커밋되지 않으므로 다른 환경에서 새로 받으면 존재하지 않는다. 이 섹션과 git 커밋 로그가 진짜 진실의 원천이다.
 - **DB 준비 (다른 환경에서 이어서 할 때):** 저장소 루트의 `docker-compose.yml`로 PostgreSQL을 띄우는 것을 권장한다 — `docker compose up -d`. 컨테이너는 호스트 포트 `5434`(로컬에 이미 설치된 Postgres의 기본 5432, `trend_one`의 Docker Postgres가 쓰는 5433과 겹치지 않도록 선택)에 `probank`/`probank_dev`(비밀번호 `probank_dev`) 계정과 DB를 자동 생성한다. 백엔드 실행 시 `DB_URL=jdbc:postgresql://localhost:5434/probank_dev` 환경변수로 이 컨테이너를 가리키면 된다(스키마는 앱이 `spring.sql.init.mode=always`로 기동 시 자동 적용하므로 별도 초기화 스크립트가 필요 없다). 로컬에 이미 5432로 Postgres를 설치해 쓰는 경우 Docker 없이 `docker-compose.yml`의 기본값과 동일한 계정(`probank`/`probank_dev`, DB `probank_dev`)만 직접 만들어도 된다 — 이 경우 `DB_URL` 재정의 없이 `application.yml` 기본값(`localhost:5432`)이 그대로 맞는다.
 - **환경변수 유의:** Java(Temurin 8)·Gradle 관련 `JAVA_HOME`/`PATH`는 이 세션에서 사용한 셸이 세션 중간의 영구 환경변수 변경을 자동 반영하지 않는 문제가 있었다 — 다른 환경/새 셸에서는 보통 정상 동작하지만, 안 될 경우 매 gradle 명령 앞에 `export JAVA_HOME=<jdk8-path>; export PATH="$JAVA_HOME/bin:$PATH"`를 직접 붙이면 된다.
