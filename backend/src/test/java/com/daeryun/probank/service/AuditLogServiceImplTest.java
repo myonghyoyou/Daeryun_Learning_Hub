@@ -2,18 +2,22 @@ package com.daeryun.probank.service;
 
 import com.daeryun.probank.dao.AuditLogDao;
 import com.daeryun.probank.domain.AuditLog;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class AuditLogServiceImplTest {
 
     private final AuditLogDao auditLogDao = mock(AuditLogDao.class);
-    private final AuditLogServiceImpl service = new AuditLogServiceImpl(auditLogDao);
+    private final AuditLogServiceImpl service = new AuditLogServiceImpl(auditLogDao, new ObjectMapper());
 
     @Test
     void record_passesActorActionTargetDetailToDaoUnchanged() {
@@ -35,30 +39,59 @@ class AuditLogServiceImplTest {
         assertEquals(detailJson, saved.getDetail());
     }
 
-    /**
-     * Verification rule from the task brief: password and temporary password values must never end
-     * up in audit {@code detail}. {@code detailJson} is an opaque, schema-free string as far as this
-     * service is concerned, so the service cannot generically detect or reject a password value
-     * hidden inside it — that discipline belongs to the callers (Plan 2~5's admin mutation code)
-     * that build the JSON. This test does not assert that the service enforces the rule (it can't);
-     * it encodes the rule as an executable check on the test's own fixture data, documenting the
-     * expected shape of a password-reset audit entry (who reset whose password) and guarding against
-     * that fixture drifting to accidentally include a password/temp-password value later.
-     */
     @Test
-    void record_passwordResetDetailFixtureNeverCarriesThePasswordValue() {
-        Long actorId = 10L;
-        String action = "USER_PASSWORD_RESET";
-        String targetType = "USER";
-        Long targetId = 55L;
-        String detailJson = "{\"targetEmployeeNo\":\"1001\",\"resetByAdminId\":10}";
+    void record_rejectsTopLevelPasswordKey_andNeverCallsDao() {
+        String detailJson = "{\"password\":\"secret123\"}";
 
-        service.record(actorId, action, targetType, targetId, detailJson);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.record(1L, "USER_PASSWORD_RESET", "USER", 1L, detailJson));
+
+        assertTrue(exception.getMessage().contains("password"));
+        verifyNoInteractions(auditLogDao);
+    }
+
+    @Test
+    void record_rejectsPasswordLikeKey_caseInsensitiveAndNested() {
+        // "TempPassword" (mixed case) nested inside a sub-object -- both the case-insensitivity and
+        // the recursive-scan requirements are exercised by this one payload.
+        String detailJson = "{\"target\":{\"employeeNo\":\"1001\",\"TempPassword\":\"a8Xk29\"}}";
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.record(1L, "USER_PASSWORD_RESET", "USER", 1L, detailJson));
+
+        verifyNoInteractions(auditLogDao);
+    }
+
+    @Test
+    void record_acceptsLegitimateEntryWherePasswordIsOnlyAValueNotAKey() {
+        // {"changedField":"password"} describes *that* the password field was changed, without
+        // carrying any secret value. The key name "changedField" does not match "password", so this
+        // must be accepted -- a naive substring check over the whole payload would wrongly reject it.
+        String detailJson = "{\"changedField\":\"password\"}";
+
+        service.record(1L, "USER_UPDATE", "USER", 1L, detailJson);
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(auditLogDao).insert(captor.capture());
-        String savedDetail = captor.getValue().getDetail();
-        assertFalse(savedDetail.toLowerCase().contains("password"),
-                "audit detail fixture must never contain a password or temporary password value");
+        assertEquals(detailJson, captor.getValue().getDetail());
+    }
+
+    @Test
+    void record_allowsNullDetailJson() {
+        service.record(1L, "USER_CREATE", "USER", 1L, null);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogDao).insert(captor.capture());
+        assertNull(captor.getValue().getDetail());
+    }
+
+    @Test
+    void record_rejectsNonJsonDetailJson_failsClosedRatherThanSkippingTheGuard() {
+        String detailJson = "not valid json";
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.record(1L, "USER_UPDATE", "USER", 1L, detailJson));
+
+        verifyNoInteractions(auditLogDao);
     }
 }
