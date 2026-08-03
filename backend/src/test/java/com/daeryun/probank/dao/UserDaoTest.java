@@ -9,9 +9,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,23 +67,103 @@ class UserDaoTest {
     }
 
     @Test
-    void incrementFailedLogin_persistsFailedLoginCount() {
+    void incrementFailedLogin_incrementsInTheDatabaseWithoutAnAbsoluteValueFromJava() {
         Department department = insertDepartment();
         User user = insertUser(department, UserRole.EMPLOYEE);
+        LocalDateTime lockedUntil = LocalDateTime.now().plusMinutes(15).withNano(0);
 
-        userDao.incrementFailedLogin(user.getId(), 3);
+        // 임계값(5)에 도달하지 않는 3 번의 실패는 카운트만 1 씩 올리고 잠그지 않는다.
+        assertNull(userDao.incrementFailedLogin(user.getId(), 5, lockedUntil));
+        assertEquals(1, userDao.findByEmployeeNo(user.getEmployeeNo()).getFailedLoginCount());
+
+        assertNull(userDao.incrementFailedLogin(user.getId(), 5, lockedUntil));
+        assertNull(userDao.incrementFailedLogin(user.getId(), 5, lockedUntil));
 
         User found = userDao.findByEmployeeNo(user.getEmployeeNo());
         assertEquals(3, found.getFailedLoginCount());
+        assertNull(found.getLockedUntil());
+    }
+
+    @Test
+    void incrementFailedLogin_appliesLockInTheSameStatementWhenThresholdIsReached() {
+        Department department = insertDepartment();
+        User user = insertUser(department, UserRole.EMPLOYEE);
+        LocalDateTime lockedUntil = LocalDateTime.now().plusMinutes(15).withNano(0);
+
+        for (int attempt = 1; attempt <= 4; attempt++) {
+            assertNull(userDao.incrementFailedLogin(user.getId(), 5, lockedUntil));
+        }
+
+        // 5 번째 실패에서 같은 문장이 카운트 증가와 잠금을 동시에 적용하고,
+        // 갱신 후의 locked_until 을 돌려준다.
+        LocalDateTime returned = userDao.incrementFailedLogin(user.getId(), 5, lockedUntil);
+        assertEquals(lockedUntil, returned);
+
+        User found = userDao.findByEmployeeNo(user.getEmployeeNo());
+        assertEquals(lockedUntil, found.getLockedUntil());
+        assertEquals(5, found.getFailedLoginCount());
+    }
+
+    /**
+     * 이 테스트만 테스트 트랜잭션 밖에서 실행한다(NOT_SUPPORTED). 별도 스레드들이
+     * 각자의 커넥션으로 같은 행을 동시에 갱신해야 하는데, 테스트 트랜잭션 안에서
+     * 만든 행은 커밋되지 않아 다른 커넥션에서 보이지 않기 때문이다.
+     * 대신 만든 데이터는 finally 에서 직접 정리한다.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void incrementFailedLogin_isAtomicUnderConcurrentAttempts() throws Exception {
+        String suffix = String.valueOf(System.nanoTime());
+        String departmentCode = "TEST-DEPT-" + suffix;
+        String employeeNo = "EMP-CONCURRENT-" + suffix;
+        jdbcTemplate.update(
+                "INSERT INTO departments (name, code, status) VALUES ('테스트부서', ?, 'ACTIVE')", departmentCode);
+        Long departmentId = jdbcTemplate.queryForObject(
+                "SELECT id FROM departments WHERE code = ?", Long.class, departmentCode);
+        jdbcTemplate.update(
+                "INSERT INTO users (employee_no, name, email, password_hash, department_id, role, status,"
+                        + " must_change_password) VALUES (?, '동시성', ?, 'hashed', ?, 'EMPLOYEE', 'ACTIVE', TRUE)",
+                employeeNo, employeeNo + "@company.local", departmentId);
+        Long userId = jdbcTemplate.queryForObject(
+                "SELECT id FROM users WHERE employee_no = ?", Long.class, employeeNo);
+
+        int threads = 8;
+        LocalDateTime lockedUntil = LocalDateTime.now().plusMinutes(15).withNano(0);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    userDao.incrementFailedLogin(userId, 5, lockedUntil);
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> future : futures) {
+                future.get(30, TimeUnit.SECONDS);
+            }
+
+            // 절대값 덮어쓰기였다면 동시에 같은 값을 읽은 스레드들이 같은 값을 써서
+            // 카운트가 시도 횟수보다 작아진다. DB 안에서 증가시키면 정확히 8 이다.
+            Integer count = jdbcTemplate.queryForObject(
+                    "SELECT failed_login_count FROM users WHERE id = ?", Integer.class, userId);
+            assertEquals(threads, count.intValue());
+        } finally {
+            pool.shutdownNow();
+            jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+            jdbcTemplate.update("DELETE FROM departments WHERE id = ?", departmentId);
+        }
     }
 
     @Test
     void lockAccount_setsLockedUntilAndResetsFailedLoginCount() {
         Department department = insertDepartment();
         User user = insertUser(department, UserRole.EMPLOYEE);
-        userDao.incrementFailedLogin(user.getId(), 5);
-
         LocalDateTime lockedUntil = LocalDateTime.now().plusMinutes(15).withNano(0);
+        userDao.incrementFailedLogin(user.getId(), 5, lockedUntil);
+
         userDao.lockAccount(user.getId(), lockedUntil);
 
         User found = userDao.findByEmployeeNo(user.getEmployeeNo());
@@ -87,8 +175,13 @@ class UserDaoTest {
     void resetFailedLogin_clearsCountAndLockedUntil() {
         Department department = insertDepartment();
         User user = insertUser(department, UserRole.EMPLOYEE);
-        userDao.incrementFailedLogin(user.getId(), 5);
-        userDao.lockAccount(user.getId(), LocalDateTime.now().plusMinutes(15).withNano(0));
+        LocalDateTime lockedUntil = LocalDateTime.now().plusMinutes(15).withNano(0);
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            userDao.incrementFailedLogin(user.getId(), 5, lockedUntil);
+        }
+        User locked = userDao.findByEmployeeNo(user.getEmployeeNo());
+        assertEquals(5, locked.getFailedLoginCount());
+        assertEquals(lockedUntil, locked.getLockedUntil());
 
         userDao.resetFailedLogin(user.getId());
 

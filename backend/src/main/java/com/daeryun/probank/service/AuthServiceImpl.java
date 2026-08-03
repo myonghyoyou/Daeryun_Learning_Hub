@@ -53,8 +53,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BizException(ErrorCode.ACCOUNT_LOCKED);
         }
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPasswordHash())) {
-            handleFailedAttempt(user);
-            throw new BizException(ErrorCode.LOGIN_FAILED);
+            throw handleFailedAttempt(user);
         }
 
         userDao.resetFailedLogin(user.getId());
@@ -128,13 +127,25 @@ public class AuthServiceImpl implements AuthService {
         return request.getSession(true);
     }
 
-    private void handleFailedAttempt(User user) {
-        int nextFailedCount = user.getFailedLoginCount() + 1;
-        if (nextFailedCount >= maxFailedAttempts) {
-            userDao.lockAccount(user.getId(), LocalDateTime.now().plusMinutes(lockoutMinutes));
-        } else {
-            userDao.incrementFailedLogin(user.getId(), nextFailedCount);
+    /**
+     * 비밀번호 불일치 시 실패 카운트를 원자적으로 올리고, 이번 시도로 계정이
+     * 잠겼는지 여부에 따라 던질 예외를 결정한다.
+     *
+     * 카운트 증가와 잠금 판정은 모두 SQL 한 문장 안에서 일어난다. Java 에서
+     * 읽어 온 failedLoginCount 로 다음 값을 계산하면 동시 요청이 같은 값을 읽고
+     * 같은 값을 써서 잠금을 우회할 수 있기 때문이다.
+     *
+     * 잠금이 걸린 그 시도에서 LOGIN_FAILED 를 던지면 사용자는 방금 잠겼다는
+     * 사실을 알 수 없으므로(로그인 화면의 잠금 안내도 뜨지 않는다),
+     * ACCOUNT_LOCKED 를 던진다.
+     */
+    private BizException handleFailedAttempt(User user) {
+        LocalDateTime lockedUntil = userDao.incrementFailedLogin(
+                user.getId(), maxFailedAttempts, LocalDateTime.now().plusMinutes(lockoutMinutes));
+        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) {
+            return new BizException(ErrorCode.ACCOUNT_LOCKED);
         }
+        return new BizException(ErrorCode.LOGIN_FAILED);
     }
 
     private boolean isBlank(String value) {

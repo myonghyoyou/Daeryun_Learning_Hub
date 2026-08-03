@@ -12,6 +12,7 @@ import com.daeryun.probank.dto.auth.SessionStatusResponse;
 import com.daeryun.probank.exception.BizException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpSession;
@@ -84,13 +85,17 @@ class AuthServiceImplTest {
         BizException exception = assertThrows(BizException.class, () -> authService.login(loginRequest, request));
 
         assertEquals(1011, exception.getErrorCode().getCode());
-        Mockito.verify(userDao).incrementFailedLogin(1L, 1);
+        // 카운트 증가/잠금 판정은 DB 안에서 원자적으로 처리한다.
+        // 서비스는 임계값과 잠금 만료시각만 넘기고, 다음 카운트를 계산하지 않는다.
+        Mockito.verify(userDao).incrementFailedLogin(Mockito.eq(1L), Mockito.eq(5), Mockito.any(LocalDateTime.class));
     }
 
     @Test
-    void login_fifthWrongPassword_locksAccount() {
+    void login_wrongPassword_doesNotComputeNextFailedCountInJava() {
         User user = activeUser("correct-password");
-        user.setFailedLoginCount(4);
+        // DB 의 실제 값과 어긋나는(stale) 카운트를 넣어 둔다. 서비스가 이 값을 근거로
+        // 다음 카운트를 계산한다면 그 값이 DAO 로 흘러나가고, 동시 요청에서 잠금이 우회된다.
+        user.setFailedLoginCount(99);
         Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
         MockHttpServletRequest request = new MockHttpServletRequest();
 
@@ -100,8 +105,28 @@ class AuthServiceImplTest {
 
         assertThrows(BizException.class, () -> authService.login(loginRequest, request));
 
-        Mockito.verify(userDao).lockAccount(Mockito.eq(1L), Mockito.any(LocalDateTime.class));
-        Mockito.verify(userDao, Mockito.never()).incrementFailedLogin(Mockito.anyLong(), Mockito.anyInt());
+        ArgumentCaptor<Integer> thresholdCaptor = ArgumentCaptor.forClass(Integer.class);
+        Mockito.verify(userDao).incrementFailedLogin(
+                Mockito.eq(1L), thresholdCaptor.capture(), Mockito.any(LocalDateTime.class));
+        assertEquals(5, thresholdCaptor.getValue().intValue());
+    }
+
+    @Test
+    void login_attemptThatLocksTheAccount_reportsAccountLockedNotLoginFailed() {
+        User user = activeUser("correct-password");
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        // DB 가 "이 시도로 잠겼다"고 알려주는 상황(갱신 후 locked_until 이 미래).
+        Mockito.when(userDao.incrementFailedLogin(Mockito.eq(1L), Mockito.anyInt(), Mockito.any(LocalDateTime.class)))
+                .thenReturn(LocalDateTime.now().plusMinutes(15));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("wrong-password");
+
+        BizException exception = assertThrows(BizException.class, () -> authService.login(loginRequest, request));
+
+        assertEquals(1010, exception.getErrorCode().getCode());
     }
 
     @Test
@@ -166,19 +191,21 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void login_fourthWrongPassword_incrementsWithoutLocking() {
+    void login_wrongPasswordWithoutLocking_reportsLoginFailed() {
         User user = activeUser("correct-password");
-        user.setFailedLoginCount(3);
         Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        // DB 가 잠금을 적용하지 않은 경우(임계값 미만) locked_until 은 null 로 돌아온다.
+        Mockito.when(userDao.incrementFailedLogin(Mockito.eq(1L), Mockito.anyInt(), Mockito.any(LocalDateTime.class)))
+                .thenReturn(null);
         MockHttpServletRequest request = new MockHttpServletRequest();
 
         LoginRequest loginRequest = new LoginRequest();
         loginRequest.setEmployeeNo("1001");
         loginRequest.setPassword("wrong-password");
 
-        assertThrows(BizException.class, () -> authService.login(loginRequest, request));
+        BizException exception = assertThrows(BizException.class, () -> authService.login(loginRequest, request));
 
-        Mockito.verify(userDao).incrementFailedLogin(1L, 4);
+        assertEquals(1011, exception.getErrorCode().getCode());
         Mockito.verify(userDao, Mockito.never()).lockAccount(Mockito.anyLong(), Mockito.any(LocalDateTime.class));
     }
 
