@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.UserDao">
+
+    <select id="findByEmployeeNo" resultType="User">
+        SELECT id, employee_no, name, email, password_hash, department_id, role, status,
+               must_change_password, failed_login_count, locked_until, last_login_at, created_at
+        FROM users
+        WHERE employee_no = #{employeeNo}
+    </select>
+
+    <select id="existsSuperAdmin" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM users WHERE role = 'SUPER_ADMIN')
+    </select>
+
+    <select id="existsByEmail" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(#{email}))
+    </select>
+
+    <insert id="insert" parameterType="User" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users (employee_no, name, email, password_hash, department_id, role, status, must_change_password)
+        VALUES (#{employeeNo}, #{name}, #{email}, #{passwordHash}, #{departmentId}, #{role}, #{status}, #{mustChangePassword})
+    </insert>
+
+    <!--
+        실패 카운트 증가와 잠금 적용을 한 SQL 안에서 원자적으로 처리한다.
+        Java 에서 count+1 을 계산해 절대값으로 덮어쓰면, 동시에 들어온 N 번의
+        실패 로그인이 모두 같은 값을 읽고 같은 값을 써서 카운터가 "시도 1회"가
+        아니라 "배치 1회"만 증가한다(병렬 요청으로 잠금 우회 가능).
+        RETURNING 으로 갱신 후의 locked_until 을 돌려주어, 이번 시도로 잠겼는지를
+        추가 조회 없이 판단할 수 있게 한다(PostgreSQL).
+    -->
+    <select id="incrementFailedLogin" resultType="java.time.LocalDateTime" flushCache="true" useCache="false">
+        UPDATE users
+        SET failed_login_count = failed_login_count + 1,
+            locked_until = CASE
+                WHEN failed_login_count + 1 &gt;= #{maxFailedAttempts} THEN #{lockedUntil}
+                ELSE locked_until
+            END
+        WHERE id = #{userId}
+        RETURNING locked_until
+    </select>
+
+    <update id="lockAccount">
+        UPDATE users SET locked_until = #{lockedUntil}, failed_login_count = 0 WHERE id = #{userId}
+    </update>
+
+    <update id="resetFailedLogin">
+        UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = #{userId}
+    </update>
+
+    <update id="updateLastLoginAt">
+        UPDATE users SET last_login_at = #{lastLoginAt} WHERE id = #{userId}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE users SET password_hash = #{passwordHash}, must_change_password = FALSE WHERE id = #{userId}
+    </update>
+
+</mapper>
