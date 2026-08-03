@@ -8,11 +8,22 @@
 
 **Tech Stack:** Spring Boot 2.7(Java 8) · MyBatis 2.2.2 · PostgreSQL · Apache POI(이후 Plan에서 사용) · spring-security-crypto(BCrypt) · spring-boot-starter-mail · Lombok / React 19 · Vite · Tailwind CSS 4(`@tailwindcss/vite`) · react-router-dom 7 · Zustand · react-toastify
 
-## 구현 진행 상황 (2026-08-03 기준)
+## 구현 진행 상황 (2026-08-03 기준) — **Plan 1 전체 완료**
 
-- **완료:** Task 1(Gradle+Spring Boot 골격), Task 2(DB 스키마 12개 테이블), Task 3(공통 응답/에러 처리 + CORS), Task 4(세션 principal 및 SessionCheckFilter — 사용자 지시로 Task 3-A를 건너뛰고 먼저 진행함). 각 Task는 subagent-driven-development 방식(구현 서브에이전트 → 별도 리뷰어 검증)으로 진행되었고 전부 커밋 완료.
-- **Task 4 특이사항:** Step 2의 `SessionCheckFilter` 원안 코드(`PASSWORD_CHANGE_REQUIRED` → HTTP 403)와 Step 3의 원안 테스트(동일 케이스에 HTTP 200 기대)가 서로 모순이었다. 사람에게 확인한 결과 HTTP 200이 최종 사양으로 확정되어 코드와 문서를 그에 맞게 정정했다 — 이 필터를 소비하는 이후 Task는 `mustChangePassword` 강제 응답을 **HTTP 200 + resultCode 1012**로 가정할 것.
-- **다음 시작점:** Task 3-A(DB 감사 로그 저장 인프라, 아직 미착수)부터 이어서 진행하거나, Task 4까지의 순서를 따를 경우 Task 5(Department/User 도메인 및 Dao·Mapper)로 진행한다. 이 파일의 `- [x]` 체크박스가 완료된 Step, `- [ ]`가 남은 Step이다.
+- **완료:** Task 1~15 및 Task 3-A **전부 완료**. 모든 Step 체크박스가 `- [x]`이다. 각 Task는 subagent-driven-development 방식(구현 서브에이전트 → 별도 리뷰어 검증 → 필요 시 수정 라운드 → 범위 한정 재검증)으로 진행되었고 전부 커밋 완료.
+- **테스트 현황:** 백엔드 41개 테스트 통과(실제 PostgreSQL 통합 테스트 포함), 프론트엔드 17개 테스트 통과(`node --test`), 프로덕션 빌드 성공. 브라우저에서 로그인 → 강제 비밀번호 변경 → 기기/역할 기반 랜딩 전체 플로우 수동 확인 완료.
+- **다음 단계:** Plan 2(부서/계정 관리)부터 진행. Plan 2~5는 이 Plan이 만든 `AuthService`, `SessionCheckFilter`, `@RequireRole`, `AuditLogService`, 프론트엔드 세션 스토어/라우터 위에 얹는다.
+
+### 구현 중 확정된 사항 (이후 Plan이 반드시 따라야 함)
+
+- **비밀번호 변경 강제 응답은 HTTP 200 + `resultCode` 1012다** (403이 아님). Task 4의 원안 코드와 원안 테스트가 서로 모순이어서 사람 확인 후 200으로 확정했다. 이 필터를 소비하는 모든 코드는 HTTP 상태가 아니라 응답 본문의 `resultCode`로 분기해야 한다.
+- **`AuditLogService.record`는 `detailJson`에 password 계열 JSON 키가 있으면 `IllegalArgumentException`을 던진다.** 키 이름 기준 검사이므로 `{"changedField":"password"}` 같은 정당한 기록은 통과한다. Plan 2의 임시 비밀번호 발급 로직은 절대 비밀번호 값을 detail에 담지 말 것.
+- **`UserDao.incrementFailedLogin(userId, failedCount)`는 절대값을 설정한다** — SQL 증가가 아니다. 호출자가 `현재값 + 1`을 계산해야 하며 동시 로그인 실패에 대해 원자적이지 않다.
+- **`SuperAdminBootstrapRunner`는 `@Profile("!test")`다.** `@SpringBootTest` 클래스는 반드시 `@ActiveProfiles("test")`를 붙여야 한다 — 붙이지 않으면 앱 기동 시 실제 개발 DB에 관리자/부서 행이 기록된다(실제로 한 번 발생했다).
+- **프론트엔드 세션 스토어는 스스로 갱신하지 않는다.** `login()`/`logout()`이 resolve된 뒤 반드시 `refetchSession()`(`@/store/sessionStore.js`)을 호출해야 한다. 클라이언트 라우팅은 페이지 리로드가 없으므로, 호출하지 않으면 방금 로그인한 사용자가 `/login`으로 되튕긴다.
+- **미해결 — 회사 로고 자산 없음.** 디자인 시스템 8.1은 CSS/텍스트로 로고를 재현하는 것을 금지한다. `LoginPage`에 TODO만 남겨둔 상태이며, 실제 로고 파일이 제공되어야 채울 수 있다.
+- **미해결 — 로그인 감사 로그 누락.** Task 3-A가 감사 로그 인프라를 만들었지만 Plan 1의 어떤 Task도 로그인 성공/실패/계정잠금을 기록하지 않는다. 필요하다면 Plan 2 이후에 별도로 추가해야 한다.
+- **Plan 4 주의:** `routes.jsx`의 `/solve`는 `children` 없는 단일 leaf라서, 하위 라우트를 추가하려면 컴포넌트 교체가 아니라 해당 엔트리 구조 자체를 바꿔야 한다(`/admin`은 이미 `children` 배열이 있음).
 - **작업 브랜치:** `worktree-plan1-foundation-auth` (git worktree). 이 브랜치의 커밋 로그가 실제 코드 산출물이다. `superpowers:subagent-driven-development`로 재개할 경우 `.superpowers/sdd/2026-07-28-01-foundation-and-auth/progress.md`(git-ignored 워크스페이스 ledger)를 먼저 확인할 것 — 단, 그 ledger는 커밋되지 않으므로 다른 환경에서 새로 받으면 존재하지 않는다. 이 섹션과 git 커밋 로그가 진짜 진실의 원천이다.
 - **DB 준비 (다른 환경에서 이어서 할 때):** 저장소 루트의 `docker-compose.yml`로 PostgreSQL을 띄우는 것을 권장한다 — `docker compose up -d`. 컨테이너는 호스트 포트 `5434`(로컬에 이미 설치된 Postgres의 기본 5432, `trend_one`의 Docker Postgres가 쓰는 5433과 겹치지 않도록 선택)에 `probank`/`probank_dev`(비밀번호 `probank_dev`) 계정과 DB를 자동 생성한다. 백엔드 실행 시 `DB_URL=jdbc:postgresql://localhost:5434/probank_dev` 환경변수로 이 컨테이너를 가리키면 된다(스키마는 앱이 `spring.sql.init.mode=always`로 기동 시 자동 적용하므로 별도 초기화 스크립트가 필요 없다). 로컬에 이미 5432로 Postgres를 설치해 쓰는 경우 Docker 없이 `docker-compose.yml`의 기본값과 동일한 계정(`probank`/`probank_dev`, DB `probank_dev`)만 직접 만들어도 된다 — 이 경우 `DB_URL` 재정의 없이 `application.yml` 기본값(`localhost:5432`)이 그대로 맞는다.
 - **환경변수 유의:** Java(Temurin 8)·Gradle 관련 `JAVA_HOME`/`PATH`는 이 세션에서 사용한 셸이 세션 중간의 영구 환경변수 변경을 자동 반영하지 않는 문제가 있었다 — 다른 환경/새 셸에서는 보통 정상 동작하지만, 안 될 경우 매 gradle 명령 앞에 `export JAVA_HOME=<jdk8-path>; export PATH="$JAVA_HOME/bin:$PATH"`를 직접 붙이면 된다.
@@ -758,20 +769,20 @@ git commit -m "feat: add common response/error handling and CORS config"
 - Consumes: Task 2의 `audit_logs` 테이블, Task 4 이후의 `AuthUser`
 - Produces: `AuditLogService.record(Long actorId, String action, String targetType, Long targetId, String detailJson)`. Plan 2~5의 관리자 변경 작업이 이 서비스를 호출한다.
 
-- [ ] **Step 1: 감사 로그 도메인·DAO·Mapper 작성**
+- [x] **Step 1: 감사 로그 도메인·DAO·Mapper 작성**
 
 `AuditLog`은 `id`, `actorId`, `action`, `targetType`, `targetId`, `detail`, `createdAt`을 갖는다. `AuditLogDao.insert(AuditLog)`는 `audit_logs`에 JSONB detail을 저장한다.
 
-- [ ] **Step 2: 서비스 단위 테스트 작성**
+- [x] **Step 2: 서비스 단위 테스트 작성**
 
 서비스 호출 시 전달된 actor/action/target/detail을 `AuditLogDao.insert`에 그대로 전달하는 테스트를 작성한다. 비밀번호·임시 비밀번호는 detail에 포함하지 않는다는 검증 규칙을 테스트 데이터로 명시한다.
 
-- [ ] **Step 3: 구현 및 테스트 실행**
+- [x] **Step 3: 구현 및 테스트 실행**
 
 Run: `cd backend && ./gradlew test --tests AuditLogServiceImplTest`
 Expected: `BUILD SUCCESSFUL`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/domain/AuditLog.java backend/src/main/java/com/daeryun/probank/dao/AuditLogDao.java backend/src/main/resources/mappers/probank/AuditLogMapper.xml backend/src/main/java/com/daeryun/probank/service/AuditLogService.java backend/src/main/java/com/daeryun/probank/service/AuditLogServiceImpl.java backend/src/test/java/com/daeryun/probank/service/AuditLogServiceImplTest.java
@@ -1028,7 +1039,7 @@ git commit -m "feat: add session principal and session check filter"
 - Consumes: Task 2의 스키마
 - Produces: `UserDao.findByEmployeeNo(String)`, `UserDao.insert(User)`, `UserDao.incrementFailedLogin(Long, int)`, `UserDao.lockAccount(Long, LocalDateTime)`, `UserDao.resetFailedLogin(Long)`, `UserDao.updateLastLoginAt(Long, LocalDateTime)`, `UserDao.updatePassword(Long, String)`, `UserDao.existsSuperAdmin()`; `DepartmentDao.findByCode(String)`, `DepartmentDao.insert(Department)`. `PasswordEncoder` 빈(BCrypt). 이후 인증/계정 관련 모든 Task가 이 Dao를 사용한다.
 
-- [ ] **Step 1: 도메인 POJO 작성**
+- [x] **Step 1: 도메인 POJO 작성**
 
 `backend/src/main/java/com/daeryun/probank/domain/Status.java`:
 ```java
@@ -1084,7 +1095,7 @@ public class User {
 }
 ```
 
-- [ ] **Step 2: Dao 인터페이스 작성**
+- [x] **Step 2: Dao 인터페이스 작성**
 
 `backend/src/main/java/com/daeryun/probank/dao/DepartmentDao.java`:
 ```java
@@ -1120,7 +1131,7 @@ public interface UserDao {
 }
 ```
 
-- [ ] **Step 3: Mapper XML 작성**
+- [x] **Step 3: Mapper XML 작성**
 
 `backend/src/main/resources/mappers/probank/DepartmentMapper.xml`:
 ```xml
@@ -1191,7 +1202,7 @@ public interface UserDao {
 </mapper>
 ```
 
-- [ ] **Step 4: PasswordEncoder 빈 등록**
+- [x] **Step 4: PasswordEncoder 빈 등록**
 
 `backend/src/main/java/com/daeryun/probank/config/SecurityBeansConfig.java`:
 ```java
@@ -1212,7 +1223,7 @@ public class SecurityBeansConfig {
 }
 ```
 
-- [ ] **Step 5: Dao 통합 테스트 작성 (실DB 필요)**
+- [x] **Step 5: Dao 통합 테스트 작성 (실DB 필요)**
 
 `backend/src/test/java/com/daeryun/probank/dao/UserDaoTest.java`:
 ```java
@@ -1268,12 +1279,12 @@ class UserDaoTest {
 }
 ```
 
-- [ ] **Step 6: 테스트 실행**
+- [x] **Step 6: 테스트 실행**
 
 Run: `cd backend && ./gradlew test --tests UserDaoTest`
 Expected: `BUILD SUCCESSFUL` (PostgreSQL이 떠 있어야 함, `@Transactional`로 테스트 후 자동 롤백됨)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/domain backend/src/main/java/com/daeryun/probank/dao backend/src/main/resources/mappers backend/src/main/java/com/daeryun/probank/config/SecurityBeansConfig.java backend/src/test/java/com/daeryun/probank/dao
@@ -1296,7 +1307,7 @@ git commit -m "feat: add department/user domain, dao and mapper"
 - Consumes: `UserDao`, `PasswordEncoder`(Task 5), `AuthUser`, `SessionKeys`, `ErrorCode`, `BizException`(Task 3, 4)
 - Produces: `AuthService.login(LoginRequest, HttpServletRequest) : LoginResponse`. `POST /api/auth/login`. 이후 Task 7(로그아웃/세션조회), Task 14(프론트엔드 로그인 화면)이 이 API를 사용한다.
 
-- [ ] **Step 1: 실패하는 서비스 테스트 작성**
+- [x] **Step 1: 실패하는 서비스 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/service/AuthServiceImplTest.java`:
 ```java
@@ -1435,12 +1446,12 @@ class AuthServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인 (컴파일 실패 예상)**
+- [x] **Step 2: 테스트 실행하여 실패 확인 (컴파일 실패 예상)**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: FAIL — `AuthServiceImpl`, `LoginRequest`, `LoginResponse`가 존재하지 않아 컴파일 오류
 
-- [ ] **Step 3: DTO와 서비스 구현**
+- [x] **Step 3: DTO와 서비스 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/auth/LoginRequest.java`:
 ```java
@@ -1601,12 +1612,12 @@ public class AuthController {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 5 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/auth backend/src/main/java/com/daeryun/probank/service backend/src/main/java/com/daeryun/probank/controller/AuthController.java backend/src/test/java/com/daeryun/probank/service
@@ -1628,7 +1639,7 @@ git commit -m "feat: add login API with account lockout"
 - Consumes: `AuthUser`, `SessionKeys`(Task 4)
 - Produces: `AuthService.logout(HttpServletRequest)`, `AuthService.getSessionStatus(HttpServletRequest) : SessionStatusResponse`. `POST /api/auth/logout`, `GET /api/auth/session`. Task 13(useSessionStatus)이 `GET /api/auth/session`을 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 `backend/src/test/java/com/daeryun/probank/service/AuthServiceImplTest.java`의 클래스 끝에 아래 테스트 2개를 추가한다 (기존 import 문 아래, 마지막 `}` 앞):
 ```java
@@ -1661,12 +1672,12 @@ git commit -m "feat: add login API with account lockout"
 import com.daeryun.probank.dto.auth.SessionStatusResponse;
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: FAIL — `AuthService`에 `getSessionStatus`/`logout`이 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/auth/SessionStatusResponse.java`:
 ```java
@@ -1743,12 +1754,12 @@ public class SessionStatusResponse {
     }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 7 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/auth backend/src/main/java/com/daeryun/probank/service backend/src/main/java/com/daeryun/probank/controller/AuthController.java backend/src/test/java/com/daeryun/probank/service
@@ -1770,7 +1781,7 @@ git commit -m "feat: add logout and session status API"
 - Consumes: `UserDao.updatePassword`(Task 5), `SessionCheckFilter`의 `mustChangePassword` 가드(Task 4)
 - Produces: `AuthService.changePassword(String newPassword, HttpServletRequest)`. `POST /api/auth/change-password`. Task 14(ChangePasswordPage)가 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 `AuthServiceImplTest`에 아래 테스트 추가:
 ```java
@@ -1802,12 +1813,12 @@ git commit -m "feat: add logout and session status API"
     }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: FAIL — `changePassword` 메서드가 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/auth/ChangePasswordRequest.java`:
 ```java
@@ -1861,12 +1872,12 @@ public class ChangePasswordRequest {
 ```
 (상단 import에 `import com.daeryun.probank.dto.auth.ChangePasswordRequest;` 추가)
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 9 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/auth backend/src/main/java/com/daeryun/probank/service backend/src/main/java/com/daeryun/probank/controller/AuthController.java backend/src/test/java/com/daeryun/probank/service
@@ -1885,7 +1896,7 @@ git commit -m "feat: add change-password API enforcing minimum length"
 - Consumes: `UserDao`, `DepartmentDao`(Task 5), `PasswordEncoder`(Task 5)
 - Produces: 앱 최초 기동 시 `SUPER_ADMIN` 계정이 하나도 없으면 기본 부서("본사", 코드 `HQ`)와 총괄관리자 계정을 자동 생성한다. 이후 Plan 2(부서/계정 관리)는 이 계정으로 로그인해 다른 계정을 만든다.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/config/SuperAdminBootstrapRunnerTest.java`:
 ```java
@@ -1945,12 +1956,12 @@ class SuperAdminBootstrapRunnerTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests SuperAdminBootstrapRunnerTest`
 Expected: FAIL — `SuperAdminBootstrapRunner` 클래스가 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/main/java/com/daeryun/probank/config/SuperAdminBootstrapRunner.java`:
 ```java
@@ -2024,12 +2035,12 @@ public class SuperAdminBootstrapRunner implements CommandLineRunner {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests SuperAdminBootstrapRunnerTest`
 Expected: `BUILD SUCCESSFUL`, 2 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/config/SuperAdminBootstrapRunner.java backend/src/test/java/com/daeryun/probank/config
@@ -2050,7 +2061,7 @@ git commit -m "feat: bootstrap default department and super admin account on sta
 - Consumes: `AuthUser`, `SessionKeys`, `ErrorCode`, `BizException`(Task 3, 4)
 - Produces: `@RequireRole({UserRole...})` 어노테이션(메서드/클래스 레벨). Plan 2~5의 관리자 전용 컨트롤러 메서드는 이 어노테이션을 붙여 권한을 제한한다.
 
-- [ ] **Step 1: 어노테이션 작성**
+- [x] **Step 1: 어노테이션 작성**
 
 `backend/src/main/java/com/daeryun/probank/common/RequireRole.java`:
 ```java
@@ -2070,7 +2081,7 @@ public @interface RequireRole {
 }
 ```
 
-- [ ] **Step 2: 실패하는 인터셉터 테스트 작성**
+- [x] **Step 2: 실패하는 인터셉터 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/config/RoleCheckInterceptorTest.java`:
 ```java
@@ -2145,12 +2156,12 @@ class RoleCheckInterceptorTest {
 }
 ```
 
-- [ ] **Step 3: 테스트 실행하여 실패 확인**
+- [x] **Step 3: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests RoleCheckInterceptorTest`
 Expected: FAIL — `RoleCheckInterceptor` 클래스가 없어 컴파일 오류
 
-- [ ] **Step 4: 인터셉터와 등록 설정 구현**
+- [x] **Step 4: 인터셉터와 등록 설정 구현**
 
 `backend/src/main/java/com/daeryun/probank/config/RoleCheckInterceptor.java`:
 ```java
@@ -2227,12 +2238,12 @@ public class WebConfig implements WebMvcConfigurer {
 }
 ```
 
-- [ ] **Step 5: 테스트 실행하여 통과 확인**
+- [x] **Step 5: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests RoleCheckInterceptorTest`
 Expected: `BUILD SUCCESSFUL`, 4 tests 통과
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/common/RequireRole.java backend/src/main/java/com/daeryun/probank/config backend/src/test/java/com/daeryun/probank/config
@@ -2259,7 +2270,7 @@ git commit -m "feat: add role-based access control interceptor"
 - Consumes: (없음 — 프론트엔드 최초 Task)
 - Produces: `npm run dev`로 실행 가능한 Vite 개발 서버(5173), `/api/**` 요청을 `localhost:8080`으로 프록시. `@/` → `src/` 별칭. 이후 모든 프론트엔드 Task가 `src/` 하위에 파일을 추가한다.
 
-- [ ] **Step 1: package.json 작성**
+- [x] **Step 1: package.json 작성**
 
 `frontend/package.json`:
 ```json
@@ -2290,7 +2301,7 @@ git commit -m "feat: add role-based access control interceptor"
 }
 ```
 
-- [ ] **Step 2: Vite/별칭/프록시 설정 작성**
+- [x] **Step 2: Vite/별칭/프록시 설정 작성**
 
 `frontend/vite.config.js`:
 ```javascript
@@ -2353,7 +2364,7 @@ node_modules/
 dist/
 ```
 
-- [ ] **Step 3: 엔트리 파일 작성**
+- [x] **Step 3: 엔트리 파일 작성**
 
 `frontend/src/styles/index.css`:
 ```css
@@ -2381,12 +2392,12 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 4: 의존성 설치 및 개발 서버 확인**
+- [x] **Step 4: 의존성 설치 및 개발 서버 확인**
 
 Run: `cd frontend && npm install && npm run dev`
 Expected: `Local: http://localhost:5173/` 출력, 브라우저에서 "문제 은행 Hub" 텍스트 확인 후 Ctrl+C로 종료
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend
@@ -2406,7 +2417,7 @@ git commit -m "chore: bootstrap Vite + React frontend project"
 - Consumes: (없음 — 순수 함수 + fetch)
 - Produces: `apiGet(path)`, `apiPost(path, body)`, `ApiError`, `resolveErrorMessage(error, fallback)`, `setOnSessionExpired(listener)`, `setOnPasswordChangeRequired(listener)`; `login({employeeNo, password})`, `logout()`, `getSession()`, `changePassword({newPassword})`. Task 13(useSessionStatus), Task 14(로그인 화면)이 사용한다.
 
-- [ ] **Step 1: client.js 실패하는 테스트 작성**
+- [x] **Step 1: client.js 실패하는 테스트 작성**
 
 `frontend/src/api/client.test.js`:
 ```javascript
@@ -2430,12 +2441,12 @@ test("resolveErrorMessage falls back for non-ApiError", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd frontend && npm test`
 Expected: FAIL — `client.js` 파일이 없음
 
-- [ ] **Step 3: client.js, auth.js 구현**
+- [x] **Step 3: client.js, auth.js 구현**
 
 `frontend/src/api/client.js`:
 ```javascript
@@ -2532,12 +2543,12 @@ export function changePassword({ newPassword }) {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd frontend && npm test`
 Expected: 모든 테스트 통과 (`# pass 3`)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api
@@ -2558,7 +2569,7 @@ git commit -m "feat: add common API client and auth API wrapper"
 - Consumes: `getSession()`(Task 12)
 - Produces: `useSessionStatus() : { status: "loading"|"authenticated"|"unauthenticated", session }` — `session`은 `SessionStatusResponse`(role, departmentId 등) 원본을 담는다. `<PrivateRoute/>`, `<PublicRoute/>` 레이아웃 라우트 컴포넌트. Task 14, 15가 사용한다.
 
-- [ ] **Step 1: useSessionStatus 작성**
+- [x] **Step 1: useSessionStatus 작성**
 
 `frontend/src/hooks/useSessionStatus.js`:
 ```javascript
@@ -2595,7 +2606,7 @@ export function useSessionStatus() {
 }
 ```
 
-- [ ] **Step 2: 로더 컴포넌트 작성**
+- [x] **Step 2: 로더 컴포넌트 작성**
 
 `frontend/src/components/ui/Loader.jsx`:
 ```javascript
@@ -2609,7 +2620,7 @@ export default function Loader({ visible, message }) {
 }
 ```
 
-- [ ] **Step 3: PrivateRoute / PublicRoute 작성**
+- [x] **Step 3: PrivateRoute / PublicRoute 작성**
 
 `frontend/src/routers/PrivateRoute.jsx`:
 ```javascript
@@ -2649,7 +2660,7 @@ export default function PublicRoute() {
 }
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/hooks frontend/src/components/ui/Loader.jsx frontend/src/routers/PrivateRoute.jsx frontend/src/routers/PublicRoute.jsx
@@ -2670,7 +2681,7 @@ git commit -m "feat: add session status hook and route guards"
 - Consumes: `login`, `changePassword`(Task 12), `ApiError`, `resolveErrorMessage`(Task 12), `react-toastify`
 - Produces: `/login`, `/change-password` 라우트에 매칭되는 화면 컴포넌트. Task 15가 `routes.jsx`에 연결한다.
 
-- [ ] **Step 1: LoginPage 작성**
+- [x] **Step 1: LoginPage 작성**
 
 `frontend/src/pages/auth/LoginPage.jsx`:
 ```javascript
@@ -2735,7 +2746,7 @@ export default function LoginPage() {
 }
 ```
 
-- [ ] **Step 2: ChangePasswordPage 작성**
+- [x] **Step 2: ChangePasswordPage 작성**
 
 `frontend/src/pages/auth/ChangePasswordPage.jsx`:
 ```javascript
@@ -2809,7 +2820,7 @@ export default function ChangePasswordPage() {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/pages/auth
@@ -2845,7 +2856,7 @@ git commit -m "feat: add login and change-password pages"
 | PC | EMPLOYEE | `/solve` | 차단 |
 | 모바일 | 전 역할 | `/solve` | 차단 |
 
-- [ ] **Step 1: 순수 로직 실패하는 테스트 작성**
+- [x] **Step 1: 순수 로직 실패하는 테스트 작성**
 
 `frontend/src/utils/device.test.js`:
 ```javascript
@@ -2903,12 +2914,12 @@ test("landing path for any mobile role is /solve", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd frontend && npm test`
 Expected: FAIL — `device.js`, `routing.js` 파일이 없음
 
-- [ ] **Step 3: 순수 로직 구현**
+- [x] **Step 3: 순수 로직 구현**
 
 `frontend/src/utils/device.js`:
 ```javascript
@@ -2932,12 +2943,12 @@ export function resolveLandingPath({ device, role }) {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd frontend && npm test`
 Expected: 모든 테스트 통과
 
-- [ ] **Step 5: useDeviceType 훅, AdminRoute, Landing, 임시 페이지 작성**
+- [x] **Step 5: useDeviceType 훅, AdminRoute, Landing, 임시 페이지 작성**
 
 `frontend/src/hooks/useDeviceType.js`:
 ```javascript
@@ -3006,7 +3017,7 @@ export default function SolveHomePage() {
 }
 ```
 
-- [ ] **Step 6: 라우터 조립**
+- [x] **Step 6: 라우터 조립**
 
 `frontend/src/routers/routes.jsx`:
 ```javascript
@@ -3058,7 +3069,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 7: 개발 서버로 수동 확인**
+- [x] **Step 7: 개발 서버로 수동 확인**
 
 Run: `cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'` (터미널 1), `cd frontend && npm run dev` (터미널 2)
 1. 브라우저 창을 768px 미만으로 좁혀 `http://localhost:5173` 접속 → `/login`으로 리다이렉트 확인
@@ -3067,7 +3078,7 @@ Run: `cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'` (�
 4. 창을 768px 이상으로 넓히고 새로고침 → `/admin`으로 랜딩 확인
 Expected: 위 4가지 시나리오가 PRD 섹션 3.2 표대로 동작
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add frontend/src/utils frontend/src/hooks/useDeviceType.js frontend/src/routers frontend/src/pages/admin frontend/src/pages/solve frontend/src/App.jsx
