@@ -9,13 +9,19 @@ import com.daeryun.probank.dto.department.DepartmentCreateRequest;
 import com.daeryun.probank.dto.department.DepartmentResponse;
 import com.daeryun.probank.dto.department.DepartmentUpdateRequest;
 import com.daeryun.probank.exception.BizException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class DepartmentServiceImpl implements DepartmentService {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final DepartmentDao departmentDao;
     private final AuditLogService auditLogService;
@@ -54,6 +60,18 @@ public class DepartmentServiceImpl implements DepartmentService {
         department.setStatus(request.getStatus());
         departmentDao.update(department);
         auditLogService.record(actor.getUserId(), "DEPARTMENT_UPDATED", "DEPARTMENT", id,
-                "{\"code\":\"" + department.getCode() + "\"}");
+                buildUpdateDetail(department));
+    }
+
+    private String buildUpdateDetail(Department department) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("code", department.getCode());
+        detail.put("name", department.getName());
+        detail.put("status", department.getStatus());
+        try {
+            return OBJECT_MAPPER.writeValueAsString(detail);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize department update audit detail", e);
+        }
     }
 }

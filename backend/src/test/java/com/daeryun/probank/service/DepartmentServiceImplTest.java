@@ -9,6 +9,8 @@ import com.daeryun.probank.dto.department.DepartmentResponse;
 import com.daeryun.probank.dto.department.DepartmentUpdateRequest;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.exception.BizException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,13 +24,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class DepartmentServiceImplTest {
 
     private DepartmentDao departmentDao;
+    private AuditLogService auditLogService;
     private DepartmentServiceImpl service;
     private AuthUser actor;
 
     @BeforeEach
     void setUp() {
         departmentDao = Mockito.mock(DepartmentDao.class);
-        service = new DepartmentServiceImpl(departmentDao, Mockito.mock(AuditLogService.class));
+        auditLogService = Mockito.mock(AuditLogService.class);
+        service = new DepartmentServiceImpl(departmentDao, auditLogService);
         actor = new AuthUser(1L, "admin", "관리자", UserRole.SUPER_ADMIN, null, false);
     }
 
@@ -79,6 +83,54 @@ class DepartmentServiceImplTest {
         Mockito.verify(departmentDao).update(captor.capture());
         assertEquals("개발본부", captor.getValue().getName());
         assertEquals(Status.INACTIVE, captor.getValue().getStatus());
+    }
+
+    @Test
+    void update_recordsAuditDetailWithChangeSummary() throws Exception {
+        Department existing = new Department();
+        existing.setId(1L);
+        existing.setName("개발팀");
+        existing.setCode("DEV");
+        existing.setStatus(Status.ACTIVE);
+        Mockito.when(departmentDao.findById(1L)).thenReturn(existing);
+
+        DepartmentUpdateRequest request = new DepartmentUpdateRequest();
+        request.setName("개발본부");
+        request.setStatus(Status.INACTIVE);
+
+        service.update(1L, request, actor);
+
+        ArgumentCaptor<String> detailCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(auditLogService).record(Mockito.eq(1L), Mockito.eq("DEPARTMENT_UPDATED"),
+                Mockito.eq("DEPARTMENT"), Mockito.eq(1L), detailCaptor.capture());
+
+        JsonNode detail = new ObjectMapper().readTree(detailCaptor.getValue());
+        assertEquals("DEV", detail.get("code").asText());
+        assertEquals("개발본부", detail.get("name").asText());
+        assertEquals("INACTIVE", detail.get("status").asText());
+    }
+
+    @Test
+    void update_withNameContainingQuote_recordsValidEscapedJsonDetail() throws Exception {
+        Department existing = new Department();
+        existing.setId(1L);
+        existing.setName("개발팀");
+        existing.setCode("DEV");
+        existing.setStatus(Status.ACTIVE);
+        Mockito.when(departmentDao.findById(1L)).thenReturn(existing);
+
+        DepartmentUpdateRequest request = new DepartmentUpdateRequest();
+        request.setName("개발\"본부\\팀");
+        request.setStatus(Status.INACTIVE);
+
+        service.update(1L, request, actor);
+
+        ArgumentCaptor<String> detailCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(auditLogService).record(Mockito.eq(1L), Mockito.eq("DEPARTMENT_UPDATED"),
+                Mockito.eq("DEPARTMENT"), Mockito.eq(1L), detailCaptor.capture());
+
+        JsonNode detail = new ObjectMapper().readTree(detailCaptor.getValue());
+        assertEquals("개발\"본부\\팀", detail.get("name").asText());
     }
 
     @Test
