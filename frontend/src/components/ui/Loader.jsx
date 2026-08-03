@@ -1,4 +1,4 @@
-export default function Loader({ visible, message }) {
+export default function Loader({ visible, message = "로딩 중..." }) {
   if (!visible) return null;
   return (
     <div className="flex h-screen items-center justify-center text-sm text-gray-500">
