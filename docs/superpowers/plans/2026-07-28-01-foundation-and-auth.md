@@ -8,10 +8,11 @@
 
 **Tech Stack:** Spring Boot 2.7(Java 8) · MyBatis 2.2.2 · PostgreSQL · Apache POI(이후 Plan에서 사용) · spring-security-crypto(BCrypt) · spring-boot-starter-mail · Lombok / React 19 · Vite · Tailwind CSS 4(`@tailwindcss/vite`) · react-router-dom 7 · Zustand · react-toastify
 
-## 구현 진행 상황 (2026-07-31 기준)
+## 구현 진행 상황 (2026-08-03 기준)
 
-- **완료:** Task 1(Gradle+Spring Boot 골격), Task 2(DB 스키마 12개 테이블), Task 3(공통 응답/에러 처리 + CORS). 각 Task는 subagent-driven-development 방식(구현 서브에이전트 → 별도 리뷰어 검증)으로 진행되었고 전부 커밋 완료.
-- **다음 시작점:** Task 3-A(DB 감사 로그 저장 인프라)부터 이어서 진행. 이 파일의 `- [x]` 체크박스가 완료된 Step, `- [ ]`가 남은 Step이다.
+- **완료:** Task 1(Gradle+Spring Boot 골격), Task 2(DB 스키마 12개 테이블), Task 3(공통 응답/에러 처리 + CORS), Task 4(세션 principal 및 SessionCheckFilter — 사용자 지시로 Task 3-A를 건너뛰고 먼저 진행함). 각 Task는 subagent-driven-development 방식(구현 서브에이전트 → 별도 리뷰어 검증)으로 진행되었고 전부 커밋 완료.
+- **Task 4 특이사항:** Step 2의 `SessionCheckFilter` 원안 코드(`PASSWORD_CHANGE_REQUIRED` → HTTP 403)와 Step 3의 원안 테스트(동일 케이스에 HTTP 200 기대)가 서로 모순이었다. 사람에게 확인한 결과 HTTP 200이 최종 사양으로 확정되어 코드와 문서를 그에 맞게 정정했다 — 이 필터를 소비하는 이후 Task는 `mustChangePassword` 강제 응답을 **HTTP 200 + resultCode 1012**로 가정할 것.
+- **다음 시작점:** Task 3-A(DB 감사 로그 저장 인프라, 아직 미착수)부터 이어서 진행하거나, Task 4까지의 순서를 따를 경우 Task 5(Department/User 도메인 및 Dao·Mapper)로 진행한다. 이 파일의 `- [x]` 체크박스가 완료된 Step, `- [ ]`가 남은 Step이다.
 - **작업 브랜치:** `worktree-plan1-foundation-auth` (git worktree). 이 브랜치의 커밋 로그가 실제 코드 산출물이다. `superpowers:subagent-driven-development`로 재개할 경우 `.superpowers/sdd/2026-07-28-01-foundation-and-auth/progress.md`(git-ignored 워크스페이스 ledger)를 먼저 확인할 것 — 단, 그 ledger는 커밋되지 않으므로 다른 환경에서 새로 받으면 존재하지 않는다. 이 섹션과 git 커밋 로그가 진짜 진실의 원천이다.
 - **DB 준비 (다른 환경에서 이어서 할 때):** 저장소 루트의 `docker-compose.yml`로 PostgreSQL을 띄우는 것을 권장한다 — `docker compose up -d`. 컨테이너는 호스트 포트 `5434`(로컬에 이미 설치된 Postgres의 기본 5432, `trend_one`의 Docker Postgres가 쓰는 5433과 겹치지 않도록 선택)에 `probank`/`probank_dev`(비밀번호 `probank_dev`) 계정과 DB를 자동 생성한다. 백엔드 실행 시 `DB_URL=jdbc:postgresql://localhost:5434/probank_dev` 환경변수로 이 컨테이너를 가리키면 된다(스키마는 앱이 `spring.sql.init.mode=always`로 기동 시 자동 적용하므로 별도 초기화 스크립트가 필요 없다). 로컬에 이미 5432로 Postgres를 설치해 쓰는 경우 Docker 없이 `docker-compose.yml`의 기본값과 동일한 계정(`probank`/`probank_dev`, DB `probank_dev`)만 직접 만들어도 된다 — 이 경우 `DB_URL` 재정의 없이 `application.yml` 기본값(`localhost:5432`)이 그대로 맞는다.
 - **환경변수 유의:** Java(Temurin 8)·Gradle 관련 `JAVA_HOME`/`PATH`는 이 세션에서 사용한 셸이 세션 중간의 영구 환경변수 변경을 자동 반영하지 않는 문제가 있었다 — 다른 환경/새 셸에서는 보통 정상 동작하지만, 안 될 경우 매 gradle 명령 앞에 `export JAVA_HOME=<jdk8-path>; export PATH="$JAVA_HOME/bin:$PATH"`를 직접 붙이면 된다.
@@ -792,7 +793,7 @@ git commit -m "feat: add database audit log persistence"
 - Consumes: `ResponseDto`, `ErrorCode`(Task 3)
 - Produces: `AuthUser`(userId, employeeNo, name, role, departmentId, mustChangePassword — 모두 getter 보유), `SessionKeys.LOGIN_USER`(String 상수). 이후 인증 관련 모든 Task가 세션에 `AuthUser`를 이 키로 저장/조회한다.
 
-- [ ] **Step 1: UserRole, SessionKeys, AuthUser 작성**
+- [x] **Step 1: UserRole, SessionKeys, AuthUser 작성**
 
 `backend/src/main/java/com/daeryun/probank/domain/UserRole.java`:
 ```java
@@ -843,9 +844,11 @@ public class AuthUser implements Serializable {
 }
 ```
 
-- [ ] **Step 2: SessionCheckFilter 작성**
+- [x] **Step 2: SessionCheckFilter 작성**
 
 인증이 필요 없는 경로(`/api/auth/login`, `/api/auth/session`, OPTIONS 요청)를 제외한 모든 `/api/**` 요청에 세션을 요구한다. 세션은 있으나 `mustChangePassword`가 true이고 `/api/auth/*`가 아닌 경로를 요청하면 비밀번호 변경을 강제한다.
+
+**구현 시 발견된 정정 사항:** 아래 코드 블록은 최초 작성 당시 `PASSWORD_CHANGE_REQUIRED`에 HTTP 403을 반환하도록 되어 있었으나, 바로 아래 Step 3의 테스트 코드는 처음부터 HTTP 200(본문 `resultCode:1012`)을 기대하고 있어 서로 모순이었다. 구현 시 이 모순이 발견되어 사람에게 확인했고, **테스트가 기대하는 HTTP 200이 최종 사양으로 확정**되었다 — `writeError`는 `EMPTY_SESSION`에만 401을 명시적으로 설정하고, `PASSWORD_CHANGE_REQUIRED`는 기본 상태코드 200으로 응답 본문의 `resultCode`로만 구분한다(주석으로 문서화됨). 아래 코드 블록은 이 최종 동작을 반영해 갱신했다. 이후 이 필터를 소비하는 모든 Task(프론트엔드 `useSessionStatus`, 로그인/비밀번호 변경 플로우 등)는 `mustChangePassword` 강제 응답을 **HTTP 200 + resultCode 1012**로 가정해야 한다(401/403이 아님).
 
 `backend/src/main/java/com/daeryun/probank/filter/SessionCheckFilter.java`:
 ```java
@@ -908,17 +911,19 @@ public class SessionCheckFilter extends OncePerRequestFilter {
     }
 
     private void writeError(HttpServletResponse response, ErrorCode errorCode) throws IOException {
-        int httpStatus = errorCode == ErrorCode.EMPTY_SESSION
-                ? HttpServletResponse.SC_UNAUTHORIZED
-                : HttpServletResponse.SC_FORBIDDEN;
-        response.setStatus(httpStatus);
+        if (errorCode == ErrorCode.EMPTY_SESSION) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+        // PASSWORD_CHANGE_REQUIRED intentionally returns HTTP 200 so clients can read the structured error
+        // via ResponseDto.resultCode (1012). This differs from GlobalExceptionHandler, which maps the same
+        // ErrorCode to 400 when raised as BizException elsewhere in the application.
         response.setContentType("application/json;charset=UTF-8");
         objectMapper.writeValue(response.getWriter(), ResponseDto.ok(errorCode.getCode(), errorCode.getMessage()));
     }
 }
 ```
 
-- [ ] **Step 3: 필터 동작 단위 테스트 작성**
+- [x] **Step 3: 필터 동작 단위 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/filter/SessionCheckFilterTest.java`:
 ```java
@@ -990,12 +995,12 @@ class SessionCheckFilterTest {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행**
+- [x] **Step 4: 테스트 실행**
 
 Run: `cd backend && ./gradlew test --tests SessionCheckFilterTest`
 Expected: `BUILD SUCCESSFUL`, 4 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/domain backend/src/main/java/com/daeryun/probank/common backend/src/main/java/com/daeryun/probank/filter backend/src/test/java/com/daeryun/probank/filter
