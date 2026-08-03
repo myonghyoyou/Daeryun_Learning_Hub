@@ -23,4 +23,15 @@ public class AuthController {
                                                   HttpServletRequest request) {
         return ResponseEntity.ok(ResponseDto.ok(authService.login(loginRequest, request)));
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ResponseDto<?>> logout(HttpServletRequest request) {
+        authService.logout(request);
+        return ResponseEntity.ok(ResponseDto.ok());
+    }
+
+    @GetMapping("/session")
+    public ResponseEntity<ResponseDto<?>> getSession(HttpServletRequest request) {
+        return ResponseEntity.ok(ResponseDto.ok(authService.getSessionStatus(request)));
+    }
 }

@@ -8,6 +8,7 @@ import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.User;
 import com.daeryun.probank.dto.auth.LoginRequest;
 import com.daeryun.probank.dto.auth.LoginResponse;
+import com.daeryun.probank.dto.auth.SessionStatusResponse;
 import com.daeryun.probank.exception.BizException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,6 +65,26 @@ public class AuthServiceImpl implements AuthService {
         session.setAttribute(SessionKeys.LOGIN_USER, authUser);
 
         return new LoginResponse(user.getName(), user.getRole(), user.isMustChangePassword());
+    }
+
+    @Override
+    public void logout(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+    }
+
+    @Override
+    public SessionStatusResponse getSessionStatus(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        AuthUser authUser = session == null ? null : (AuthUser) session.getAttribute(SessionKeys.LOGIN_USER);
+        if (authUser == null) {
+            return SessionStatusResponse.notLoggedIn();
+        }
+        return new SessionStatusResponse(
+                true, authUser.getEmployeeNo(), authUser.getName(), authUser.getRole(),
+                authUser.getDepartmentId(), authUser.isMustChangePassword());
     }
 
     private void handleFailedAttempt(User user) {

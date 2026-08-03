@@ -8,6 +8,7 @@ import com.daeryun.probank.domain.User;
 import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.auth.LoginRequest;
 import com.daeryun.probank.dto.auth.LoginResponse;
+import com.daeryun.probank.dto.auth.SessionStatusResponse;
 import com.daeryun.probank.exception.BizException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -196,5 +197,29 @@ class AuthServiceImplTest {
         AuthUser sessionUser = (AuthUser) request.getSession().getAttribute(SessionKeys.LOGIN_USER);
         assertNotNull(sessionUser);
         Mockito.verify(userDao).resetFailedLogin(1L);
+    }
+
+    @Test
+    void getSessionStatus_noSession_returnsLoggedInFalse() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        SessionStatusResponse status = authService.getSessionStatus(request);
+
+        assertFalse(status.isLoggedIn());
+    }
+
+    @Test
+    void logout_invalidatesSession() {
+        User user = activeUser("correct-password");
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        authService.logout(request);
+
+        assertNull(request.getSession(false));
     }
 }
