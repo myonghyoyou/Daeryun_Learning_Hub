@@ -7,6 +7,8 @@ import LoginPage from "@/pages/auth/LoginPage.jsx";
 import ChangePasswordPage from "@/pages/auth/ChangePasswordPage.jsx";
 import AdminLayout from "@/pages/admin/AdminLayout.jsx";
 import DepartmentListPage from "@/pages/admin/departments/DepartmentListPage.jsx";
+import UserListPage from "@/pages/admin/users/UserListPage.jsx";
+import UserExcelUploadPage from "@/pages/admin/users/UserExcelUploadPage.jsx";
 import SolveHomePage from "@/pages/solve/SolveHomePage.jsx";
 
 export const router = createBrowserRouter([
@@ -32,6 +34,8 @@ export const router = createBrowserRouter([
               // 부서 관리자가 PC로 로그인하면 403을 만난다(Plan 5까지 마쳐야 해소).
               { index: true, element: <Navigate to="/admin/departments" replace /> },
               { path: "departments", element: <DepartmentListPage /> },
+              { path: "users", element: <UserListPage /> },
+              { path: "users/excel-upload", element: <UserExcelUploadPage /> },
             ],
           },
         ],

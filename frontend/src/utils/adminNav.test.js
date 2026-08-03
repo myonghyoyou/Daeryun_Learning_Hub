@@ -13,14 +13,21 @@ function toPlain(groups) {
 
 const DASHBOARD_ONLY = [{ label: "주요 메뉴", items: [{ to: "/admin", label: "대시보드", end: true }] }];
 
-test("SUPER_ADMIN sees the dashboard and the department management menu", () => {
+test("SUPER_ADMIN sees the dashboard, department management, and account management menus", () => {
   assert.deepEqual(toPlain(buildNavGroups("SUPER_ADMIN")), [
     ...DASHBOARD_ONLY,
-    { label: "관리 메뉴", items: [{ to: "/admin/departments", label: "부서 관리", end: false }] },
+    {
+      label: "관리 메뉴",
+      items: [
+        { to: "/admin/departments", label: "부서 관리", end: false },
+        { to: "/admin/users", label: "계정 관리", end: false },
+        { to: "/admin/users/excel-upload", label: "계정 일괄 등록", end: false },
+      ],
+    },
   ]);
 });
 
-test("DEPT_ADMIN does not see department management (hidden, not disabled)", () => {
+test("DEPT_ADMIN does not see department or account management (hidden, not disabled)", () => {
   assert.deepEqual(toPlain(buildNavGroups("DEPT_ADMIN")), DASHBOARD_ONLY);
 });
 
