@@ -23,6 +23,9 @@ export default function UserExcelUploadPage() {
 
   function handleFileChange(event) {
     setFile(event.target.files?.[0] ?? null);
+    // 새 파일을 고르면 이전 업로드의 요약/오류 목록이 아직 업로드하지 않은 새 파일 옆에
+    // 남아 있지 않도록 지운다.
+    setResult(null);
   }
 
   async function handleUpload() {

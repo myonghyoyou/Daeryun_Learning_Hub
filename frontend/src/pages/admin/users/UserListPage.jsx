@@ -8,15 +8,16 @@ import { filterUsers } from "@/utils/userFilters.js";
 import { validateUserCreateForm, validateUserEditForm } from "@/utils/userValidation.js";
 import { ROLE_OPTIONS, roleLabel } from "@/utils/userRole.js";
 import { formatLastLogin } from "@/utils/userFormat.js";
-import { canDismissConfirmModal } from "@/utils/modalDismissal.js";
+import { buildDepartmentOptions } from "@/utils/departmentOptions.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
 import Select from "@/components/ui/Select.jsx";
 import StatusBadge from "@/components/ui/StatusBadge.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
-import EmptyState from "@/components/ui/EmptyState.jsx";
 import Modal from "@/components/ui/Modal.jsx";
+import ListStateSurface from "@/components/admin/ListStateSurface.jsx";
+import ConfirmToggleModal from "@/components/admin/ConfirmToggleModal.jsx";
 
 const STATUS_FILTER_OPTIONS = [
   { value: "ALL", label: "전체 상태" },
@@ -74,9 +75,12 @@ export default function UserListPage() {
 
   const filteredUsers = useMemo(() => filterUsers(users, { keyword, status: statusFilter }), [users, keyword, statusFilter]);
 
-  const departmentOptions = useMemo(
-    () => [{ value: "", label: "부서 선택" }, ...departments.map((department) => ({ value: String(department.id), label: department.name }))],
-    [departments],
+  // 생성 폼: 비활성 부서는 배정 대상에서 제외한다. 수정 폼: 편집 중인 계정의 현재 부서는
+  // 비활성이어도 목록에 남기고(라벨에 "(비활성)" 표시), 그 외 비활성 부서는 제외한다.
+  const createDepartmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
+  const editDepartmentOptions = useMemo(
+    () => buildDepartmentOptions(departments, { currentDepartmentId: editingUser?.departmentId }),
+    [departments, editingUser],
   );
 
   function handleCreateFieldChange(field) {
@@ -97,13 +101,15 @@ export default function UserListPage() {
 
   async function handleCreate(event) {
     event.preventDefault();
+    // 검증 실패로 되돌아왔을 때 이전 생성 성공 문구가 새 인라인 오류 옆에 남아 있지 않도록,
+    // 검증보다 먼저 지운다.
+    setCreateNotice(null);
     const errors = validateUserCreateForm(createForm);
     setCreateFormErrors(errors);
     if (Object.keys(errors).length > 0) {
       return;
     }
     setCreating(true);
-    setCreateNotice(null);
     try {
       const response = await createUser({
         employeeNo: createForm.employeeNo.trim(),
@@ -249,7 +255,7 @@ export default function UserListPage() {
             required
             value={createForm.departmentId}
             onChange={handleCreateFieldChange("departmentId")}
-            options={departmentOptions}
+            options={createDepartmentOptions}
             error={createFormErrors.departmentId}
             className="w-full sm:w-40"
           />
@@ -278,75 +284,65 @@ export default function UserListPage() {
         </div>
       </Surface>
 
-      <Surface>
-        <div aria-live="polite">
-          {loading ? (
-            <p className="px-5 py-10 text-center text-body-small text-ink-muted">계정 목록을 불러오는 중입니다...</p>
-          ) : loadError ? (
-            <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
-              <p className="text-body-small text-danger-text">{loadError}</p>
-              <Button variant="secondary" size="sm" onClick={refresh}>
-                다시 시도
-              </Button>
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <EmptyState
-              title={users.length === 0 ? "등록된 계정이 없습니다." : "조건에 맞는 계정이 없습니다."}
-              description={
-                users.length === 0 ? "위 양식으로 첫 계정을 생성하세요." : "검색어 또는 상태 필터를 확인해 주세요."
-              }
-            />
-          ) : (
-            <DataTable
-              ariaLabel="계정 목록"
-              columns={[
-                { key: "employeeNo", label: "사번" },
-                { key: "name", label: "이름" },
-                { key: "email", label: "회사 이메일" },
-                { key: "department", label: "부서" },
-                { key: "role", label: "역할" },
-                { key: "status", label: "상태" },
-                { key: "lastLogin", label: "최근 로그인" },
-                { key: "actions", label: "관리" },
-              ]}
-            >
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium text-ink-strong">{user.employeeNo}</TableCell>
-                  <TableCell>{user.name}</TableCell>
-                  <TableCell>
-                    {/* 긴 회사 이메일은 ellipsis 처리하고, 전체 값은 수정 Modal에서 제공한다(8.10). */}
-                    <span className="block max-w-[220px] truncate" title={user.email}>
-                      {user.email}
-                    </span>
-                  </TableCell>
-                  <TableCell>{user.departmentName}</TableCell>
-                  <TableCell>{roleLabel(user.role)}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={user.status} />
-                  </TableCell>
-                  <TableCell>{formatLastLogin(user.lastLoginAt)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(user)}>
-                        수정
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={user.status === "ACTIVE" ? "destructive" : "secondary"}
-                        size="sm"
-                        onClick={() => setPendingToggle(user)}
-                      >
-                        {user.status === "ACTIVE" ? "비활성화" : "활성화"}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </Surface>
+      <ListStateSurface
+        loading={loading}
+        loadingMessage="계정 목록을 불러오는 중입니다..."
+        error={loadError}
+        onRetry={refresh}
+        isEmpty={filteredUsers.length === 0}
+        emptyTitle={users.length === 0 ? "등록된 계정이 없습니다." : "조건에 맞는 계정이 없습니다."}
+        emptyDescription={
+          users.length === 0 ? "위 양식으로 첫 계정을 생성하세요." : "검색어 또는 상태 필터를 확인해 주세요."
+        }
+      >
+        <DataTable
+          ariaLabel="계정 목록"
+          columns={[
+            { key: "employeeNo", label: "사번" },
+            { key: "name", label: "이름" },
+            { key: "email", label: "회사 이메일" },
+            { key: "department", label: "부서" },
+            { key: "role", label: "역할" },
+            { key: "status", label: "상태" },
+            { key: "lastLogin", label: "최근 로그인" },
+            { key: "actions", label: "관리" },
+          ]}
+        >
+          {filteredUsers.map((user) => (
+            <TableRow key={user.id}>
+              <TableCell className="font-medium text-ink-strong">{user.employeeNo}</TableCell>
+              <TableCell>{user.name}</TableCell>
+              <TableCell>
+                {/* 긴 회사 이메일은 ellipsis 처리하고, 전체 값은 수정 Modal에서 제공한다(8.10). */}
+                <span className="block max-w-[220px] truncate" title={user.email}>
+                  {user.email}
+                </span>
+              </TableCell>
+              <TableCell>{user.departmentName}</TableCell>
+              <TableCell>{roleLabel(user.role)}</TableCell>
+              <TableCell>
+                <StatusBadge status={user.status} />
+              </TableCell>
+              <TableCell>{formatLastLogin(user.lastLoginAt)}</TableCell>
+              <TableCell>
+                <div className="flex gap-2">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(user)}>
+                    수정
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={user.status === "ACTIVE" ? "destructive" : "secondary"}
+                    size="sm"
+                    onClick={() => setPendingToggle(user)}
+                  >
+                    {user.status === "ACTIVE" ? "비활성화" : "활성화"}
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </DataTable>
+      </ListStateSurface>
 
       <Modal
         open={Boolean(editingUser)}
@@ -379,7 +375,7 @@ export default function UserListPage() {
               required
               value={editForm.departmentId}
               onChange={handleEditFieldChange("departmentId")}
-              options={departmentOptions}
+              options={editDepartmentOptions}
               error={editFormErrors.departmentId}
             />
             <Select
@@ -403,41 +399,28 @@ export default function UserListPage() {
         )}
       </Modal>
 
-      <Modal
+      <ConfirmToggleModal
         open={Boolean(pendingToggle)}
+        pendingId={pendingToggle?.id}
+        togglingId={togglingId}
         title={pendingToggle?.status === "ACTIVE" ? "계정 비활성화" : "계정 활성화"}
-        onClose={() => setPendingToggle(null)}
-        dismissible={canDismissConfirmModal({ pendingId: pendingToggle?.id, togglingId })}
-      >
-        {pendingToggle && (
-          <div className="space-y-4">
-            <p className="text-body text-ink-default">
+        message={
+          pendingToggle && (
+            <>
               <span className="font-semibold text-ink-strong">
                 {pendingToggle.name}({pendingToggle.employeeNo})
               </span>
               {pendingToggle.status === "ACTIVE"
                 ? " 계정을 비활성화합니다. 비활성화된 계정은 로그인할 수 없으며, 필요하면 다시 활성화할 수 있습니다."
                 : " 계정을 다시 활성화합니다. 활성화하면 다시 로그인할 수 있습니다."}
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                disabled={togglingId === pendingToggle.id}
-                onClick={() => setPendingToggle(null)}
-              >
-                취소
-              </Button>
-              <Button
-                variant={pendingToggle.status === "ACTIVE" ? "destructive" : "primary"}
-                loading={togglingId === pendingToggle.id}
-                onClick={confirmToggle}
-              >
-                {pendingToggle.status === "ACTIVE" ? "비활성화 확정" : "활성화 확정"}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+            </>
+          )
+        }
+        confirmLabel={pendingToggle?.status === "ACTIVE" ? "비활성화 확정" : "활성화 확정"}
+        confirmVariant={pendingToggle?.status === "ACTIVE" ? "destructive" : "primary"}
+        onCancel={() => setPendingToggle(null)}
+        onConfirm={confirmToggle}
+      />
     </div>
   );
 }

@@ -5,15 +5,14 @@ import { createDepartment, listDepartments, updateDepartment } from "@/api/depar
 import { resolveErrorMessage } from "@/api/client.js";
 import { filterDepartments } from "@/utils/departmentFilters.js";
 import { validateDepartmentForm } from "@/utils/departmentValidation.js";
-import { canDismissConfirmModal } from "@/utils/modalDismissal.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
 import Select from "@/components/ui/Select.jsx";
 import StatusBadge from "@/components/ui/StatusBadge.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
-import EmptyState from "@/components/ui/EmptyState.jsx";
-import Modal from "@/components/ui/Modal.jsx";
+import ListStateSurface from "@/components/admin/ListStateSurface.jsx";
+import ConfirmToggleModal from "@/components/admin/ConfirmToggleModal.jsx";
 
 const STATUS_FILTER_OPTIONS = [
   { value: "ALL", label: "전체 상태" },
@@ -163,93 +162,68 @@ export default function DepartmentListPage() {
         </form>
       </Surface>
 
-      <Surface>
-        <div aria-live="polite">
-          {loading ? (
-            <p className="px-5 py-10 text-center text-body-small text-ink-muted">부서 목록을 불러오는 중입니다...</p>
-          ) : loadError ? (
-            <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
-              <p className="text-body-small text-danger-text">{loadError}</p>
-              <Button variant="secondary" size="sm" onClick={refresh}>
-                다시 시도
-              </Button>
-            </div>
-          ) : filteredDepartments.length === 0 ? (
-            <EmptyState
-              title={departments.length === 0 ? "등록된 부서가 없습니다." : "조건에 맞는 부서가 없습니다."}
-              description={
-                departments.length === 0
-                  ? "위 양식으로 첫 부서를 생성하세요."
-                  : "검색어 또는 상태 필터를 확인해 주세요."
-              }
-            />
-          ) : (
-            <DataTable
-              ariaLabel="부서 목록"
-              columns={[
-                { key: "name", label: "부서명" },
-                { key: "code", label: "코드" },
-                { key: "status", label: "상태" },
-                { key: "actions", label: "관리" },
-              ]}
-            >
-              {filteredDepartments.map((department) => (
-                <TableRow key={department.id}>
-                  <TableCell className="font-medium text-ink-strong">{department.name}</TableCell>
-                  <TableCell>{department.code}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={department.status} />
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      type="button"
-                      variant={department.status === "ACTIVE" ? "destructive" : "secondary"}
-                      size="sm"
-                      onClick={() => setPendingToggle(department)}
-                    >
-                      {department.status === "ACTIVE" ? "비활성화" : "활성화"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </Surface>
-
-      <Modal
-        open={Boolean(pendingToggle)}
-        title={pendingToggle?.status === "ACTIVE" ? "부서 비활성화" : "부서 활성화"}
-        onClose={() => setPendingToggle(null)}
-        dismissible={canDismissConfirmModal({ pendingId: pendingToggle?.id, togglingId })}
+      <ListStateSurface
+        loading={loading}
+        loadingMessage="부서 목록을 불러오는 중입니다..."
+        error={loadError}
+        onRetry={refresh}
+        isEmpty={filteredDepartments.length === 0}
+        emptyTitle={departments.length === 0 ? "등록된 부서가 없습니다." : "조건에 맞는 부서가 없습니다."}
+        emptyDescription={
+          departments.length === 0 ? "위 양식으로 첫 부서를 생성하세요." : "검색어 또는 상태 필터를 확인해 주세요."
+        }
       >
-        {pendingToggle && (
-          <div className="space-y-4">
-            <p className="text-body text-ink-default">
+        <DataTable
+          ariaLabel="부서 목록"
+          columns={[
+            { key: "name", label: "부서명" },
+            { key: "code", label: "코드" },
+            { key: "status", label: "상태" },
+            { key: "actions", label: "관리" },
+          ]}
+        >
+          {filteredDepartments.map((department) => (
+            <TableRow key={department.id}>
+              <TableCell className="font-medium text-ink-strong">{department.name}</TableCell>
+              <TableCell>{department.code}</TableCell>
+              <TableCell>
+                <StatusBadge status={department.status} />
+              </TableCell>
+              <TableCell>
+                <Button
+                  type="button"
+                  variant={department.status === "ACTIVE" ? "destructive" : "secondary"}
+                  size="sm"
+                  onClick={() => setPendingToggle(department)}
+                >
+                  {department.status === "ACTIVE" ? "비활성화" : "활성화"}
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </DataTable>
+      </ListStateSurface>
+
+      <ConfirmToggleModal
+        open={Boolean(pendingToggle)}
+        pendingId={pendingToggle?.id}
+        togglingId={togglingId}
+        title={pendingToggle?.status === "ACTIVE" ? "부서 비활성화" : "부서 활성화"}
+        message={
+          pendingToggle && (
+            <>
               <span className="font-semibold text-ink-strong">{pendingToggle.name}</span>
               {pendingToggle.status === "ACTIVE"
                 ? " 부서를 비활성화합니다. 이 부서는 비활성 상태로 전환되며, 필요하면 다시 활성화할 수 있습니다."
                 : " 부서를 다시 활성화합니다."}
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                disabled={togglingId === pendingToggle.id}
-                onClick={() => setPendingToggle(null)}
-              >
-                취소
-              </Button>
-              <Button
-                variant={pendingToggle.status === "ACTIVE" ? "destructive" : "primary"}
-                loading={togglingId === pendingToggle.id}
-                onClick={confirmToggle}
-              >
-                {pendingToggle.status === "ACTIVE" ? "비활성화 확정" : "활성화 확정"}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+            </>
+          )
+        }
+        confirmLabel={pendingToggle?.status === "ACTIVE" ? "비활성화 확정" : "활성화 확정"}
+        confirmVariant={pendingToggle?.status === "ACTIVE" ? "destructive" : "primary"}
+        onCancel={() => setPendingToggle(null)}
+        onConfirm={confirmToggle}
+      />
     </div>
   );
 }
