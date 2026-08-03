@@ -130,4 +130,71 @@ class AuthServiceImplTest {
 
         assertEquals(1011, exception.getErrorCode().getCode());
     }
+
+    @Test
+    void login_blankOrNullCredentials_rejectsWithInputValueInvalid() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        LoginRequest nullEmployeeNo = new LoginRequest();
+        nullEmployeeNo.setEmployeeNo(null);
+        nullEmployeeNo.setPassword("anything");
+        assertEquals(1000, assertThrows(BizException.class, () -> authService.login(nullEmployeeNo, request))
+                .getErrorCode().getCode());
+
+        LoginRequest blankEmployeeNo = new LoginRequest();
+        blankEmployeeNo.setEmployeeNo("  ");
+        blankEmployeeNo.setPassword("anything");
+        assertEquals(1000, assertThrows(BizException.class, () -> authService.login(blankEmployeeNo, request))
+                .getErrorCode().getCode());
+
+        LoginRequest nullPassword = new LoginRequest();
+        nullPassword.setEmployeeNo("1001");
+        nullPassword.setPassword(null);
+        assertEquals(1000, assertThrows(BizException.class, () -> authService.login(nullPassword, request))
+                .getErrorCode().getCode());
+
+        LoginRequest blankPassword = new LoginRequest();
+        blankPassword.setEmployeeNo("1001");
+        blankPassword.setPassword("  ");
+        assertEquals(1000, assertThrows(BizException.class, () -> authService.login(blankPassword, request))
+                .getErrorCode().getCode());
+
+        Mockito.verifyNoInteractions(userDao);
+    }
+
+    @Test
+    void login_fourthWrongPassword_incrementsWithoutLocking() {
+        User user = activeUser("correct-password");
+        user.setFailedLoginCount(3);
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("wrong-password");
+
+        assertThrows(BizException.class, () -> authService.login(loginRequest, request));
+
+        Mockito.verify(userDao).incrementFailedLogin(1L, 4);
+        Mockito.verify(userDao, Mockito.never()).lockAccount(Mockito.anyLong(), Mockito.any(LocalDateTime.class));
+    }
+
+    @Test
+    void login_expiredLock_allowsLoginWithCorrectPassword() {
+        User user = activeUser("correct-password");
+        user.setLockedUntil(LocalDateTime.now().minusMinutes(1));
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+
+        LoginResponse response = authService.login(loginRequest, request);
+
+        assertEquals("홍길동", response.getName());
+        AuthUser sessionUser = (AuthUser) request.getSession().getAttribute(SessionKeys.LOGIN_USER);
+        assertNotNull(sessionUser);
+        Mockito.verify(userDao).resetFailedLogin(1L);
+    }
 }
