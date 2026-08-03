@@ -8,8 +8,10 @@ import { refetchSession } from "@/store/sessionStore.js";
 
 const MIN_LENGTH = 8;
 
+// 8.1.4: 모바일에서 자동 확대를 방지하려면 입력 글자 크기가 16px 미만이면 안 된다.
+// 디자인 시스템의 type-body 토큰(14px)보다 우선하는 의도된 예외이며, text-base(16px)를 쓴다.
 const inputBaseClass =
-  "h-11 w-full rounded-sm border border-line-default bg-surface-default px-3 pr-11 text-body text-ink-strong " +
+  "h-11 w-full rounded-sm border border-line-default bg-surface-default px-3 pr-11 text-base text-ink-strong " +
   "placeholder:text-ink-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua";
 
 export default function ChangePasswordPage() {
@@ -58,11 +60,11 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="flex min-h-screen justify-center bg-surface-page px-5 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] md:px-0 md:pt-[12vh] md:pb-16">
-      <div className="w-full max-w-[400px]">
+      <div className="w-full max-w-110">
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="w-full max-w-[440px] mx-auto rounded-lg border border-line-default bg-surface-default p-8 shadow-surface"
+          className="w-full rounded-lg border border-line-default bg-surface-default p-8 shadow-surface"
         >
           <h1 className="text-center text-page-title font-extrabold tracking-title text-ink-strong">
             비밀번호 변경
@@ -98,6 +100,7 @@ export default function ChangePasswordPage() {
                   onChange={(event) => setNewPassword(event.target.value)}
                   autoComplete="new-password"
                   autoFocus
+                  aria-describedby="newPassword-rule"
                 />
                 <button
                   type="button"
@@ -110,6 +113,7 @@ export default function ChangePasswordPage() {
                 </button>
               </div>
               <div
+                id="newPassword-rule"
                 className={`mt-1 flex items-center gap-1 text-body-small ${
                   lengthValid ? "text-success-text" : "text-ink-muted"
                 }`}

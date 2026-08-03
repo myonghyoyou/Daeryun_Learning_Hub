@@ -21,8 +21,10 @@ import { refetchSession } from "@/store/sessionStore.js";
  */
 const SESSION_EXPIRED_REASON = "session-expired";
 
+// 8.1.4: 모바일에서 자동 확대를 방지하려면 입력 글자 크기가 16px 미만이면 안 된다.
+// 디자인 시스템의 type-body 토큰(14px)보다 우선하는 의도된 예외이며, text-base(16px)를 쓴다.
 const inputBaseClass =
-  "h-11 w-full rounded-sm border bg-surface-default px-3 text-body text-ink-strong placeholder:text-ink-subtle " +
+  "h-11 w-full rounded-sm border bg-surface-default px-3 text-base text-ink-strong placeholder:text-ink-subtle " +
   "focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua";
 
 function fieldBorderClass(hasError) {
@@ -46,6 +48,7 @@ export default function LoginPage() {
   });
 
   const employeeNoRef = useRef(null);
+  const isLocked = banner?.tone === "locked";
 
   function validate() {
     const nextErrors = {};
@@ -81,8 +84,8 @@ export default function LoginPage() {
       }
     } catch (error) {
       const message = resolveErrorMessage(error, "로그인에 실패했습니다.");
-      const isLocked = error instanceof ApiError && error.resultCode === 1010;
-      setBanner({ tone: isLocked ? "locked" : "error", message });
+      const isLockedError = error instanceof ApiError && error.resultCode === 1010;
+      setBanner({ tone: isLockedError ? "locked" : "error", message });
       toast.error(message);
       // 인증 실패 시 입력값은 유지하고 사번 필드로 포커스만 되돌린다.
       employeeNoRef.current?.focus();
@@ -101,11 +104,11 @@ export default function LoginPage() {
     <div
       className="flex min-h-screen justify-center bg-surface-page px-5 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] md:px-0 md:pt-[12vh] md:pb-16"
     >
-      <div className="w-full max-w-[400px]">
+      <div className="w-full max-w-110">
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="w-full max-w-[440px] mx-auto rounded-lg border border-line-default bg-surface-default p-8 shadow-surface"
+          className="w-full rounded-lg border border-line-default bg-surface-default p-8 shadow-surface"
         >
           {/*
             로고 lockup: 디자인 시스템(8.1)은 실제 제공된 로고 자산 사용을 요구하고
@@ -153,6 +156,11 @@ export default function LoginPage() {
                   setEmployeeNo(event.target.value);
                   if (fieldErrors.employeeNo) {
                     setFieldErrors((prev) => ({ ...prev, employeeNo: undefined }));
+                  }
+                  // 잠금 계정 배너가 뜬 채로 제출 버튼이 영구히 막히지 않도록,
+                  // 사번을 고쳐서 다른 계정으로 시도하려는 신호로 보고 잠금 상태를 해제한다.
+                  if (isLocked) {
+                    setBanner(null);
                   }
                 }}
                 autoComplete="username"
@@ -208,7 +216,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || isLocked}
             className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-sm bg-action-primary-bg text-body font-semibold text-white transition-colors hover:bg-action-primary-hover disabled:opacity-45 disabled:hover:bg-action-primary-bg focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
           >
             {submitting && <SpinnerGap size={18} className="animate-spin" />}
