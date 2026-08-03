@@ -1,0 +1,82 @@
+/**
+ * Blue Bento Learning 디자인 시스템 토큰.
+ * 단일 기준 문서: docs/superpowers/specs/2026-07-29-blue-bento-design-system.md
+ *
+ * Tailwind CSS 4의 @theme 블록은 여기 정의된 --color-*, --radius-*, --text-*,
+ * --shadow-*, --tracking-* 커스텀 프로퍼티로부터 자동으로 유틸리티 클래스를
+ * 생성한다 (예: --color-brand-dark -> bg-brand-dark / text-brand-dark).
+ * 화면 구현에서는 이 토큰을 참조하는 유틸리티만 사용하고, 임의의
+ * Tailwind 기본 팔레트 색상(blue-600 등)을 직접 쓰지 않는다.
+ */
+@theme {
+  /* 3.2 원시 색상 토큰 */
+  --color-brand-dark: #005CA9;
+  --color-brand-blue: #008BD2;
+  --color-brand-aqua: #00B4E3;
+
+  --color-ink-strong: #102B4C;
+  --color-ink-default: #52667D;
+  --color-ink-muted: #75849A;
+  --color-ink-subtle: #9AAABD;
+
+  --color-surface-page: #F6F9FC;
+  --color-surface-default: #FFFFFF;
+  --color-surface-subtle: #F9FBFC;
+  --color-surface-blue: #EEF7FD;
+  --color-surface-aqua: #E8FAFF;
+
+  --color-line-default: #E3EAF2;
+  --color-line-strong: #CDD9E4;
+  --color-focus: #00B4E3;
+
+  /* 3.3 시맨틱 색상 토큰 */
+  --color-action-primary-bg: #005CA9;
+  --color-action-primary-hover: #004D8E;
+  --color-action-secondary-text: #005CA9;
+  --color-selection-bg: #EAF7FD;
+  --color-progress-bg: #00B4E3;
+  --color-info-text: #007BB7;
+  --color-info-bg: #EAF8FD;
+  --color-success-text: #087C59;
+  --color-success-bg: #F0FCF6;
+  --color-warning-text: #B46500;
+  --color-warning-bg: #FFF6E5;
+  --color-danger-text: #C94155;
+  --color-danger-bg: #FFF0F2;
+
+  /* 4.1 글꼴 */
+  --font-sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+
+  /* 4.2 타입 스케일 (font-size/line-height 페어). font-weight는
+     font-normal/medium/semibold/bold/extrabold 유틸리티를 별도로 조합한다. */
+  --text-display: 28px;
+  --text-display--line-height: 36px;
+  --text-page-title: 24px;
+  --text-page-title--line-height: 32px;
+  --text-section-title: 17px;
+  --text-section-title--line-height: 24px;
+  --text-card-title: 15px;
+  --text-card-title--line-height: 22px;
+  --text-body: 14px;
+  --text-body--line-height: 22px;
+  --text-body-small: 12px;
+  --text-body-small--line-height: 18px;
+  --text-label: 11px;
+  --text-label--line-height: 16px;
+  --text-caption: 10px;
+  --text-caption--line-height: 14px;
+
+  /* 4.2 제목 자간 */
+  --tracking-title: -0.04em;
+
+  /* 5.3 반경 */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  /* 5.4 그림자 */
+  --shadow-surface: 0 8px 24px rgba(21, 65, 108, 0.06);
+  --shadow-raised: 0 10px 22px rgba(0, 92, 169, 0.12);
+}
