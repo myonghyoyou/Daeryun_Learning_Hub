@@ -25,11 +25,26 @@ class RoleCheckInterceptorTest {
         }
     }
 
+    @RequireRole(UserRole.DEPT_ADMIN)
+    static class DeptAdminOnlyController {
+        public void inheritsClassRole() {
+        }
+
+        @RequireRole(UserRole.SUPER_ADMIN)
+        public void overridesWithSuperAdminOnly() {
+        }
+    }
+
     private final RoleCheckInterceptor interceptor = new RoleCheckInterceptor();
 
     private HandlerMethod handlerMethodFor(String methodName) throws NoSuchMethodException {
         Method method = SampleController.class.getMethod(methodName);
         return new HandlerMethod(new SampleController(), method);
+    }
+
+    private HandlerMethod deptAdminHandlerMethodFor(String methodName) throws NoSuchMethodException {
+        Method method = DeptAdminOnlyController.class.getMethod(methodName);
+        return new HandlerMethod(new DeptAdminOnlyController(), method);
     }
 
     @Test
@@ -42,8 +57,9 @@ class RoleCheckInterceptorTest {
     @Test
     void methodWithAnnotation_noSession_throwsEmptySession() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        assertThrows(BizException.class, () ->
+        BizException exception = assertThrows(BizException.class, () ->
                 interceptor.preHandle(request, new MockHttpServletResponse(), handlerMethodFor("superAdminOnly")));
+        assertEquals(980, exception.getErrorCode().getCode());
     }
 
     @Test
@@ -65,5 +81,39 @@ class RoleCheckInterceptorTest {
 
         boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), handlerMethodFor("superAdminOnly"));
         assertTrue(result);
+    }
+
+    @Test
+    void classLevelAnnotation_wrongRole_throwsAccessDenied() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        AuthUser authUser = new AuthUser(1L, "1001", "홍길동", UserRole.EMPLOYEE, 1L, false);
+        request.getSession(true).setAttribute(SessionKeys.LOGIN_USER, authUser);
+
+        BizException exception = assertThrows(BizException.class, () ->
+                interceptor.preHandle(request, new MockHttpServletResponse(), deptAdminHandlerMethodFor("inheritsClassRole")));
+        assertEquals(990, exception.getErrorCode().getCode());
+    }
+
+    @Test
+    void classLevelAnnotation_matchingRole_isAllowed() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        AuthUser authUser = new AuthUser(1L, "2001", "김부장", UserRole.DEPT_ADMIN, 1L, false);
+        request.getSession(true).setAttribute(SessionKeys.LOGIN_USER, authUser);
+
+        boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), deptAdminHandlerMethodFor("inheritsClassRole"));
+        assertTrue(result);
+    }
+
+    @Test
+    void methodLevelAnnotation_overridesClassLevelAnnotation() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        // Has the class-required DEPT_ADMIN role, but the method itself requires SUPER_ADMIN,
+        // which must take precedence over the class-level annotation.
+        AuthUser authUser = new AuthUser(1L, "2001", "김부장", UserRole.DEPT_ADMIN, 1L, false);
+        request.getSession(true).setAttribute(SessionKeys.LOGIN_USER, authUser);
+
+        BizException exception = assertThrows(BizException.class, () ->
+                interceptor.preHandle(request, new MockHttpServletResponse(), deptAdminHandlerMethodFor("overridesWithSuperAdminOnly")));
+        assertEquals(990, exception.getErrorCode().getCode());
     }
 }
