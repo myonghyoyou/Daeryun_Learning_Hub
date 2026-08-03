@@ -60,6 +60,9 @@ public class SessionCheckFilter extends OncePerRequestFilter {
         if (errorCode == ErrorCode.EMPTY_SESSION) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }
+        // PASSWORD_CHANGE_REQUIRED intentionally returns HTTP 200 so clients can read the structured error
+        // via ResponseDto.resultCode (1012). This differs from GlobalExceptionHandler, which maps the same
+        // ErrorCode to 400 when raised as BizException elsewhere in the application.
         response.setContentType("application/json;charset=UTF-8");
         objectMapper.writeValue(response.getWriter(), ResponseDto.ok(errorCode.getCode(), errorCode.getMessage()));
     }
