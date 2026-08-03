@@ -5,6 +5,7 @@ import { createDepartment, listDepartments, updateDepartment } from "@/api/depar
 import { resolveErrorMessage } from "@/api/client.js";
 import { filterDepartments } from "@/utils/departmentFilters.js";
 import { validateDepartmentForm } from "@/utils/departmentValidation.js";
+import { canDismissConfirmModal } from "@/utils/modalDismissal.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
@@ -220,6 +221,7 @@ export default function DepartmentListPage() {
         open={Boolean(pendingToggle)}
         title={pendingToggle?.status === "ACTIVE" ? "부서 비활성화" : "부서 활성화"}
         onClose={() => setPendingToggle(null)}
+        dismissible={canDismissConfirmModal({ pendingId: pendingToggle?.id, togglingId })}
       >
         {pendingToggle && (
           <div className="space-y-4">
@@ -230,7 +232,11 @@ export default function DepartmentListPage() {
                 : " 부서를 다시 활성화합니다."}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setPendingToggle(null)}>
+              <Button
+                variant="secondary"
+                disabled={togglingId === pendingToggle.id}
+                onClick={() => setPendingToggle(null)}
+              >
                 취소
               </Button>
               <Button

@@ -20,3 +20,24 @@ export function departmentScopeLabel(session) {
   }
   return session?.departmentId ? `부서 ${session.departmentId}번` : "-";
 }
+
+const SESSION_STATUS_META = {
+  authenticated: { label: "세션 연결됨", dotClassName: "bg-success-text", textClassName: "text-success-text" },
+  loading: { label: "세션 확인 중", dotClassName: "bg-warning-text", textClassName: "text-warning-text" },
+  unauthenticated: { label: "세션 종료됨", dotClassName: "bg-danger-text", textClassName: "text-danger-text" },
+};
+
+/**
+ * Topbar의 세션 상태 표시(8.6.1 "현재 역할·부서·세션 상태"). 폴링이나 별도 API 호출
+ * 없이, useSessionStatus가 이미 들고 있는 전역 세션 스토어의 status만 그대로
+ * 보여준다. 색상 점만으로 상태를 전달하지 않도록 텍스트를 항상 함께 반환한다(§7.9).
+ */
+export function sessionStatusMeta(status) {
+  return (
+    SESSION_STATUS_META[status] ?? {
+      label: "세션 상태 확인 불가",
+      dotClassName: "bg-ink-subtle",
+      textClassName: "text-ink-muted",
+    }
+  );
+}
