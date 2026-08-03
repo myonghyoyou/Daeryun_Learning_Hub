@@ -76,6 +76,26 @@ export function ensureSessionFetched() {
  * 받더라도, generation이 무효화로 인해 이미 증가했기 때문에
  * applySessionFetch 내부의 generation 비교에서 걸러져 상태를 덮어쓰지 않는다.
  */
+/**
+ * 서버가 세션 만료(resultCode 980)를 알려왔을 때, 네트워크 왕복 없이 스토어를
+ * 즉시 미인증 상태로 되돌린다.
+ *
+ * 이 액션이 없으면 만료 후 /login 으로 보내도 스토어에 남은 "authenticated" 를
+ * PublicRoute 가 읽어 곧바로 "/" 로 되돌려 보내므로, 만료 안내 배너가 뜨지 않고
+ * 사용자가 로그인 화면에 머물지도 못한다.
+ *
+ * generation 을 올려 진행 중이던 이전 fetch 의 응답이 나중에 도착해
+ * "authenticated" 로 되돌리는 것을 막는다.
+ */
+export function markSessionExpired() {
+  useSessionStore.setState({
+    status: "unauthenticated",
+    session: null,
+    fetchPromise: null,
+    generation: useSessionStore.getState().generation + 1,
+  });
+}
+
 export function refetchSession() {
   const nextGeneration = useSessionStore.getState().generation + 1;
   useSessionStore.setState({
