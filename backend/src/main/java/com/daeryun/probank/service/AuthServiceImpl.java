@@ -99,6 +99,13 @@ public class AuthServiceImpl implements AuthService {
             throw new BizException(ErrorCode.EMPTY_SESSION);
         }
 
+        // 최초 로그인 강제 변경에서 메일로 받은 임시 비밀번호를 그대로 다시 입력하면
+        // 요구사항 자체가 무력화되므로, 현재 저장된 해시와 같은 비밀번호는 거부한다.
+        User user = userDao.findByEmployeeNo(current.getEmployeeNo());
+        if (user != null && passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "현재 비밀번호와 다른 비밀번호를 입력하세요.");
+        }
+
         userDao.updatePassword(current.getUserId(), passwordEncoder.encode(newPassword));
 
         AuthUser updated = new AuthUser(

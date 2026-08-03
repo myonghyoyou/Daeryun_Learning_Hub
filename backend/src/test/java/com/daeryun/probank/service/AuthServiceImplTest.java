@@ -10,6 +10,7 @@ import com.daeryun.probank.dto.auth.LoginRequest;
 import com.daeryun.probank.dto.auth.LoginResponse;
 import com.daeryun.probank.dto.auth.SessionStatusResponse;
 import com.daeryun.probank.exception.BizException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -235,6 +236,52 @@ class AuthServiceImplTest {
         SessionStatusResponse status = authService.getSessionStatus(request);
 
         assertFalse(status.isLoggedIn());
+        // 세션 조회가 세션을 새로 만들어서는 안 된다(getSession(true) 회귀 방지).
+        assertNull(request.getSession(false));
+    }
+
+    @Test
+    void getSessionStatus_loggedIn_mapsEveryAuthUserFieldOntoTheResponse() {
+        User user = activeUser("correct-password");
+        user.setEmployeeNo("2002");
+        user.setName("김관리");
+        user.setRole(UserRole.DEPT_ADMIN);
+        user.setDepartmentId(77L);
+        user.setMustChangePassword(true);
+        Mockito.when(userDao.findByEmployeeNo("2002")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("2002");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        SessionStatusResponse status = authService.getSessionStatus(request);
+
+        assertTrue(status.isLoggedIn());
+        assertEquals("2002", status.getEmployeeNo());
+        assertEquals("김관리", status.getName());
+        assertEquals(UserRole.DEPT_ADMIN, status.getRole());
+        assertEquals(77L, status.getDepartmentId().longValue());
+        assertTrue(status.isMustChangePassword());
+    }
+
+    @Test
+    void getSessionStatus_loggedIn_serializesLoggedInFlagAsIsLoggedIn() throws Exception {
+        User user = activeUser("correct-password");
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        // 프런트엔드의 모든 라우팅 판단이 이 JSON 키를 읽는다.
+        // @JsonProperty("isLoggedIn") 이 사라지면 조용히 깨지는 지점이라 직렬화까지 확인한다.
+        String json = new ObjectMapper().writeValueAsString(authService.getSessionStatus(request));
+
+        assertTrue(json.contains("\"isLoggedIn\":true"), json);
+        assertTrue(json.contains("\"employeeNo\":\"1001\""), json);
+        assertTrue(json.contains("\"mustChangePassword\":false"), json);
     }
 
     @Test
@@ -324,6 +371,51 @@ class AuthServiceImplTest {
         request.getSession(true);
 
         assertThrows(BizException.class, () -> authService.changePassword("short", request));
+        Mockito.verify(userDao, Mockito.never()).updatePassword(Mockito.anyLong(), Mockito.anyString());
+    }
+
+    @Test
+    void changePassword_sameAsCurrentPassword_isRejected() {
+        User user = activeUser("temporary-password");
+        user.setMustChangePassword(true);
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("temporary-password");
+        authService.login(loginRequest, request);
+
+        // 메일로 받은 임시 비밀번호를 그대로 다시 입력하는 시나리오.
+        BizException exception = assertThrows(
+                BizException.class, () -> authService.changePassword("temporary-password", request));
+
+        assertEquals(1000, exception.getErrorCode().getCode());
+        Mockito.verify(userDao, Mockito.never()).updatePassword(Mockito.anyLong(), Mockito.anyString());
+        // 변경이 거부되었으므로 강제 변경 플래그도 그대로 남아 있어야 한다.
+        AuthUser sessionUser = (AuthUser) request.getSession(false).getAttribute(SessionKeys.LOGIN_USER);
+        assertTrue(sessionUser.isMustChangePassword());
+    }
+
+    @Test
+    void changePassword_withoutSession_rejectsWithEmptySession() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        BizException exception = assertThrows(
+                BizException.class, () -> authService.changePassword("new-password-123", request));
+
+        assertEquals(980, exception.getErrorCode().getCode());
+        Mockito.verify(userDao, Mockito.never()).updatePassword(Mockito.anyLong(), Mockito.anyString());
+    }
+
+    @Test
+    void changePassword_sessionWithoutLoginUser_rejectsWithEmptySession() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession(true);
+
+        BizException exception = assertThrows(
+                BizException.class, () -> authService.changePassword("new-password-123", request));
+
+        assertEquals(980, exception.getErrorCode().getCode());
         Mockito.verify(userDao, Mockito.never()).updatePassword(Mockito.anyLong(), Mockito.anyString());
     }
 }
