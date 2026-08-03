@@ -1,11 +1,12 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import PrivateRoute from "@/routers/PrivateRoute.jsx";
 import PublicRoute from "@/routers/PublicRoute.jsx";
 import AdminRoute from "@/routers/AdminRoute.jsx";
 import Landing from "@/routers/Landing.jsx";
 import LoginPage from "@/pages/auth/LoginPage.jsx";
 import ChangePasswordPage from "@/pages/auth/ChangePasswordPage.jsx";
-import AdminHomePage from "@/pages/admin/AdminHomePage.jsx";
+import AdminLayout from "@/pages/admin/AdminLayout.jsx";
+import DepartmentListPage from "@/pages/admin/departments/DepartmentListPage.jsx";
 import SolveHomePage from "@/pages/solve/SolveHomePage.jsx";
 
 export const router = createBrowserRouter([
@@ -21,7 +22,19 @@ export const router = createBrowserRouter([
       {
         path: "/admin",
         element: <AdminRoute />,
-        children: [{ index: true, element: <AdminHomePage /> }],
+        children: [
+          {
+            element: <AdminLayout />,
+            children: [
+              // 임시 값: Plan 5 Task 5가 관리자 대시보드 화면을 추가하면서
+              // /admin/departments 대신 /admin/dashboard로 교체한다. 그 전까지는
+              // 총괄 관리자 전용 API인 /admin/departments로 곧장 리다이렉트하므로
+              // 부서 관리자가 PC로 로그인하면 403을 만난다(Plan 5까지 마쳐야 해소).
+              { index: true, element: <Navigate to="/admin/departments" replace /> },
+              { path: "departments", element: <DepartmentListPage /> },
+            ],
+          },
+        ],
       },
       { path: "/solve", element: <SolveHomePage /> },
     ],
