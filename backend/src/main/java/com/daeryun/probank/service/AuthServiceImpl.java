@@ -63,7 +63,7 @@ public class AuthServiceImpl implements AuthService {
         AuthUser authUser = new AuthUser(
                 user.getId(), user.getEmployeeNo(), user.getName(), user.getRole(),
                 user.getDepartmentId(), user.isMustChangePassword());
-        HttpSession session = request.getSession(true);
+        HttpSession session = rotateSession(request);
         session.setAttribute(SessionKeys.LOGIN_USER, authUser);
 
         return new LoginResponse(user.getName(), user.getRole(), user.isMustChangePassword());
@@ -105,7 +105,27 @@ public class AuthServiceImpl implements AuthService {
         AuthUser updated = new AuthUser(
                 current.getUserId(), current.getEmployeeNo(), current.getName(), current.getRole(),
                 current.getDepartmentId(), false);
-        session.setAttribute(SessionKeys.LOGIN_USER, updated);
+        // 비밀번호 변경 전에 탈취된 세션이 변경 이후에도 그대로 살아 있으면 안 되므로,
+        // 로그인과 동일하게 세션 ID를 교체한 뒤 새 세션에 주체를 설정한다.
+        rotateSession(request).setAttribute(SessionKeys.LOGIN_USER, updated);
+    }
+
+    /**
+     * 세션 고정(session fixation, CWE-384) 방지: 권한 수준이 바뀌는 시점
+     * (로그인 성공 / 비밀번호 변경)에 기존 세션을 파기하고 새 세션 ID를 발급한다.
+     * 공격자가 미리 심어 둔 JSESSIONID 가 그대로 인증된 세션으로 승격되는 것을 막는다.
+     *
+     * 기존 세션의 속성은 의도적으로 옮기지 않는다. 이 시점에 보존해야 할 상태가
+     * 없고(로그인 전 세션은 익명 상태), 옮기는 순간 공격자가 심어 둔 속성까지
+     * 함께 승격되기 때문이다. 호출부는 새 세션을 받기 전에 기존 세션에서 필요한
+     * 값을 모두 읽어 두어야 한다.
+     */
+    private HttpSession rotateSession(HttpServletRequest request) {
+        HttpSession existing = request.getSession(false);
+        if (existing != null) {
+            existing.invalidate();
+        }
+        return request.getSession(true);
     }
 
     private void handleFailedAttempt(User user) {

@@ -14,9 +14,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import javax.servlet.http.HttpSession;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -239,6 +241,54 @@ class AuthServiceImplTest {
         Mockito.verify(userDao).updatePassword(Mockito.eq(1L), Mockito.anyString());
         AuthUser sessionUser = (AuthUser) request.getSession().getAttribute(SessionKeys.LOGIN_USER);
         assertFalse(sessionUser.isMustChangePassword());
+    }
+
+    @Test
+    void login_rotatesSessionId_soAPlantedSessionIsNeverPromoted() {
+        User user = activeUser("correct-password");
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        // 공격자가 미리 심어 둔 세션을 흉내 낸다.
+        HttpSession plantedSession = request.getSession(true);
+        plantedSession.setAttribute("attacker-planted", "x");
+        String plantedSessionId = plantedSession.getId();
+
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        HttpSession newSession = request.getSession(false);
+        assertNotNull(newSession);
+        assertNotEquals(plantedSessionId, newSession.getId());
+        assertNotNull(newSession.getAttribute(SessionKeys.LOGIN_USER));
+        // 심어 둔 세션은 파기되었고, 그 속성도 새 세션으로 승격되지 않는다.
+        assertTrue(((MockHttpSession) plantedSession).isInvalid());
+        assertNull(newSession.getAttribute("attacker-planted"));
+    }
+
+    @Test
+    void changePassword_rotatesSessionId_soAPreChangeSessionDoesNotSurvive() {
+        User user = activeUser("correct-password");
+        user.setMustChangePassword(true);
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        HttpSession beforeChange = request.getSession(false);
+        String beforeChangeId = beforeChange.getId();
+
+        authService.changePassword("new-password-123", request);
+
+        HttpSession afterChange = request.getSession(false);
+        assertNotNull(afterChange);
+        assertNotEquals(beforeChangeId, afterChange.getId());
+        assertTrue(((MockHttpSession) beforeChange).isInvalid());
+        assertNotNull(afterChange.getAttribute(SessionKeys.LOGIN_USER));
     }
 
     @Test
