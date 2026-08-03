@@ -6,6 +6,9 @@ server:
       cookie:
         http-only: true
         same-site: lax
+        # 로컬 HTTP 개발이 가능하도록 기본값은 false 이지만, 운영 환경에서는
+        # 반드시 SESSION_COOKIE_SECURE=true 로 설정해 HTTPS 로만 쿠키가 전송되게 한다.
+        secure: ${SESSION_COOKIE_SECURE:false}
 
 spring:
   application:
