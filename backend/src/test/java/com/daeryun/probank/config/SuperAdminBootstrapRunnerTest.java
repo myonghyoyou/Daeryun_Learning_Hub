@@ -50,5 +50,7 @@ class SuperAdminBootstrapRunnerTest {
         runner.run();
 
         Mockito.verify(userDao, Mockito.never()).insert(Mockito.any());
+        Mockito.verify(departmentDao, Mockito.never()).findByCode(Mockito.any());
+        Mockito.verify(departmentDao, Mockito.never()).insert(Mockito.any());
     }
 }
