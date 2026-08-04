@@ -1,4 +1,4 @@
-import { Gauge, Buildings, Users, Upload } from "@phosphor-icons/react";
+import { Buildings, Users, Upload } from "@phosphor-icons/react";
 
 /**
  * 8.6.1 관리자 Shell 메뉴 구성.
@@ -8,14 +8,13 @@ import { Gauge, Buildings, Users, Upload } from "@phosphor-icons/react";
  * 이 함수가 뒤집히거나 role 문자열에 오타가 나면 총괄 관리자 전용 메뉴가
  * 조용히 새거나 숨는다 — 이 Task에서 가장 spec에 직결된 파생 상태라 별도
  * 모듈로 분리해 테스트한다(adminNav.test.js).
+ *
+ * 대시보드 항목은 두지 않는다. /admin 은 라우터가 /admin/departments 로 리다이렉트하므로
+ * end:true NavLink 가 활성화될 수 없고, 눌러도 "부서 관리"가 켜진 채 부서 화면으로 갈 뿐인
+ * 죽은 링크가 된다. 실제 대시보드 화면은 Plan 5에서 추가하면서 함께 넣는다.
  */
 export function buildNavGroups(role) {
-  const groups = [
-    {
-      label: "주요 메뉴",
-      items: [{ to: "/admin", label: "대시보드", icon: Gauge, end: true }],
-    },
-  ];
+  const groups = [];
   if (role === "SUPER_ADMIN") {
     groups.push({
       label: "관리 메뉴",

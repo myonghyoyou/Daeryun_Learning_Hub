@@ -11,11 +11,8 @@ function toPlain(groups) {
   }));
 }
 
-const DASHBOARD_ONLY = [{ label: "주요 메뉴", items: [{ to: "/admin", label: "대시보드", end: true }] }];
-
-test("SUPER_ADMIN sees the dashboard, department management, and account management menus", () => {
+test("SUPER_ADMIN sees the department management and account management menus", () => {
   assert.deepEqual(toPlain(buildNavGroups("SUPER_ADMIN")), [
-    ...DASHBOARD_ONLY,
     {
       label: "관리 메뉴",
       items: [
@@ -27,17 +24,29 @@ test("SUPER_ADMIN sees the dashboard, department management, and account managem
   ]);
 });
 
-test("DEPT_ADMIN does not see department or account management (hidden, not disabled)", () => {
-  assert.deepEqual(toPlain(buildNavGroups("DEPT_ADMIN")), DASHBOARD_ONLY);
+// 대시보드 화면이 없는 동안에는 /admin 메뉴 항목을 두지 않는다(라우터가 /admin/departments로
+// 리다이렉트해 절대 활성화될 수 없는 죽은 링크가 되기 때문). Plan 5에서 실제 화면과 함께 추가한다.
+test("no menu item points at /admin while the dashboard screen does not exist", () => {
+  for (const role of ["SUPER_ADMIN", "DEPT_ADMIN", "EMPLOYEE", undefined, null]) {
+    for (const group of buildNavGroups(role)) {
+      for (const item of group.items) {
+        assert.notEqual(item.to, "/admin", `${role} still has a dead /admin link`);
+      }
+    }
+  }
 });
 
-test("EMPLOYEE (should never reach AdminLayout, but defensively) also only sees the dashboard", () => {
-  assert.deepEqual(toPlain(buildNavGroups("EMPLOYEE")), DASHBOARD_ONLY);
+test("DEPT_ADMIN does not see department or account management (hidden, not disabled)", () => {
+  assert.deepEqual(toPlain(buildNavGroups("DEPT_ADMIN")), []);
+});
+
+test("EMPLOYEE (should never reach AdminLayout, but defensively) sees no menu at all", () => {
+  assert.deepEqual(toPlain(buildNavGroups("EMPLOYEE")), []);
 });
 
 test("an undefined or null role does not throw and hides the admin-only menu", () => {
-  assert.deepEqual(toPlain(buildNavGroups(undefined)), DASHBOARD_ONLY);
-  assert.deepEqual(toPlain(buildNavGroups(null)), DASHBOARD_ONLY);
+  assert.deepEqual(toPlain(buildNavGroups(undefined)), []);
+  assert.deepEqual(toPlain(buildNavGroups(null)), []);
 });
 
 test("every rendered item carries an icon component", () => {

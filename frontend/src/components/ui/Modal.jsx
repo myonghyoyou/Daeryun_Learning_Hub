@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { X } from "@phosphor-icons/react";
 
 /**
@@ -14,6 +14,17 @@ import { X } from "@phosphor-icons/react";
 export default function Modal({ open, title, onClose, children, dismissible = true }) {
   const dialogRef = useRef(null);
   const triggerElementRef = useRef(null);
+  const titleId = useId();
+
+  // onClose는 caller가 대개 인라인 화살표 함수로 넘기고 dismissible도 저장 중 여부에 따라
+  // 매 렌더 바뀐다. 이 둘을 effect 의존성에 넣으면 Modal 안의 입력에 한 글자 칠 때마다
+  // effect가 정리(=트리거로 포커스 반환)되고 다시 실행(=dialog로 포커스 이동)되어 포커스가
+  // 입력에서 빠져나가고, triggerElementRef가 dialog 자신으로 덮어써져 닫을 때 원래 트리거로
+  // 돌아가지도 못한다. 최신 값은 ref로 들고, effect는 open 전환에만 반응하게 한다.
+  const onCloseRef = useRef(onClose);
+  const dismissibleRef = useRef(dismissible);
+  onCloseRef.current = onClose;
+  dismissibleRef.current = dismissible;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -22,8 +33,9 @@ export default function Modal({ open, title, onClose, children, dismissible = tr
     dialogRef.current?.focus();
 
     function handleKeyDown(event) {
-      if (event.key === "Escape" && dismissible) {
-        onClose();
+      // ref로 읽어야 Esc가 "지금" 닫을 수 있는지를 본다(저장 중에는 dismissible=false).
+      if (event.key === "Escape" && dismissibleRef.current) {
+        onCloseRef.current();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
@@ -31,7 +43,7 @@ export default function Modal({ open, title, onClose, children, dismissible = tr
       document.removeEventListener("keydown", handleKeyDown);
       triggerElementRef.current?.focus?.();
     };
-  }, [open, onClose, dismissible]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -50,13 +62,13 @@ export default function Modal({ open, title, onClose, children, dismissible = tr
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         className="w-full max-w-md rounded-lg border border-line-default bg-surface-default p-6 shadow-raised focus:outline-none"
       >
         <div className="flex items-start justify-between gap-4">
-          <h2 id="modal-title" className="text-section-title font-bold text-ink-strong">
+          <h2 id={titleId} className="text-section-title font-bold text-ink-strong">
             {title}
           </h2>
           <button
