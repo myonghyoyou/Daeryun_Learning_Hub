@@ -65,6 +65,78 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void create_withCodeContainingQuote_recordsValidEscapedJsonDetail() throws Exception {
+        Mockito.when(departmentDao.findByCode(Mockito.anyString())).thenReturn(null);
+        Mockito.doAnswer(invocation -> {
+            ((Department) invocation.getArgument(0)).setId(7L);
+            return null;
+        }).when(departmentDao).insert(Mockito.any());
+
+        DepartmentCreateRequest request = new DepartmentCreateRequest();
+        request.setName("개발팀");
+        request.setCode("DE\"V\\1");
+
+        service.create(request, actor);
+
+        ArgumentCaptor<String> detailCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(auditLogService).record(Mockito.eq(1L), Mockito.eq("DEPARTMENT_CREATED"),
+                Mockito.eq("DEPARTMENT"), Mockito.eq(7L), detailCaptor.capture());
+
+        // 직접 조립한 JSON 이었다면 여기서 파싱이 깨지고, AuditLogServiceImpl 이 fail-closed 로
+        // 거부해 이미 커밋된 부서만 남은 채 요청이 실패한다.
+        JsonNode detail = new ObjectMapper().readTree(detailCaptor.getValue());
+        assertEquals("DE\"V\\1", detail.get("code").asText());
+    }
+
+    @Test
+    void create_withBlankNameOrCode_throwsBizExceptionBeforeTouchingTheDao() {
+        DepartmentCreateRequest blankName = new DepartmentCreateRequest();
+        blankName.setName("   ");
+        blankName.setCode("DEV");
+        assertThrows(BizException.class, () -> service.create(blankName, actor));
+
+        DepartmentCreateRequest nullName = new DepartmentCreateRequest();
+        nullName.setCode("DEV");
+        assertThrows(BizException.class, () -> service.create(nullName, actor));
+
+        DepartmentCreateRequest nullCode = new DepartmentCreateRequest();
+        nullCode.setName("개발팀");
+        assertThrows(BizException.class, () -> service.create(nullCode, actor));
+
+        Mockito.verify(departmentDao, Mockito.never()).findByCode(Mockito.any());
+        Mockito.verify(departmentDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_withOverlongNameOrCode_throwsBizException() {
+        DepartmentCreateRequest longName = new DepartmentCreateRequest();
+        longName.setName(repeat("가", 101));
+        longName.setCode("DEV");
+        assertThrows(BizException.class, () -> service.create(longName, actor));
+
+        DepartmentCreateRequest longCode = new DepartmentCreateRequest();
+        longCode.setName("개발팀");
+        longCode.setCode(repeat("D", 51));
+        assertThrows(BizException.class, () -> service.create(longCode, actor));
+
+        Mockito.verify(departmentDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void update_withBlankNameOrNullStatus_throwsBizException() {
+        DepartmentUpdateRequest blankName = new DepartmentUpdateRequest();
+        blankName.setName("  ");
+        blankName.setStatus(Status.ACTIVE);
+        assertThrows(BizException.class, () -> service.update(1L, blankName, actor));
+
+        DepartmentUpdateRequest nullStatus = new DepartmentUpdateRequest();
+        nullStatus.setName("개발본부");
+        assertThrows(BizException.class, () -> service.update(1L, nullStatus, actor));
+
+        Mockito.verify(departmentDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
     void update_changesNameAndStatus() {
         Department existing = new Department();
         existing.setId(1L);
@@ -146,5 +218,14 @@ class DepartmentServiceImplTest {
 
         assertEquals(1, responses.size());
         assertEquals("DEV", responses.get(0).getCode());
+    }
+
+    // Java 8 이라 String.repeat 을 쓸 수 없다.
+    private static String repeat(String unit, int times) {
+        StringBuilder builder = new StringBuilder(unit.length() * times);
+        for (int i = 0; i < times; i++) {
+            builder.append(unit);
+        }
+        return builder.toString();
     }
 }

@@ -9,7 +9,10 @@ public interface UserDao {
     User findByEmployeeNo(@Param("employeeNo") String employeeNo);
     boolean existsByEmail(@Param("email") String email);
     boolean existsByEmployeeNo(@Param("employeeNo") String employeeNo);
+    /** 활성 상태의 SUPER_ADMIN 이 하나라도 있는지. 비활성 계정은 관리 화면에 들어올 수 없으므로 세지 않는다. */
     boolean existsSuperAdmin();
+    /** userId 를 제외한 활성 SUPER_ADMIN 수. 마지막 관리자를 잃는 변경을 막는 데 쓴다. */
+    int countActiveSuperAdminsExcluding(@Param("userId") Long userId);
     User findById(@Param("id") Long id);
     java.util.List<com.daeryun.probank.dto.user.UserListItem> findAll(@Param("departmentId") Long departmentId);
     void insert(User user);

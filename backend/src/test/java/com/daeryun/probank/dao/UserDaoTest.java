@@ -231,6 +231,47 @@ class UserDaoTest {
         assertTrue(userDao.existsSuperAdmin());
     }
 
+    /*
+     * 아래 두 테스트는 상태를 바꿀 때 jdbcTemplate 의 UPDATE 를 쓰지 않고 원하는 status 로 새 행을
+     * 넣는다. 같은 트랜잭션 안에서 같은 select 를 같은 파라미터로 두 번 부르면 MyBatis 1차 캐시가
+     * 첫 결과를 그대로 돌려주는데, MyBatis 를 거치지 않는 jdbcTemplate 갱신은 그 캐시를 비우지
+     * 못해 두 번째 호출이 갱신 이전 값을 보게 되기 때문이다(MyBatis insert 는 캐시를 비운다).
+     */
+    @Test
+    void existsSuperAdmin_ignoresInactiveSuperAdmins() {
+        jdbcTemplate.update("DELETE FROM users WHERE role = 'SUPER_ADMIN'");
+        Department department = insertDepartment();
+        insertUser(department, UserRole.SUPER_ADMIN, Status.INACTIVE);
+
+        // 비활성 총괄 관리자만 남은 상태는 아무도 관리 화면에 들어갈 수 없는 상태다. 여기서 true 를
+        // 주면 SuperAdminBootstrapRunner 가 재기동해도 복구를 건너뛴다.
+        assertFalse(userDao.existsSuperAdmin());
+
+        insertUser(department, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        assertTrue(userDao.existsSuperAdmin());
+    }
+
+    @Test
+    void countActiveSuperAdminsExcluding_countsOnlyOtherActiveSuperAdmins() {
+        jdbcTemplate.update("DELETE FROM users WHERE role = 'SUPER_ADMIN'");
+        Department department = insertDepartment();
+        User first = insertUser(department, UserRole.SUPER_ADMIN, Status.ACTIVE);
+
+        // 자기 자신은 세지 않는다.
+        assertEquals(0, userDao.countActiveSuperAdminsExcluding(first.getId()));
+
+        // 비활성 총괄 관리자는 "남아 있는 관리자"가 아니다.
+        insertUser(department, UserRole.SUPER_ADMIN, Status.INACTIVE);
+        assertEquals(0, userDao.countActiveSuperAdminsExcluding(first.getId()));
+
+        // 다른 역할은 아무리 많아도 세지 않는다.
+        insertUser(department, UserRole.DEPT_ADMIN, Status.ACTIVE);
+        assertEquals(0, userDao.countActiveSuperAdminsExcluding(first.getId()));
+
+        insertUser(department, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        assertEquals(1, userDao.countActiveSuperAdminsExcluding(first.getId()));
+    }
+
     @Test
     void findByCode_returnsInsertedDepartmentAndNullForUnknownCode() {
         Department department = insertDepartment();
@@ -253,6 +294,10 @@ class UserDaoTest {
     }
 
     private User insertUser(Department department, UserRole role) {
+        return insertUser(department, role, Status.ACTIVE);
+    }
+
+    private User insertUser(Department department, UserRole role, Status status) {
         User user = new User();
         user.setEmployeeNo("EMP-" + System.nanoTime());
         user.setName("홍길동");
@@ -260,7 +305,7 @@ class UserDaoTest {
         user.setPasswordHash("hashed");
         user.setDepartmentId(department.getId());
         user.setRole(role);
-        user.setStatus(Status.ACTIVE);
+        user.setStatus(status);
         user.setMustChangePassword(true);
         userDao.insert(user);
         return user;

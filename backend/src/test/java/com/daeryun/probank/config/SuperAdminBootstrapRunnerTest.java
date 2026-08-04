@@ -15,8 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SuperAdminBootstrapRunnerTest {
 
+    /**
+     * existsSuperAdmin() 은 "활성" SUPER_ADMIN 이 있는지를 뜻한다(UserMapper.xml).
+     * 이 러너의 분기 자체는 그대로지만, 비활성 총괄 관리자만 남은 상태에서는 false 가
+     * 돌아와 부트스트랩 계정이 다시 만들어지는 복구 경로가 열린다.
+     */
     @Test
-    void whenNoSuperAdminExists_createsDepartmentAndSuperAdmin() throws Exception {
+    void whenNoActiveSuperAdminExists_createsDepartmentAndSuperAdmin() throws Exception {
         DepartmentDao departmentDao = Mockito.mock(DepartmentDao.class);
         UserDao userDao = Mockito.mock(UserDao.class);
         Mockito.when(userDao.existsSuperAdmin()).thenReturn(false);
@@ -39,7 +44,7 @@ class SuperAdminBootstrapRunnerTest {
     }
 
     @Test
-    void whenSuperAdminAlreadyExists_doesNothing() throws Exception {
+    void whenAnActiveSuperAdminAlreadyExists_doesNothing() throws Exception {
         DepartmentDao departmentDao = Mockito.mock(DepartmentDao.class);
         UserDao userDao = Mockito.mock(UserDao.class);
         Mockito.when(userDao.existsSuperAdmin()).thenReturn(true);

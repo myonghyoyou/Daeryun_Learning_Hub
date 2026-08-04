@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -42,6 +43,15 @@ public class ExcelAccountUploadServiceImpl implements ExcelAccountUploadService 
     private static final Logger LOGGER = LoggerFactory.getLogger(ExcelAccountUploadServiceImpl.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int HEADER_ROW_COUNT = 1;
+    /**
+     * 한 요청에서 처리할 데이터 행 상한. 행마다 BCrypt 해싱(약 100ms)과 SMTP 왕복이 직렬로
+     * 일어나므로 행 수가 곧 응답 시간이다. 20MB 멀티파트 제한은 이보다 훨씬 많은 행을 허용해
+     * 리버스 프록시가 먼저 연결을 끊으면 관리자는 몇 건이 커밋됐는지 알 길이 없다(행마다
+     * REQUIRES_NEW 로 이미 커밋된다). 비동기·배치 처리는 더 큰 설계 변경이라 이번에는 상한만 둔다.
+     */
+    private static final int MAX_DATA_ROWS = 500;
+    private static final String UNREADABLE_MESSAGE =
+            "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요.";
 
     private final UserDao userDao;
     private final DepartmentDao departmentDao;
@@ -64,16 +74,27 @@ public class ExcelAccountUploadServiceImpl implements ExcelAccountUploadService 
         this.auditLogService = auditLogService;
     }
 
+    /**
+     * excel_upload_logs 행과 그 감사 로그를 한 트랜잭션으로 묶는다. 행별 계정 생성은
+     * AccountProvisioningService 가 REQUIRES_NEW 로 각각 커밋하므로 이 경계에 영향받지 않는다.
+     */
     @Override
+    @Transactional
     public ExcelUploadResult upload(MultipartFile file, Long uploadedByUserId) {
         List<RowResult> results = new ArrayList<>();
         Set<String> seenEmployeeNos = new HashSet<>();
         Set<String> seenEmails = new HashSet<>();
         DataFormatter dataFormatter = new DataFormatter();
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
-            for (int rowIndex = HEADER_ROW_COUNT; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        try (Workbook workbook = openWorkbook(file)) {
+            Sheet sheet = firstSheet(workbook);
+            int lastRowNum = sheet.getLastRowNum();
+            // 한 행도 처리하기 전에 상한을 확인한다. 처리 중에 끊으면 이미 커밋된 계정이 남는다.
+            if (lastRowNum - HEADER_ROW_COUNT + 1 > MAX_DATA_ROWS) {
+                throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                        "한 번에 업로드할 수 있는 데이터 행은 최대 " + MAX_DATA_ROWS + "건입니다. 파일을 나눠 업로드하세요.");
+            }
+            for (int rowIndex = HEADER_ROW_COUNT; rowIndex <= lastRowNum; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue;
@@ -81,7 +102,8 @@ public class ExcelAccountUploadServiceImpl implements ExcelAccountUploadService 
                 results.add(processRow(row, rowIndex + 1, seenEmployeeNos, seenEmails, uploadedByUserId, dataFormatter));
             }
         } catch (IOException e) {
-            throw new BizException(ErrorCode.FILE_REQUIRED, "엑셀 파일을 읽을 수 없습니다.");
+            // try-with-resources 의 close() 만 남은 경로. 여는 실패는 openWorkbook 이 이미 변환한다.
+            throw new BizException(ErrorCode.FILE_UNREADABLE, UNREADABLE_MESSAGE);
         }
 
         int successRows = (int) results.stream().filter(RowResult::isSuccess).count();
@@ -106,6 +128,29 @@ public class ExcelAccountUploadServiceImpl implements ExcelAccountUploadService 
                 buildUploadDetail(log));
 
         return new ExcelUploadResult(results.size(), successRows, failRows, log.getErrorDetail());
+    }
+
+    /**
+     * 워크북을 여는 동안 나는 실패는 모두 BizException 으로 바꾼다. IOException 뿐 아니라
+     * 암호가 걸린 파일의 EncryptedDocumentException, 엑셀이 아닌 바이트의 형식 판별 실패 등
+     * RuntimeException 도 나오는데, 그대로 두면 처리되지 않은 500 으로 새어 나간다.
+     */
+    private Workbook openWorkbook(MultipartFile file) {
+        try {
+            return WorkbookFactory.create(file.getInputStream());
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("엑셀 업로드 파일을 열지 못했습니다: {}", file.getOriginalFilename(), e);
+            throw new BizException(ErrorCode.FILE_UNREADABLE, UNREADABLE_MESSAGE);
+        }
+    }
+
+    private Sheet firstSheet(Workbook workbook) {
+        // getSheetAt(0) 은 시트가 없으면 IllegalArgumentException 을 던진다 — 처리되지 않은 500 이 된다.
+        if (workbook.getNumberOfSheets() == 0) {
+            throw new BizException(ErrorCode.FILE_UNREADABLE,
+                    "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요.");
+        }
+        return workbook.getSheetAt(0);
     }
 
     private RowResult processRow(Row row, int rowNumber, Set<String> seenEmployeeNos, Set<String> seenEmails,

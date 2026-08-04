@@ -342,8 +342,186 @@ class UserAdminServiceImplTest {
     }
 
     @Test
+    void create_withBlankEmployeeNoOrNameOrNullRole_throwsBizExceptionBeforeTouchingTheDao() {
+        UserCreateRequest blankEmployeeNo = validCreateRequest();
+        blankEmployeeNo.setEmployeeNo("  ");
+        assertThrows(BizException.class, () -> service.create(blankEmployeeNo, actor));
+
+        UserCreateRequest blankName = validCreateRequest();
+        blankName.setName(null);
+        assertThrows(BizException.class, () -> service.create(blankName, actor));
+
+        UserCreateRequest nullRole = validCreateRequest();
+        nullRole.setRole(null);
+        assertThrows(BizException.class, () -> service.create(nullRole, actor));
+
+        Mockito.verify(userDao, Mockito.never()).insert(Mockito.any());
+        Mockito.verifyNoInteractions(mailService);
+    }
+
+    @Test
+    void create_withOverlongEmployeeNoOrNameOrEmail_throwsBizException() {
+        UserCreateRequest longEmployeeNo = validCreateRequest();
+        longEmployeeNo.setEmployeeNo(repeat("2", 51));
+        assertThrows(BizException.class, () -> service.create(longEmployeeNo, actor));
+
+        UserCreateRequest longName = validCreateRequest();
+        longName.setName(repeat("가", 101));
+        assertThrows(BizException.class, () -> service.create(longName, actor));
+
+        UserCreateRequest longEmail = validCreateRequest();
+        longEmail.setEmail(repeat("a", 250) + "@company.com");
+        assertThrows(BizException.class, () -> service.create(longEmail, actor));
+
+        Mockito.verify(userDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void update_withBlankNameOrNullRoleOrNullStatus_throwsBizException() {
+        UserUpdateRequest blankName = validUpdateRequest();
+        blankName.setName("   ");
+        assertThrows(BizException.class, () -> service.update(5L, blankName, actor));
+
+        UserUpdateRequest nullRole = validUpdateRequest();
+        nullRole.setRole(null);
+        assertThrows(BizException.class, () -> service.update(5L, nullRole, actor));
+
+        UserUpdateRequest nullStatus = validUpdateRequest();
+        nullStatus.setStatus(null);
+        assertThrows(BizException.class, () -> service.update(5L, nullStatus, actor));
+
+        Mockito.verify(userDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void update_whenActorDemotesTheirOwnSuperAdminRole_throwsBizException() {
+        // actor 의 userId 는 1L 이다. 다른 활성 총괄 관리자가 남아 있어도 본인 강등은 막는다.
+        stubExistingUser(1L, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        Mockito.when(userDao.countActiveSuperAdminsExcluding(1L)).thenReturn(3);
+
+        UserUpdateRequest request = validUpdateRequest();
+        request.setRole(UserRole.EMPLOYEE);
+
+        assertThrows(BizException.class, () -> service.update(1L, request, actor));
+        Mockito.verify(userDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void update_whenActorDeactivatesTheirOwnAccount_throwsBizException() {
+        stubExistingUser(1L, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        Mockito.when(userDao.countActiveSuperAdminsExcluding(1L)).thenReturn(3);
+
+        // 역할은 그대로 두고 상태만 비활성으로 바꾼다 — 강등이 아니라 자기 비활성화를 막는지 본다.
+        UserUpdateRequest request = validUpdateRequest();
+        request.setRole(UserRole.SUPER_ADMIN);
+        request.setStatus(Status.INACTIVE);
+
+        assertThrows(BizException.class, () -> service.update(1L, request, actor));
+        Mockito.verify(userDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void update_whenDemotingTheLastActiveSuperAdmin_throwsBizException() {
+        stubExistingUser(5L, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        Mockito.when(userDao.countActiveSuperAdminsExcluding(5L)).thenReturn(0);
+
+        UserUpdateRequest request = validUpdateRequest();
+        request.setRole(UserRole.EMPLOYEE);
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+        Mockito.verify(userDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void update_whenDeactivatingTheLastActiveSuperAdmin_throwsBizException() {
+        stubExistingUser(5L, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        Mockito.when(userDao.countActiveSuperAdminsExcluding(5L)).thenReturn(0);
+
+        UserUpdateRequest request = validUpdateRequest();
+        request.setRole(UserRole.SUPER_ADMIN);
+        request.setStatus(Status.INACTIVE);
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+        Mockito.verify(userDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void update_whenAnotherActiveSuperAdminRemains_allowsDemotingASuperAdmin() {
+        stubExistingUser(5L, UserRole.SUPER_ADMIN, Status.ACTIVE);
+        Mockito.when(userDao.countActiveSuperAdminsExcluding(5L)).thenReturn(1);
+
+        UserUpdateRequest request = validUpdateRequest();
+        request.setRole(UserRole.EMPLOYEE);
+
+        service.update(5L, request, actor);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        Mockito.verify(userDao).update(captor.capture());
+        assertEquals(UserRole.EMPLOYEE, captor.getValue().getRole());
+    }
+
+    @Test
+    void update_deactivatingANonAdmin_doesNotConsultTheSuperAdminCount() {
+        stubExistingUser(5L, UserRole.EMPLOYEE, Status.ACTIVE);
+
+        UserUpdateRequest request = validUpdateRequest();
+        request.setRole(UserRole.EMPLOYEE);
+        request.setStatus(Status.INACTIVE);
+
+        service.update(5L, request, actor);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        Mockito.verify(userDao).update(captor.capture());
+        assertEquals(Status.INACTIVE, captor.getValue().getStatus());
+        Mockito.verify(userDao, Mockito.never()).countActiveSuperAdminsExcluding(Mockito.any());
+    }
+
+    @Test
     void list_delegatesToDaoWithDepartmentFilter() {
         service.list(20L);
         Mockito.verify(userDao).findAll(20L);
+    }
+
+    private UserCreateRequest validCreateRequest() {
+        UserCreateRequest request = new UserCreateRequest();
+        request.setEmployeeNo("2001");
+        request.setName("김철수");
+        request.setEmail("kim@company.com");
+        request.setDepartmentId(10L);
+        request.setRole(UserRole.EMPLOYEE);
+        return request;
+    }
+
+    private UserUpdateRequest validUpdateRequest() {
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setName("김철수2");
+        request.setEmail("kim@company.com");
+        request.setDepartmentId(20L);
+        request.setRole(UserRole.DEPT_ADMIN);
+        request.setStatus(Status.ACTIVE);
+        return request;
+    }
+
+    /** validUpdateRequest 의 이메일/부서와 맞물리는, 이미 존재하는 계정을 스텁한다. */
+    private void stubExistingUser(Long id, UserRole role, Status status) {
+        User existing = new User();
+        existing.setId(id);
+        existing.setEmployeeNo("2001");
+        existing.setEmail("kim@company.com");
+        existing.setRole(role);
+        existing.setStatus(status);
+        Mockito.when(userDao.findById(id)).thenReturn(existing);
+        Department department = new Department();
+        department.setId(20L);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(department);
+    }
+
+    // Java 8 이라 String.repeat 을 쓸 수 없다.
+    private static String repeat(String unit, int times) {
+        StringBuilder builder = new StringBuilder(unit.length() * times);
+        for (int i = 0; i < times; i++) {
+            builder.append(unit);
+        }
+        return builder.toString();
     }
 }

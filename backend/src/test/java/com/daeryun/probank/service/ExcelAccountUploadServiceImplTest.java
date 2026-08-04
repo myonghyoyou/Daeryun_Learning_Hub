@@ -1,11 +1,13 @@
 package com.daeryun.probank.service;
 
+import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.ExcelUploadLogDao;
 import com.daeryun.probank.dao.UserDao;
 import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.User;
 import com.daeryun.probank.dto.upload.ExcelUploadResult;
+import com.daeryun.probank.exception.BizException;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -17,9 +19,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExcelAccountUploadServiceImplTest {
 
@@ -176,6 +181,80 @@ class ExcelAccountUploadServiceImplTest {
         assertEquals(1, result.getFailRows());
         assertFalse(result.getErrorDetail().toLowerCase().contains("smtp"),
                 "행 실패 사유는 고정 문구여야 하고 하위 예외의 상세 메시지를 노출해서는 안 된다");
+    }
+
+    @Test
+    void upload_withNonExcelBytes_throwsBizExceptionInsteadOfAnUnhandledException() {
+        MockMultipartFile file = new MockMultipartFile("file", "accounts.xlsx", "application/vnd.ms-excel",
+                "이건 엑셀이 아니라 그냥 텍스트입니다".getBytes(StandardCharsets.UTF_8));
+
+        BizException exception = assertThrows(BizException.class, () -> service.upload(file, 1L));
+
+        // FILE_REQUIRED("필수 파일이 누락되었습니다")는 파일이 온 이 상황과 정반대라 재사용하지 않는다.
+        assertEquals(ErrorCode.FILE_UNREADABLE, exception.getErrorCode());
+        Mockito.verifyNoInteractions(accountProvisioningService);
+        Mockito.verifyNoInteractions(excelUploadLogDao);
+    }
+
+    @Test
+    void upload_withNoSheets_throwsBizExceptionInsteadOfAnUnhandledException() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            workbook.write(out);
+        }
+        MockMultipartFile file = new MockMultipartFile("file", "accounts.xlsx", "application/vnd.ms-excel",
+                out.toByteArray());
+
+        BizException exception = assertThrows(BizException.class, () -> service.upload(file, 1L));
+
+        assertEquals(ErrorCode.FILE_UNREADABLE, exception.getErrorCode());
+        Mockito.verifyNoInteractions(excelUploadLogDao);
+    }
+
+    @Test
+    void upload_withMoreDataRowsThanTheCap_isRejectedBeforeAnyRowIsProcessed() throws Exception {
+        Department department = new Department();
+        department.setId(10L);
+        Mockito.when(departmentDao.findByCode("DEV")).thenReturn(department);
+        Mockito.when(userDao.existsByEmployeeNo(Mockito.anyString())).thenReturn(false);
+
+        Object[][] rows = new Object[502][];
+        rows[0] = new Object[]{"사번", "이름", "회사이메일", "부서코드", "역할"};
+        for (int i = 1; i < rows.length; i++) {
+            rows[i] = new Object[]{"40" + i, "박영희" + i, "park" + i + "@company.com", "DEV", "EMPLOYEE"};
+        }
+
+        BizException exception = assertThrows(BizException.class, () -> service.upload(buildExcel(rows), 1L));
+
+        assertTrue(exception.getMessage().contains("500"), "상한 값이 메시지에 드러나야 한다: " + exception.getMessage());
+        // 한 행도 처리되면 안 된다 — 행별 커밋(REQUIRES_NEW)이라 되돌릴 수 없다.
+        Mockito.verifyNoInteractions(accountProvisioningService);
+        Mockito.verifyNoInteractions(excelUploadLogDao);
+    }
+
+    /** 상한과 정확히 같은 행 수는 통과해야 한다(off-by-one 이면 정상 파일이 거부된다). */
+    @Test
+    void upload_withExactlyTheCappedNumberOfDataRows_isAccepted() throws Exception {
+        Department department = new Department();
+        department.setId(10L);
+        Mockito.when(departmentDao.findByCode("DEV")).thenReturn(department);
+        Mockito.when(userDao.existsByEmployeeNo(Mockito.anyString())).thenReturn(false);
+        // 이 테스트만 BCrypt 대신 목 인코더를 쓴다. 500 행 x 실제 해싱(행당 ~100ms)은 테스트를
+        // 1 분 가까이 붙잡는데, 여기서 확인하려는 것은 해싱이 아니라 상한 경계다.
+        ExcelAccountUploadServiceImpl serviceWithFastEncoder = new ExcelAccountUploadServiceImpl(userDao, departmentDao,
+                Mockito.mock(org.springframework.security.crypto.password.PasswordEncoder.class), excelUploadLogDao,
+                accountProvisioningService, userAdminService, auditLogService);
+
+        Object[][] rows = new Object[501][];
+        rows[0] = new Object[]{"사번", "이름", "회사이메일", "부서코드", "역할"};
+        for (int i = 1; i < rows.length; i++) {
+            rows[i] = new Object[]{"40" + i, "박영희" + i, "park" + i + "@company.com", "DEV", "EMPLOYEE"};
+        }
+
+        ExcelUploadResult result = serviceWithFastEncoder.upload(buildExcel(rows), 1L);
+
+        assertEquals(500, result.getTotalRows());
+        assertEquals(500, result.getSuccessRows());
     }
 
     @Test
