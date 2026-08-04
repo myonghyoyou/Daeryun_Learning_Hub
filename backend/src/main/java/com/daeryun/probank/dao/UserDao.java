@@ -8,8 +8,15 @@ import java.time.LocalDateTime;
 public interface UserDao {
     User findByEmployeeNo(@Param("employeeNo") String employeeNo);
     boolean existsByEmail(@Param("email") String email);
+    boolean existsByEmployeeNo(@Param("employeeNo") String employeeNo);
+    /** 활성 상태의 SUPER_ADMIN 이 하나라도 있는지. 비활성 계정은 관리 화면에 들어올 수 없으므로 세지 않는다. */
     boolean existsSuperAdmin();
+    /** userId 를 제외한 활성 SUPER_ADMIN 수. 마지막 관리자를 잃는 변경을 막는 데 쓴다. */
+    int countActiveSuperAdminsExcluding(@Param("userId") Long userId);
+    User findById(@Param("id") Long id);
+    java.util.List<com.daeryun.probank.dto.user.UserListItem> findAll(@Param("departmentId") Long departmentId);
     void insert(User user);
+    void update(User user);
     /**
      * 로그인 실패 카운트를 DB 안에서 원자적으로 1 증가시키고, 그 결과가
      * maxFailedAttempts 이상이면 같은 문장에서 lockedUntil 로 계정을 잠근다.

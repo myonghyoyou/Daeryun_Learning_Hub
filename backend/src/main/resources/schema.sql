@@ -109,3 +109,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     detail JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
+
+ALTER TABLE excel_upload_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) NOT NULL DEFAULT 'PROBLEM'
+    CHECK (target_type IN ('ACCOUNT', 'PROBLEM'));

@@ -68,3 +68,7 @@ export function apiPost(path, body, options = {}) {
 export function apiPostForm(path, formData) {
   return request(path, { method: "POST", body: formData });
 }
+
+export function apiPut(path, body) {
+  return request(path, { method: "PUT", body: JSON.stringify(body) });
+}

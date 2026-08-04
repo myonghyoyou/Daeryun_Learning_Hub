@@ -9,18 +9,55 @@
         WHERE employee_no = #{employeeNo}
     </select>
 
+    <!--
+        status 까지 본다. 비활성 SUPER_ADMIN 만 남은 상태는 아무도 관리 화면에 들어갈 수 없는
+        상태이므로, SuperAdminBootstrapRunner 가 재기동 시 부트스트랩 계정을 다시 만들어
+        복구할 수 있어야 한다.
+    -->
     <select id="existsSuperAdmin" resultType="boolean">
-        SELECT EXISTS (SELECT 1 FROM users WHERE role = 'SUPER_ADMIN')
+        SELECT EXISTS (SELECT 1 FROM users WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE')
+    </select>
+
+    <select id="countActiveSuperAdminsExcluding" resultType="int">
+        SELECT count(*) FROM users
+        WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE' AND id &lt;&gt; #{userId}
     </select>
 
     <select id="existsByEmail" resultType="boolean">
         SELECT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(#{email}))
     </select>
 
+    <select id="existsByEmployeeNo" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM users WHERE employee_no = #{employeeNo})
+    </select>
+
+    <select id="findById" resultType="User">
+        SELECT id, employee_no, name, email, password_hash, department_id, role, status,
+               must_change_password, failed_login_count, locked_until, last_login_at, created_at
+        FROM users WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultType="com.daeryun.probank.dto.user.UserListItem">
+        SELECT u.id, u.employee_no, u.name, u.email, u.department_id, d.name AS department_name,
+               u.role, u.status, u.last_login_at
+        FROM users u
+        JOIN departments d ON d.id = u.department_id
+        <where>
+            <if test="departmentId != null">AND u.department_id = #{departmentId}</if>
+        </where>
+        ORDER BY u.employee_no
+    </select>
+
     <insert id="insert" parameterType="User" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO users (employee_no, name, email, password_hash, department_id, role, status, must_change_password)
         VALUES (#{employeeNo}, #{name}, #{email}, #{passwordHash}, #{departmentId}, #{role}, #{status}, #{mustChangePassword})
     </insert>
+
+    <update id="update" parameterType="User">
+        UPDATE users
+        SET name = #{name}, email = #{email}, department_id = #{departmentId}, role = #{role}, status = #{status}
+        WHERE id = #{id}
+    </update>
 
     <!--
         실패 카운트 증가와 잠금 적용을 한 SQL 안에서 원자적으로 처리한다.

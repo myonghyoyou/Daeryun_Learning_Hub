@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.ExcelUploadLogDao">
+
+    <insert id="insert" parameterType="ExcelUploadLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO excel_upload_logs
+            (uploaded_by, department_id, target_type, file_name, total_rows, success_rows, fail_rows, error_detail)
+        VALUES
+            (#{uploadedBy}, #{departmentId}, #{targetType}, #{fileName}, #{totalRows}, #{successRows}, #{failRows}, #{errorDetail})
+    </insert>
+
+    <select id="findAll" resultType="ExcelUploadLog">
+        SELECT id, uploaded_by, department_id, target_type, file_name, total_rows, success_rows, fail_rows, error_detail, created_at
+        FROM excel_upload_logs
+        <where>
+            AND target_type = #{targetType}
+            <if test="departmentId != null">AND department_id = #{departmentId}</if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>
