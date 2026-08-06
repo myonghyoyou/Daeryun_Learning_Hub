@@ -17,11 +17,28 @@ test("SUPER_ADMIN sees the department management and account management menus", 
       label: "관리 메뉴",
       items: [
         { to: "/admin/departments", label: "부서 관리", end: false },
-        { to: "/admin/users", label: "계정 관리", end: false },
+        { to: "/admin/users", label: "계정 관리", end: true },
         { to: "/admin/users/excel-upload", label: "계정 일괄 등록", end: false },
       ],
     },
   ]);
+});
+
+// NavLink 는 기본적으로 접두사로 매칭한다. 따라서 어떤 항목의 경로가 다른 항목의 경로의
+// 접두사인데 end:true 가 없으면, 하위 경로 화면에서 두 메뉴가 동시에 활성으로 보인다
+// (/admin/users/excel-upload 에서 "계정 관리"까지 켜지던 실제 결함).
+test("a menu path that prefixes another menu path must be exact-matched (end)", () => {
+  for (const role of ["SUPER_ADMIN", "DEPT_ADMIN", "EMPLOYEE", undefined, null]) {
+    const items = buildNavGroups(role).flatMap((group) => group.items);
+    for (const item of items) {
+      const isPrefixOfAnother = items.some(
+        (other) => other !== item && other.to.startsWith(`${item.to}/`)
+      );
+      if (isPrefixOfAnother) {
+        assert.equal(item.end, true, `${item.to} prefixes another menu path but is not exact-matched`);
+      }
+    }
+  }
 });
 
 // 대시보드 화면이 없는 동안에는 /admin 메뉴 항목을 두지 않는다(라우터가 /admin/departments로

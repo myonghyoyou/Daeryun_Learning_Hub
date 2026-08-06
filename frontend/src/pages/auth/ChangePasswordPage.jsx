@@ -5,6 +5,8 @@ import { CheckCircle, Circle, Eye, EyeSlash, SpinnerGap, WarningCircle } from "@
 import { changePassword } from "@/api/auth.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { refetchSession } from "@/store/sessionStore.js";
+import LogoutButton from "@/components/ui/LogoutButton.jsx";
+import { useLogout } from "@/hooks/useLogout.js";
 
 const MIN_LENGTH = 8;
 
@@ -16,6 +18,7 @@ const inputBaseClass =
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
+  const { handleLogout, loggingOut } = useLogout();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -169,6 +172,15 @@ export default function ChangePasswordPage() {
             {submitting && <SpinnerGap size={18} className="animate-spin" />}
             {submitting ? "변경 중" : "변경하기"}
           </button>
+
+          {/*
+            이 화면은 mustChangePassword 사용자가 강제로 머무는 곳이라, 로그아웃 수단이 없으면
+            비밀번호를 바꾸기 전에는 다른 계정으로 전환할 수 없다.
+          */}
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <p className="text-body-small text-ink-muted">다른 계정으로 로그인하시겠습니까?</p>
+            <LogoutButton onLogout={handleLogout} loggingOut={loggingOut} label="로그아웃" />
+          </div>
         </form>
       </div>
     </div>
