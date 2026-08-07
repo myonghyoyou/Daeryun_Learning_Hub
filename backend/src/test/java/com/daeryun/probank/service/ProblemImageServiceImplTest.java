@@ -95,4 +95,29 @@ class ProblemImageServiceImplTest {
 
         assertThrows(BizException.class, () -> service.store(file, actor));
     }
+
+    /**
+     * Pins that a failure in the audit log write does not leave an unaudited file on disk. The file
+     * is written first, then {@code auditLogService.record(...)} is stubbed to throw (simulating e.g.
+     * a DB hiccup). Without the cleanup in {@code store()}'s catch block, the file written just before
+     * the throw would remain in {@code tempDir} even though {@code store()} reports failure — this
+     * test fails on that leftover file if the {@code deleteQuietly(target)} call were removed.
+     */
+    @Test
+    void store_deletesFileWhenAuditLogWriteFails(@TempDir Path tempDir) {
+        AuditLogService auditLogService = Mockito.mock(AuditLogService.class);
+        Mockito.doThrow(new RuntimeException("simulated DB failure"))
+                .when(auditLogService)
+                .record(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+        ProblemImageServiceImpl service = new ProblemImageServiceImpl(tempDir.toString(), auditLogService);
+        MockMultipartFile file = new MockMultipartFile("file", "sample.png", "image/png", new byte[]{1, 2, 3});
+        AuthUser actor = new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false);
+
+        BizException ex = assertThrows(BizException.class, () -> service.store(file, actor));
+        assertEquals("이미지 업로드에 실패했습니다.", ex.getMessage());
+
+        File[] children = tempDir.toFile().listFiles();
+        assertTrue(children == null || children.length == 0,
+                "audit log failure must not leave an unaudited file behind");
+    }
 }

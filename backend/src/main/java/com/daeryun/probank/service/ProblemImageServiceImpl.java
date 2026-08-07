@@ -3,6 +3,8 @@ package com.daeryun.probank.service;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.exception.BizException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,6 +21,8 @@ import java.util.UUID;
 
 @Service
 public class ProblemImageServiceImpl implements ProblemImageService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProblemImageServiceImpl.class);
 
     /**
      * Extensions accepted for problem images. Deliberately excludes svg — SVG can carry inline
@@ -61,25 +65,55 @@ public class ProblemImageServiceImpl implements ProblemImageService {
         }
 
         String extension = validateAndExtractExtension(file);
-
+        Path target;
+        String fileName;
         try {
             Files.createDirectories(uploadDir);
             // The stored name is always a fresh UUID plus a vetted extension — the client-supplied
             // original filename is never used to build the path, so it cannot inject "../", an
             // absolute path, or a NUL byte into the target location.
-            String fileName = UUID.randomUUID() + "." + extension;
-            Path target = uploadDir.resolve(fileName).normalize();
+            fileName = UUID.randomUUID() + "." + extension;
+            target = uploadDir.resolve(fileName).normalize();
             if (!target.getParent().equals(uploadDir)) {
-                // Defense-in-depth: should be unreachable given the UUID name and extension allowlist
-                // above, but never write outside the configured upload root.
+                // Belt-and-braces only: given the UUID filename and the regex-vetted extension from
+                // validateAndExtractExtension()/extractSafeExtension() above, fileName can never
+                // contain a path separator, so this branch cannot currently trigger. Kept so a future
+                // change to filename construction can't silently reintroduce an escape — it is not
+                // itself the mechanism preventing traversal, and must not be treated as load-bearing
+                // in place of the extension sanitization.
                 throw new BizException(ErrorCode.FILE_TYPE_NOT_ALLOWED, "허용되지 않는 파일입니다.");
             }
-            file.transferTo(target.toFile());
-            auditLogService.record(actor.getUserId(), "PROBLEM_IMAGE_UPLOADED", "PROBLEM_IMAGE", null,
-                    "{\"fileName\":\"" + fileName + "\"}");
-            return "/uploads/images/" + fileName;
         } catch (IOException e) {
             throw new BizException(ErrorCode.MSG_PROC_FAIL, "이미지 업로드에 실패했습니다.");
+        }
+
+        try {
+            file.transferTo(target.toFile());
+        } catch (IOException e) {
+            throw new BizException(ErrorCode.MSG_PROC_FAIL, "이미지 업로드에 실패했습니다.");
+        }
+
+        // The file is now on disk. The audit log write is part of this task's contract ("파일 저장과
+        // DB 감사 로그를 함께 수행한다") — if it fails for any reason (DB hiccup, etc.), the two must
+        // not diverge: remove the orphaned file and surface the same documented failure the caller
+        // already handles, rather than leaving an unaudited file behind or letting an unexpected
+        // exception type escape uncaught.
+        try {
+            auditLogService.record(actor.getUserId(), "PROBLEM_IMAGE_UPLOADED", "PROBLEM_IMAGE", null,
+                    "{\"fileName\":\"" + fileName + "\"}");
+        } catch (RuntimeException e) {
+            deleteQuietly(target);
+            throw new BizException(ErrorCode.MSG_PROC_FAIL, "이미지 업로드에 실패했습니다.");
+        }
+
+        return "/uploads/images/" + fileName;
+    }
+
+    private void deleteQuietly(Path target) {
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException e) {
+            LOGGER.warn("감사 로그 기록 실패 후 업로드 파일 정리에도 실패했습니다: {}", target, e);
         }
     }
 
