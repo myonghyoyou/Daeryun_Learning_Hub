@@ -1,0 +1,172 @@
+import { useRef, useState } from "react";
+import { toast } from "react-toastify";
+import { Upload } from "@phosphor-icons/react";
+import { uploadProblemsExcel } from "@/api/problems.js";
+import { resolveErrorMessage } from "@/api/client.js";
+import { parseExcelErrorDetail } from "@/utils/excelUploadResult.js";
+import Surface from "@/components/ui/Surface.jsx";
+import Button from "@/components/ui/Button.jsx";
+import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
+
+const TEMPLATE_COLUMNS = [
+  "문제유형",
+  "문제내용",
+  "이미지",
+  "참조지문",
+  "보기1",
+  "보기2",
+  "보기3",
+  "보기4",
+  "보기5",
+  "정답",
+  "해설",
+  "태그",
+];
+const TEMPLATE_EXAMPLE_ROW = [
+  "MCQ_SINGLE",
+  "대한민국의 수도는?",
+  "",
+  "",
+  "서울",
+  "부산",
+  "인천",
+  "",
+  "",
+  "1",
+  "대한민국의 수도는 서울이다.",
+  "지리,상식",
+];
+
+export default function ProblemExcelUploadPage() {
+  const fileInputRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  function handleChooseFile() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(event) {
+    setFile(event.target.files?.[0] ?? null);
+    // 새 파일을 고르면 이전 업로드의 요약/오류 목록이 아직 업로드하지 않은 새 파일 옆에
+    // 남아 있지 않도록 지운다(UserExcelUploadPage와 동일한 규칙).
+    setResult(null);
+  }
+
+  async function handleUpload() {
+    if (!file) {
+      toast.error("업로드할 엑셀 파일을 선택하세요.");
+      return;
+    }
+    setUploading(true);
+    setResult(null);
+    try {
+      const uploadResult = await uploadProblemsExcel(file);
+      setResult(uploadResult);
+      toast.success(`업로드 완료: 성공 ${uploadResult.successRows}건 / 실패 ${uploadResult.failRows}건`);
+    } catch (error) {
+      toast.error(resolveErrorMessage(error, "업로드에 실패했습니다."));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const rowErrors = result ? parseExcelErrorDetail(result.errorDetail) : [];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-page-title font-extrabold tracking-title text-ink-strong">문제 엑셀 일괄 등록</h1>
+        <p className="mt-1 text-body-small text-ink-muted">엑셀 파일로 여러 문제를 한 번에 등록합니다.</p>
+      </div>
+
+      {/* 8.9: 템플릿 컬럼 안내를 작은 설명 텍스트와 예시 행으로 제공한다. 다운로드 가능한 템플릿
+          파일/버튼은 두지 않는다 — Plan 3에서 "실제 템플릿 확정 후 별도 범위로 결정"하기로 닫힌
+          이슈다. */}
+      <Surface className="p-5">
+        <h2 className="text-section-title font-bold text-ink-strong">템플릿 안내</h2>
+        <p className="mt-1 text-body-small text-ink-muted">
+          엑셀 1행은 헤더이며, 2행부터 아래 순서의 컬럼으로 문제를 입력합니다. 이미지·참조지문·해설·태그는
+          비워둘 수 있습니다. 보기는 필요한 만큼만 채우되(최소 2개, 최대 5개) 중간 칸을 비운 채 뒤 칸을 채울 수는
+          없습니다. 태그는 콤마로 구분합니다.
+        </p>
+        <p className="mt-1 text-body-small text-ink-muted">
+          정답: 객관식(MCQ_SINGLE·MCQ_MULTI)과 OX는 보기 번호를 1부터 입력하며, 복수 정답은 콤마로 구분합니다.
+          주관식(SHORT_ANSWER)은 콤마로 구분한 허용 정답 목록입니다.
+        </p>
+        <p className="mt-2 text-body-small font-semibold text-danger-text">
+          빈칸 채우기(FILL_BLANK)는 엑셀 업로드를 지원하지 않습니다. 개별 등록/수정 화면을 이용하세요.
+        </p>
+        <div className="mt-4">
+          <DataTable
+            ariaLabel="엑셀 템플릿 컬럼 예시"
+            columns={TEMPLATE_COLUMNS.map((label) => ({ key: label, label }))}
+          >
+            <TableRow>
+              {TEMPLATE_EXAMPLE_ROW.map((value, index) => (
+                <TableCell key={TEMPLATE_COLUMNS[index]}>{value || "—"}</TableCell>
+              ))}
+            </TableRow>
+          </DataTable>
+        </div>
+      </Surface>
+
+      {/* 8.9: 점선 Dropzone이 아니라 일반 Surface + 파일 선택 버튼으로 시작한다. */}
+      <Surface className="p-5">
+        <h2 className="text-section-title font-bold text-ink-strong">파일 업로드</h2>
+        <p className="mt-1 text-body-small text-ink-muted">
+          xlsx 또는 xls 파일만 업로드할 수 있으며, 한 번에 최대 500행까지 처리됩니다.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <input
+            ref={fileInputRef}
+            id="problem-excel-file"
+            type="file"
+            accept=".xlsx,.xls"
+            aria-label="문제 엑셀 파일 선택"
+            className="hidden"
+            disabled={uploading}
+            onChange={handleFileChange}
+          />
+          <Button type="button" variant="secondary" disabled={uploading} onClick={handleChooseFile}>
+            파일 선택
+          </Button>
+          <span className="text-body-small text-ink-muted">{file ? file.name : "선택된 파일이 없습니다."}</span>
+          <Button type="button" loading={uploading} onClick={handleUpload}>
+            <Upload size={16} aria-hidden="true" />
+            업로드
+          </Button>
+        </div>
+
+        <div aria-live="polite">
+          {uploading && <p className="mt-4 text-body-small text-ink-muted">업로드 중입니다. 잠시만 기다려 주세요...</p>}
+
+          {result && (
+            <div className="mt-4 space-y-4">
+              {/* 8.6.3 부분 성공: 결과 요약과 오류 목록을 각각 제공한다. */}
+              <div className="rounded-sm border border-line-default bg-surface-subtle p-4">
+                <p className="text-body font-semibold text-ink-strong">
+                  전체 {result.totalRows}건 중 성공 {result.successRows}건 / 실패 {result.failRows}건
+                </p>
+              </div>
+
+              {rowErrors.length > 0 && (
+                <div className="rounded-sm border border-line-default p-4">
+                  <p className="text-body-small font-semibold text-danger-text">행별 오류</p>
+                  <ul className="mt-2 space-y-1">
+                    {rowErrors.map((rowError, index) => (
+                      <li key={index} className="text-body-small text-danger-text">
+                        {rowError.row ? `행 ${rowError.row}: ${rowError.reason}` : rowError.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Surface>
+    </div>
+  );
+}

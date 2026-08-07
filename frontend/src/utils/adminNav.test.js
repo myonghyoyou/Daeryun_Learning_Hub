@@ -20,6 +20,7 @@ test("SUPER_ADMIN sees the department, account, and problem management menus", (
         { to: "/admin/users", label: "계정 관리", end: true },
         { to: "/admin/users/excel-upload", label: "계정 일괄 등록", end: false },
         { to: "/admin/problems", label: "문제 관리", end: true },
+        { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
       ],
     },
   ]);
@@ -58,7 +59,10 @@ test("DEPT_ADMIN does not see department or account management (hidden, not disa
   assert.deepEqual(toPlain(buildNavGroups("DEPT_ADMIN")), [
     {
       label: "관리 메뉴",
-      items: [{ to: "/admin/problems", label: "문제 관리", end: true }],
+      items: [
+        { to: "/admin/problems", label: "문제 관리", end: true },
+        { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
+      ],
     },
   ]);
 });

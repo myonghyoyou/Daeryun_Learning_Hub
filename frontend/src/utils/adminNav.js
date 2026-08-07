@@ -22,7 +22,12 @@ import { Buildings, Users, Upload, ClipboardText } from "@phosphor-icons/react";
  * 보인다(/admin/users/excel-upload 에서 "계정 관리"까지 켜지던 문제). adminNav.test.js 가
  * 이 규칙을 자동으로 검사한다. /admin/problems는 Task 8(/admin/problems/new,
  * /admin/problems/:id/edit)과 Task 9(/admin/problems/excel-upload)가 하위 경로를
- * 추가할 예정이라 미리 end:true를 준다.
+ * 추가하므로 end:true를 준다.
+ *
+ * Task 9: 문제 엑셀 일괄 등록은 계정 일괄 등록과 같은 패턴으로 "문제 관리" 바로 아래에
+ * 별도 메뉴 항목을 둔다(디자인 시스템 8.6.1의 Sidebar 구조: 문제 관리 하위에 문제 엑셀
+ * 일괄 등록을 나열). 문제 관리 자체가 총괄/부서 관리자 모두에게 노출되므로, 이 항목도
+ * if(role === "SUPER_ADMIN") 블록 밖에 두어 두 역할 모두에게 노출한다.
  */
 export function buildNavGroups(role) {
   if (role !== "SUPER_ADMIN" && role !== "DEPT_ADMIN") {
@@ -36,6 +41,9 @@ export function buildNavGroups(role) {
       { to: "/admin/users/excel-upload", label: "계정 일괄 등록", icon: Upload },
     );
   }
-  items.push({ to: "/admin/problems", label: "문제 관리", icon: ClipboardText, end: true });
+  items.push(
+    { to: "/admin/problems", label: "문제 관리", icon: ClipboardText, end: true },
+    { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", icon: Upload },
+  );
   return [{ label: "관리 메뉴", items }];
 }
