@@ -80,15 +80,44 @@ public class ProblemServiceImpl implements ProblemService {
     }
 
     @Override
+    @Transactional
     public void update(Long id, ProblemCreateRequest request, AuthUser actor) {
-        // Task 4(문제 수정/보관 API)에서 구현한다.
-        throw new UnsupportedOperationException("update is not implemented yet");
+        Problem existing = problemDao.findById(id);
+        if (existing == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 문제입니다.");
+        }
+        assertOwnership(existing, actor);
+        if (existing.getType() != request.getType()) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "문제 유형은 수정할 수 없습니다.");
+        }
+        validate(request);
+
+        existing.setContent(request.getContent());
+        existing.setImageUrl(request.getImageUrl());
+        existing.setReferenceText(request.getReferenceText());
+        existing.setExplanation(request.getExplanation());
+        existing.setBlankRevealCount(request.getType() == ProblemType.FILL_BLANK ? request.getBlankRevealCount() : null);
+        problemDao.update(existing);
+
+        problemChoiceDao.deleteByProblemId(id);
+        problemAnswerDao.deleteByProblemId(id);
+        problemBlankDao.deleteByProblemId(id);
+        saveTypeSpecificData(id, request);
+        problemTagDao.replaceTags(id, tagDao.findOrCreateByNames(normalizeTags(request.getTags())));
+        auditLogService.record(actor.getUserId(), "PROBLEM_UPDATED", "PROBLEM", id,
+                "{\"type\":\"" + existing.getType() + "\"}");
     }
 
     @Override
+    @Transactional
     public void archive(Long id, AuthUser actor) {
-        // Task 4(문제 수정/보관 API)에서 구현한다.
-        throw new UnsupportedOperationException("archive is not implemented yet");
+        Problem existing = problemDao.findById(id);
+        if (existing == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 문제입니다.");
+        }
+        assertOwnership(existing, actor);
+        problemDao.updateStatus(id, ProblemStatus.ARCHIVED);
+        auditLogService.record(actor.getUserId(), "PROBLEM_ARCHIVED", "PROBLEM", id, "{}");
     }
 
     @Override

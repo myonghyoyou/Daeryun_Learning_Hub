@@ -269,4 +269,93 @@ class ProblemServiceImplTest {
 
         assertThrows(BizException.class, () -> service.getDetail(5L, actor));
     }
+
+    @Test
+    void update_ownProblem_replacesChoicesAndContent() {
+        com.daeryun.probank.domain.Problem existing = new com.daeryun.probank.domain.Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(10L);
+        existing.setType(ProblemType.MCQ_SINGLE);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.MCQ_SINGLE);
+        request.setContent("수정된 문제");
+        request.setChoices(Arrays.asList(choice("1", false), choice("2", true)));
+
+        service.update(5L, request, actor);
+
+        Mockito.verify(problemChoiceDao).deleteByProblemId(5L);
+        Mockito.verify(problemChoiceDao).insertAll(Mockito.anyList());
+        Mockito.verify(problemDao).update(Mockito.any());
+    }
+
+    @Test
+    void update_otherDepartmentProblemAsDeptAdmin_throwsAccessDenied() {
+        com.daeryun.probank.domain.Problem existing = new com.daeryun.probank.domain.Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(999L);
+        // 유형을 요청과 동일하게 맞춰서, 이 테스트가 실제로 부서 소유권 검사(assertOwnership)
+        // 때문에 실패하는지를 검증하도록 한다. 유형이 다르면(브리핑 원본처럼 existing.type이
+        // null인 채로 두면) update_typeMismatchWithinSameDepartment_rejects가 고정하는
+        // 유형 불일치 가드가 먼저 던져서, assertOwnership을 제거해도 이 테스트가 계속
+        // 통과해버리는 오탐(false positive)이 생긴다.
+        existing.setType(ProblemType.SHORT_ANSWER);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("x");
+        request.setAnswers(Collections.singletonList("y"));
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+    }
+
+    // 브리핑이 제공한 update 테스트 3개 중 어느 것도 "동일 부서 문제인데 요청 유형이 기존
+    // 유형과 다른 경우"를 독립적으로 검증하지 않는다.
+    // update_otherDepartmentProblemAsDeptAdmin_throwsAccessDenied는 assertOwnership이
+    // 먼저 던지므로 유형 불일치 가드를 전혀 통과하지 않는다. 플랜의 Approved Amendments
+    // ("서버에서도 기존 유형과 요청 유형의 불일치를 거부한다")를 고정하기 위해 추가한다.
+    @Test
+    void update_typeMismatchWithinSameDepartment_rejects() {
+        com.daeryun.probank.domain.Problem existing = new com.daeryun.probank.domain.Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(10L);
+        existing.setType(ProblemType.MCQ_SINGLE);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("x");
+        request.setAnswers(Collections.singletonList("y"));
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+        Mockito.verify(problemDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void archive_ownProblem_updatesStatusToArchived() {
+        com.daeryun.probank.domain.Problem existing = new com.daeryun.probank.domain.Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(10L);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+
+        service.archive(5L, actor);
+
+        Mockito.verify(problemDao).updateStatus(5L, com.daeryun.probank.domain.ProblemStatus.ARCHIVED);
+    }
+
+    // 브리핑은 archive의 허용 경로(자기 부서)만 테스트한다. "부서 스코프는 양쪽 분기 모두
+    // 테스트가 필요하다(허용 경로만 있는 테스트는 아무것도 증명하지 못한다)"는 태스크
+    // 요구사항에 따라 거부 경로를 추가로 고정한다.
+    @Test
+    void archive_otherDepartmentProblemAsDeptAdmin_throwsAccessDenied() {
+        com.daeryun.probank.domain.Problem existing = new com.daeryun.probank.domain.Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(999L);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+
+        assertThrows(BizException.class, () -> service.archive(5L, actor));
+        Mockito.verify(problemDao, Mockito.never()).updateStatus(Mockito.anyLong(), Mockito.any());
+    }
 }

@@ -45,4 +45,17 @@ public class ProblemController {
     public ResponseEntity<ResponseDto<?>> getDetail(@PathVariable Long id, @LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(problemService.getDetail(id, actor)));
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ResponseDto<?>> update(@PathVariable Long id, @RequestBody ProblemCreateRequest request,
+                                                  @LoginUser AuthUser actor) {
+        problemService.update(id, request, actor);
+        return ResponseEntity.ok(ResponseDto.ok());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ResponseDto<?>> archive(@PathVariable Long id, @LoginUser AuthUser actor) {
+        problemService.archive(id, actor);
+        return ResponseEntity.ok(ResponseDto.ok());
+    }
 }
