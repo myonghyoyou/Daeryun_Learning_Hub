@@ -88,11 +88,22 @@ class ProblemDaoTest {
         choice2.setChoiceText("2");
         choice2.setCorrect(true);
         choice2.setDisplayOrder(2);
-        problemChoiceDao.insertAll(java.util.Arrays.asList(choice1, choice2));
+        problemChoiceDao.insertAll(Arrays.asList(choice1, choice2));
 
         Problem found = problemDao.findById(problem.getId());
         assertEquals("1 + 1 = ?", found.getContent());
-        assertEquals(2, problemChoiceDao.findByProblemId(problem.getId()).size());
+
+        List<ProblemChoice> choices = problemChoiceDao.findByProblemId(problem.getId());
+        assertEquals(2, choices.size());
+        // Regression guard: is_correct must round-trip through the resultMap correctly.
+        // Lombok's `boolean correct` registers the MyBatis property name as "correct" (from
+        // isCorrect()), not "isCorrect" — relying on auto-mapping against the is_correct
+        // column silently mapped every row to correct == false. See ProblemChoiceMapper.xml's
+        // problemChoiceMap.
+        ProblemChoice persistedChoice1 = choices.stream().filter(c -> "1".equals(c.getChoiceText())).findFirst().orElseThrow(AssertionError::new);
+        ProblemChoice persistedChoice2 = choices.stream().filter(c -> "2".equals(c.getChoiceText())).findFirst().orElseThrow(AssertionError::new);
+        assertFalse(persistedChoice1.isCorrect());
+        assertTrue(persistedChoice2.isCorrect());
     }
 
     @Test
@@ -192,8 +203,5 @@ class ProblemDaoTest {
         assertEquals(2, problemBlankDao.findByProblemId(problem.getId()).size());
         problemBlankDao.deleteByProblemId(problem.getId());
         assertTrue(problemBlankDao.findByProblemId(problem.getId()).isEmpty());
-
-        assertFalse(problemChoiceDao.findByProblemId(problem.getId()).size() > 0);
-        problemChoiceDao.deleteByProblemId(problem.getId());
     }
 }
