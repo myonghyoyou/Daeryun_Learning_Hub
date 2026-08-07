@@ -3,11 +3,6 @@ package com.daeryun.probank.service;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.dao.ExcelUploadLogDao;
-import com.daeryun.probank.dao.ProblemAnswerDao;
-import com.daeryun.probank.dao.ProblemChoiceDao;
-import com.daeryun.probank.dao.ProblemDao;
-import com.daeryun.probank.dao.ProblemTagDao;
-import com.daeryun.probank.dao.TagDao;
 import com.daeryun.probank.domain.Problem;
 import com.daeryun.probank.domain.ProblemAnswer;
 import com.daeryun.probank.domain.ProblemChoice;
@@ -37,19 +32,18 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
- * 문제 엑셀 일괄 업로드. {@link com.daeryun.probank.service.ExcelAccountUploadServiceImpl}(Plan 2)과 같은 구조를
- * 따른다: 행 단위로 파싱·검증하고, 실패한 행은 건너뛰며 성공한 행만 저장하는 부분 성공을 허용한다.
+ * 문제 엑셀 일괄 업로드. {@link ExcelAccountUploadServiceImpl}(Plan 2)과 같은 구조를 따른다: 행 단위로
+ * 파싱·검증하고, 실패한 행은 건너뛰며 성공한 행만 저장하는 부분 성공을 허용한다.
  * <p>
- * 트랜잭션 경계: 이 메서드 전체에는 {@code @Transactional}을 걸지 않는다. 각 행의 검증은 DB 쓰기 이전에
- * 모두 끝나므로({@link #processRow}), {@code problemDao.insert} 이후 실행되는 나머지 쓰기(보기/정답,
- * 태그, 감사 로그)는 이례적인 DB 예외가 아니면 실패하지 않는다. 계정 업로드 레퍼런스는 이런 종류의
- * 행별 원자성을 별도 빈({@code AccountProvisioningService})의 {@code REQUIRES_NEW} 트랜잭션으로
- * 얻는다 — 여기서는 그런 별도 빈이 없고, 이 클래스의 생성자 시그니처가 테스트에 고정되어 있어
- * {@code PlatformTransactionManager}를 추가로 주입할 수도 없다. 대신 {@link #processRow}의 쓰기 구간을
- * try/catch로 감싸 한 행의 예외가 전체 배치를 중단시키지 않게 막는다(부분 성공 보장). 남는 한계는,
- * {@code problemDao.insert} 성공 후 같은 행의 후속 쓰기가 실패하면 보기/정답 없는 Problem 행이 남을 수
- * 있다는 점이다 — 이는 검증을 모두 통과한 뒤에만 벌어지는 드문 DB 수준 실패로 한정되며, 리포트에 별도
- * 한계로 명시한다.
+ * 트랜잭션 경계: 이 메서드 전체와 {@link #processRow}에는 {@code @Transactional}을 걸지 않는다. 대신 각
+ * 행의 검증을 모두 통과한 뒤의 실제 DB 쓰기(Problem insert + 보기/정답 insert + 태그 연결 + 감사 로그)는
+ * {@link ProblemProvisioningService}에 위임한다 — 계정 업로드 레퍼런스가 {@code AccountProvisioningService}
+ * 를 별도 빈으로 두고 {@code @Transactional(REQUIRES_NEW)}를 붙인 것과 동일한 이유다: 이 클래스 안의 private
+ * 메서드에 {@code @Transactional}을 붙여도 같은 빈 안에서 {@code this.xyz()}로 호출하면 Spring AOP 프록시를
+ * 우회해 트랜잭션이 걸리지 않는다(자기 호출 문제) — 그래서 실제 DB 쓰기를 별도 빈으로 분리했다. 이렇게 하면
+ * 한 행의 쓰기 도중 예외가 나도 그 행만 롤백되고(Problem·보기/정답·태그가 함께 사라진다) 이미 커밋된 다른
+ * 행에는 영향을 주지 않는다 — 트랜잭션 없이 진행하던 이전 버전에서 남을 수 있었던 "보기 없는 Problem 고아
+ * 행" 문제가 해결된다.
  */
 @Service
 public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService {
@@ -79,23 +73,15 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     private static final String UNREADABLE_MESSAGE =
             "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요.";
 
-    private final ProblemDao problemDao;
-    private final ProblemChoiceDao problemChoiceDao;
-    private final ProblemAnswerDao problemAnswerDao;
     private final ExcelUploadLogDao excelUploadLogDao;
-    private final TagDao tagDao;
-    private final ProblemTagDao problemTagDao;
+    private final ProblemProvisioningService problemProvisioningService;
     private final AuditLogService auditLogService;
 
-    public ExcelProblemUploadServiceImpl(ProblemDao problemDao, ProblemChoiceDao problemChoiceDao,
-                                          ProblemAnswerDao problemAnswerDao, ExcelUploadLogDao excelUploadLogDao,
-                                          TagDao tagDao, ProblemTagDao problemTagDao, AuditLogService auditLogService) {
-        this.problemDao = problemDao;
-        this.problemChoiceDao = problemChoiceDao;
-        this.problemAnswerDao = problemAnswerDao;
+    public ExcelProblemUploadServiceImpl(ExcelUploadLogDao excelUploadLogDao,
+                                          ProblemProvisioningService problemProvisioningService,
+                                          AuditLogService auditLogService) {
         this.excelUploadLogDao = excelUploadLogDao;
-        this.tagDao = tagDao;
-        this.problemTagDao = problemTagDao;
+        this.problemProvisioningService = problemProvisioningService;
         this.auditLogService = auditLogService;
     }
 
@@ -214,14 +200,6 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
             return RowResult.fail(rowNumber, "정답은 필수입니다.");
         }
 
-        List<String> choiceTexts = new ArrayList<>();
-        for (int i = 0; i < MAX_CHOICE_COLUMNS; i++) {
-            String choiceText = cellValue(row, COL_CHOICE_START + i, dataFormatter);
-            if (!isBlank(choiceText)) {
-                choiceTexts.add(choiceText);
-            }
-        }
-
         Problem problem = new Problem();
         problem.setType(type);
         problem.setContent(content);
@@ -233,21 +211,49 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         problem.setCreatedBy(actor.getUserId());
 
         if (type == ProblemType.SHORT_ANSWER) {
-            List<String> answers = Arrays.stream(answerText.split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
-            if (answers.isEmpty()) {
-                return RowResult.fail(rowNumber, "정답 형식이 올바르지 않습니다.");
-            }
-            return saveShortAnswer(rowNumber, problem, answers, tags, actor);
+            return processShortAnswer(rowNumber, problem, answerText, tags);
+        }
+        return processChoiceBased(rowNumber, row, problem, type, answerText, tags, dataFormatter);
+    }
+
+    private RowResult processShortAnswer(int rowNumber, Problem problem, String answerText, List<String> tags) {
+        List<String> answers = Arrays.stream(answerText.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+        if (answers.isEmpty()) {
+            return RowResult.fail(rowNumber, "정답 형식이 올바르지 않습니다.");
         }
 
-        // MCQ_SINGLE, MCQ_MULTI, OX
+        List<ProblemAnswer> answerEntities = answers.stream().map(text -> {
+            ProblemAnswer answer = new ProblemAnswer();
+            answer.setAnswerText(text);
+            return answer;
+        }).collect(Collectors.toList());
+
+        try {
+            problemProvisioningService.provisionWithAnswers(problem, answerEntities, tags);
+            return RowResult.success(rowNumber);
+        } catch (RuntimeException e) {
+            LOGGER.warn("행 {} 문제 저장 실패", rowNumber, e);
+            return RowResult.fail(rowNumber, "문제 저장 중 오류가 발생했습니다.");
+        }
+    }
+
+    private RowResult processChoiceBased(int rowNumber, Row row, Problem problem, ProblemType type,
+                                          String answerText, List<String> tags, DataFormatter dataFormatter) {
+        List<String> choiceTexts = new ArrayList<>();
+        for (int i = 0; i < MAX_CHOICE_COLUMNS; i++) {
+            String choiceText = cellValue(row, COL_CHOICE_START + i, dataFormatter);
+            if (!isBlank(choiceText)) {
+                choiceTexts.add(choiceText);
+            }
+        }
         if (choiceTexts.size() < MIN_CHOICES || choiceTexts.size() > MAX_CHOICE_COLUMNS) {
             return RowResult.fail(rowNumber, "보기는 2개 이상 5개 이하이어야 합니다.");
         }
         if (type == ProblemType.OX && choiceTexts.size() != 2) {
             return RowResult.fail(rowNumber, "OX 문제는 보기 2개(O/X)가 필요합니다.");
         }
+
         List<Integer> correctIndexes;
         try {
             correctIndexes = Arrays.stream(answerText.split(","))
@@ -268,54 +274,17 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
             return RowResult.fail(rowNumber, "정답을 최소 1개 선택하세요.");
         }
 
-        return saveChoiceBased(rowNumber, problem, choiceTexts, correctIndexes, tags, actor, type);
-    }
-
-    /**
-     * 검증을 모두 통과한 뒤의 실제 DB 쓰기 구간. Problem insert 이후 보기/정답·태그·감사 로그 중
-     * 하나라도 예외를 던지면(예: 이례적인 DB 오류) 여기서 잡아 해당 행만 실패로 표시하고, 이미 처리한
-     * 다른 행들의 커밋에는 영향을 주지 않는다 — 트랜잭션을 걸지 않은 이 메서드에서 예외가 상위
-     * upload() 루프까지 새어 나가면 전체 배치가 중단되어 부분 성공이 깨지기 때문이다.
-     */
-    private RowResult saveShortAnswer(int rowNumber, Problem problem, List<String> answers, List<String> tags,
-                                       AuthUser actor) {
-        try {
-            problemDao.insert(problem);
-            List<ProblemAnswer> answerEntities = answers.stream().map(text -> {
-                ProblemAnswer answer = new ProblemAnswer();
-                answer.setProblemId(problem.getId());
-                answer.setAnswerText(text);
-                return answer;
-            }).collect(Collectors.toList());
-            problemAnswerDao.insertAll(answerEntities);
-            problemTagDao.replaceTags(problem.getId(), tagDao.findOrCreateByNames(tags));
-            auditLogService.record(actor.getUserId(), "PROBLEM_CREATED_BY_EXCEL", "PROBLEM", problem.getId(),
-                    "{\"type\":\"SHORT_ANSWER\"}");
-            return RowResult.success(rowNumber);
-        } catch (RuntimeException e) {
-            LOGGER.warn("행 {} 문제 저장 실패", rowNumber, e);
-            return RowResult.fail(rowNumber, "문제 저장 중 오류가 발생했습니다.");
+        List<ProblemChoice> choices = new ArrayList<>();
+        for (int i = 0; i < choiceTexts.size(); i++) {
+            ProblemChoice choice = new ProblemChoice();
+            choice.setChoiceText(choiceTexts.get(i));
+            choice.setCorrect(correctIndexes.contains(i + 1));
+            choice.setDisplayOrder(i + 1);
+            choices.add(choice);
         }
-    }
 
-    private RowResult saveChoiceBased(int rowNumber, Problem problem, List<String> choiceTexts,
-                                       List<Integer> correctIndexes, List<String> tags, AuthUser actor,
-                                       ProblemType type) {
         try {
-            problemDao.insert(problem);
-            List<ProblemChoice> choices = new ArrayList<>();
-            for (int i = 0; i < choiceTexts.size(); i++) {
-                ProblemChoice choice = new ProblemChoice();
-                choice.setProblemId(problem.getId());
-                choice.setChoiceText(choiceTexts.get(i));
-                choice.setCorrect(correctIndexes.contains(i + 1));
-                choice.setDisplayOrder(i + 1);
-                choices.add(choice);
-            }
-            problemChoiceDao.insertAll(choices);
-            problemTagDao.replaceTags(problem.getId(), tagDao.findOrCreateByNames(tags));
-            auditLogService.record(actor.getUserId(), "PROBLEM_CREATED_BY_EXCEL", "PROBLEM", problem.getId(),
-                    "{\"type\":\"" + type + "\"}");
+            problemProvisioningService.provisionWithChoices(problem, choices, tags);
             return RowResult.success(rowNumber);
         } catch (RuntimeException e) {
             LOGGER.warn("행 {} 문제 저장 실패", rowNumber, e);
