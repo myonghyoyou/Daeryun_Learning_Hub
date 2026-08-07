@@ -8,6 +8,9 @@ import com.daeryun.probank.dao.ProblemDao;
 import com.daeryun.probank.dao.ProblemTagDao;
 import com.daeryun.probank.dao.TagDao;
 import com.daeryun.probank.domain.Problem;
+import com.daeryun.probank.domain.ProblemAnswer;
+import com.daeryun.probank.domain.ProblemBlank;
+import com.daeryun.probank.domain.ProblemChoice;
 import com.daeryun.probank.domain.ProblemType;
 import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.problem.BlankInput;
@@ -24,6 +27,7 @@ import org.mockito.Mockito;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -50,6 +54,13 @@ class ProblemServiceImplTest {
         AuditLogService auditLogService = Mockito.mock(AuditLogService.class);
         service = new ProblemServiceImpl(problemDao, problemChoiceDao, problemAnswerDao, problemBlankDao,
                 tagDao, problemTagDao, auditLogService);
+    }
+
+    // insertAll(List<T>)에 실제로 넘어간 엔티티를 들여다보기 위한 캡터. 제네릭 List에 대한
+    // ArgumentCaptor는 타입 리터럴을 만들 수 없어 캐스팅이 불가피하다.
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <T> ArgumentCaptor<List<T>> listCaptor() {
+        return (ArgumentCaptor<List<T>>) (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
     }
 
     private ChoiceInput choice(String text, boolean correct) {
@@ -410,6 +421,179 @@ class ProblemServiceImplTest {
         ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
         Mockito.verify(problemDao).update(captor.capture());
         assertEquals("/uploads/images/a.png", captor.getValue().getImageUrl());
+    }
+
+    // --- 저장 전 trim (전체 브랜치 리뷰 F3) ---
+    // 엑셀 경로(cellValue)와 프런트엔드(buildProblemPayload)는 이미 trim하는데 서버만
+    // isBlank()로 "검사"만 trim하고 원본을 그대로 저장하고 있었다. Plan 4의 주관식 채점이
+    // 학습자 입력을 이 저장값과 비교하므로 패딩 하나가 정답/오답을 뒤집는다.
+
+    @Test
+    void create_shortAnswer_storesTrimmedContentAndAnswer() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("  대한민국의 수도는?  ");
+        request.setAnswers(Collections.singletonList("  서울  "));
+
+        service.create(request, actor);
+
+        ArgumentCaptor<Problem> problemCaptor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).insert(problemCaptor.capture());
+        assertEquals("대한민국의 수도는?", problemCaptor.getValue().getContent());
+
+        ArgumentCaptor<List<ProblemAnswer>> answerCaptor = listCaptor();
+        Mockito.verify(problemAnswerDao).insertAll(answerCaptor.capture());
+        assertEquals("서울", answerCaptor.getValue().get(0).getAnswerText());
+    }
+
+    @Test
+    void create_mcqSingle_storesTrimmedChoiceText() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.MCQ_SINGLE);
+        request.setContent("1+1=?");
+        request.setChoices(Arrays.asList(choice("  1  ", false), choice("  2  ", true)));
+
+        service.create(request, actor);
+
+        ArgumentCaptor<List<ProblemChoice>> choiceCaptor = listCaptor();
+        Mockito.verify(problemChoiceDao).insertAll(choiceCaptor.capture());
+        assertEquals("1", choiceCaptor.getValue().get(0).getChoiceText());
+        assertEquals("2", choiceCaptor.getValue().get(1).getChoiceText());
+    }
+
+    @Test
+    void create_fillBlank_storesTrimmedBlankKeyAndAnswer() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.FILL_BLANK);
+        request.setContent("{{blank_1}}은 대한민국의 수도이다.");
+        BlankInput blank = new BlankInput();
+        blank.setBlankKey("  blank_1  ");
+        blank.setAnswerText("  서울  ");
+        request.setBlanks(Collections.singletonList(blank));
+        request.setBlankRevealCount(1);
+
+        service.create(request, actor);
+
+        ArgumentCaptor<List<ProblemBlank>> blankCaptor = listCaptor();
+        Mockito.verify(problemBlankDao).insertAll(blankCaptor.capture());
+        assertEquals("blank_1", blankCaptor.getValue().get(0).getBlankKey());
+        assertEquals("서울", blankCaptor.getValue().get(0).getAnswerText());
+    }
+
+    @Test
+    void update_shortAnswer_storesTrimmedContentAndAnswer() {
+        Mockito.when(problemDao.findById(5L)).thenReturn(existingShortAnswer());
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("  수정된 문제  ");
+        request.setAnswers(Collections.singletonList("  부산  "));
+
+        service.update(5L, request, actor);
+
+        ArgumentCaptor<Problem> problemCaptor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).update(problemCaptor.capture());
+        assertEquals("수정된 문제", problemCaptor.getValue().getContent());
+
+        ArgumentCaptor<List<ProblemAnswer>> answerCaptor = listCaptor();
+        Mockito.verify(problemAnswerDao).insertAll(answerCaptor.capture());
+        assertEquals("부산", answerCaptor.getValue().get(0).getAnswerText());
+    }
+
+    // --- 태그 소문자화 로케일 (전체 브랜치 리뷰 F4) ---
+    // ProblemServiceImpl은 String::toLowerCase(기본 로케일), ExcelProblemUploadServiceImpl은
+    // toLowerCase(Locale.ROOT)를 쓰고 있었다. 터키어 기본 로케일에서 "I"는 각각 "ı"/"i"로
+    // 갈라져 같은 사용자 입력이 tags 테이블에 두 행으로 쌓인다.
+    @Test
+    void create_normalizesTagsWithRootLocaleRegardlessOfDefaultLocale() {
+        Locale original = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            ProblemCreateRequest request = new ProblemCreateRequest();
+            request.setType(ProblemType.SHORT_ANSWER);
+            request.setContent("대한민국의 수도는?");
+            request.setAnswers(Collections.singletonList("서울"));
+            request.setTags(Collections.singletonList("I"));
+
+            service.create(request, actor);
+
+            Mockito.verify(tagDao).findOrCreateByNames(Collections.singletonList("i"));
+        } finally {
+            Locale.setDefault(original);
+        }
+    }
+
+    // --- 길이 검증 (전체 브랜치 리뷰 F5) ---
+    // schema.sql이 choice_text/answer_text VARCHAR(500), blank_key VARCHAR(50)로 강제하는데
+    // 어느 검증 경로도 길이를 보지 않아, 평범한 사용자 입력이 DataIntegrityViolationException →
+    // "처리 중 오류가 발생하였습니다" + ERROR 스택트레이스로 새어 나갔다.
+
+    private String repeat(char c, int count) {
+        StringBuilder sb = new StringBuilder(count);
+        for (int i = 0; i < count; i++) {
+            sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    @Test
+    void create_mcqSingle_withOverlongChoiceText_rejects() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.MCQ_SINGLE);
+        request.setContent("1+1=?");
+        request.setChoices(Arrays.asList(choice(repeat('가', 501), false), choice("2", true)));
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_shortAnswer_withOverlongAnswerText_rejects() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("대한민국의 수도는?");
+        request.setAnswers(Collections.singletonList(repeat('가', 501)));
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_fillBlank_withOverlongBlankKey_rejects() {
+        String key = repeat('k', 51);
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.FILL_BLANK);
+        request.setContent("{{" + key + "}}은 대한민국의 수도이다.");
+        BlankInput blank = new BlankInput();
+        blank.setBlankKey(key);
+        blank.setAnswerText("서울");
+        request.setBlanks(Collections.singletonList(blank));
+        request.setBlankRevealCount(1);
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_fillBlank_withOverlongBlankAnswerText_rejects() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.FILL_BLANK);
+        request.setContent("{{blank_1}}은 대한민국의 수도이다.");
+        BlankInput blank = new BlankInput();
+        blank.setBlankKey("blank_1");
+        blank.setAnswerText(repeat('가', 501));
+        request.setBlanks(Collections.singletonList(blank));
+        request.setBlankRevealCount(1);
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_withOverlongImageUrl_rejects() {
+        ProblemCreateRequest request = shortAnswerRequest("/uploads/images/" + repeat('a', 500) + ".png");
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
     @Test

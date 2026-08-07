@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,7 +47,14 @@ public class ProblemServiceImpl implements ProblemService {
      * 두 경로의 이 비대칭은 플랜 소유자가 판단할 사항으로 남겨 둔다.
      */
     private static final String IMAGE_URL_PREFIX = "/uploads/images/";
-    private static final int MAX_IMAGE_URL_LENGTH = 500; // problems.image_url VARCHAR(500)
+
+    // 아래 상한은 schema.sql의 컬럼 폭과 1:1로 맞춘다. 어느 쪽도 검증하지 않으면 DB가 던지는
+    // DataIntegrityViolationException이 "처리 중 오류가 발생하였습니다" + ERROR 스택트레이스로
+    // 새어 나가는데, 평범한 사용자 입력(특히 50자 blank_key)으로 충분히 도달할 수 있다.
+    private static final int MAX_IMAGE_URL_LENGTH = 500;   // problems.image_url VARCHAR(500)
+    private static final int MAX_CHOICE_TEXT_LENGTH = 500; // problem_choices.choice_text VARCHAR(500)
+    private static final int MAX_ANSWER_TEXT_LENGTH = 500; // problem_answers/problem_blanks.answer_text VARCHAR(500)
+    private static final int MAX_BLANK_KEY_LENGTH = 50;    // problem_blanks.blank_key VARCHAR(50)
 
     private final ProblemDao problemDao;
     private final ProblemChoiceDao problemChoiceDao;
@@ -71,6 +79,7 @@ public class ProblemServiceImpl implements ProblemService {
     @Override
     @Transactional
     public void create(ProblemCreateRequest request, AuthUser actor) {
+        normalize(request);
         validate(request);
 
         Problem problem = new Problem();
@@ -105,6 +114,7 @@ public class ProblemServiceImpl implements ProblemService {
         if (existing.getType() != request.getType()) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "문제 유형은 수정할 수 없습니다.");
         }
+        normalize(request);
         validate(request);
 
         existing.setContent(request.getContent());
@@ -168,10 +178,52 @@ public class ProblemServiceImpl implements ProblemService {
         }
     }
 
+    /**
+     * 저장 전에 요청 값의 앞뒤 공백을 제거한다. 검증만 {@code isBlank()}(내부적으로 trim)로 하고
+     * 저장은 원본을 그대로 넣으면 {@code {"answers":["  서울  "]}} 같은 값이 패딩째로 남는다.
+     * Plan 4의 주관식 채점은 학습자가 입력한 문자열을 이 저장값과 비교하므로, 패딩 하나가 정답을
+     * 오답으로(혹은 그 반대로) 뒤집는다. 엑셀 경로({@code cellValue})와 프런트엔드
+     * ({@code buildProblemPayload})는 이미 trim하고 있어 서버가 세 경로 중 가장 약했다.
+     * <p>
+     * 검증보다 <b>먼저</b> 돌린다 — 그래야 빈칸 마커 검사({@code content.contains("{{" + key + "}}")})가
+     * 실제로 저장될 키와 같은 값으로 수행되어 검증과 저장이 어긋나지 않는다.
+     */
+    private void normalize(ProblemCreateRequest request) {
+        request.setContent(trimToNull(request.getContent()));
+        request.setImageUrl(trimToNull(request.getImageUrl()));
+        request.setReferenceText(trimToNull(request.getReferenceText()));
+        request.setExplanation(trimToNull(request.getExplanation()));
+        if (request.getChoices() != null) {
+            for (ChoiceInput choice : request.getChoices()) {
+                choice.setText(trimToNull(choice.getText()));
+            }
+        }
+        if (request.getAnswers() != null) {
+            request.setAnswers(request.getAnswers().stream().map(this::trimToNull).collect(Collectors.toList()));
+        }
+        if (request.getBlanks() != null) {
+            for (BlankInput blank : request.getBlanks()) {
+                blank.setBlankKey(trimToNull(blank.getBlankKey()));
+                blank.setAnswerText(trimToNull(blank.getAnswerText()));
+            }
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private List<String> normalizeTags(List<String> input) {
         if (input == null) return java.util.Collections.emptyList();
+        // Locale.ROOT를 명시한다. 기본 로케일(예: tr-TR)에서는 "I".toLowerCase()가 "ı"가 되어
+        // ExcelProblemUploadServiceImpl.normalizeTags(이미 Locale.ROOT 사용)와 결과가 갈리고,
+        // 같은 사용자 입력이 tags 테이블에 서로 다른 두 행으로 쌓인다.
         List<String> normalized = input.stream().map(String::trim).filter(s -> !s.isEmpty())
-                .map(String::toLowerCase).distinct().collect(Collectors.toList());
+                .map(s -> s.toLowerCase(Locale.ROOT)).distinct().collect(Collectors.toList());
         if (normalized.size() > MAX_TAGS || normalized.stream().anyMatch(s -> s.length() > MAX_TAG_LENGTH)) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "태그는 문제당 20개, 태그명은 100자 이하여야 합니다.");
         }
@@ -284,6 +336,10 @@ public class ProblemServiceImpl implements ProblemService {
         if (choices.stream().anyMatch(c -> isBlank(c.getText()))) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "빈 보기는 입력할 수 없습니다.");
         }
+        if (choices.stream().anyMatch(c -> c.getText().length() > MAX_CHOICE_TEXT_LENGTH)) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "보기는 " + MAX_CHOICE_TEXT_LENGTH + "자 이하여야 합니다.");
+        }
         long correctCount = choices.stream().filter(ChoiceInput::isCorrect).count();
         if (exactCorrectCount > 0 && correctCount != exactCorrectCount) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "정답 개수가 올바르지 않습니다.");
@@ -300,6 +356,10 @@ public class ProblemServiceImpl implements ProblemService {
         if (answers.stream().anyMatch(this::isBlank)) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "빈 정답은 입력할 수 없습니다.");
         }
+        if (answers.stream().anyMatch(a -> a.length() > MAX_ANSWER_TEXT_LENGTH)) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "정답은 " + MAX_ANSWER_TEXT_LENGTH + "자 이하여야 합니다.");
+        }
     }
 
     private void validateBlanks(String content, List<BlankInput> blanks, Integer blankRevealCount) {
@@ -310,6 +370,14 @@ public class ProblemServiceImpl implements ProblemService {
         for (BlankInput blank : blanks) {
             if (isBlank(blank.getBlankKey()) || isBlank(blank.getAnswerText())) {
                 throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "빈칸 키와 정답을 모두 입력하세요.");
+            }
+            if (blank.getBlankKey().length() > MAX_BLANK_KEY_LENGTH) {
+                throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                        "빈칸 키는 " + MAX_BLANK_KEY_LENGTH + "자 이하여야 합니다.");
+            }
+            if (blank.getAnswerText().length() > MAX_ANSWER_TEXT_LENGTH) {
+                throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                        "빈칸 정답은 " + MAX_ANSWER_TEXT_LENGTH + "자 이하여야 합니다.");
             }
             keys.add(blank.getBlankKey());
         }
