@@ -4,10 +4,18 @@
 
 ## 구현 진행 상황
 
-- **Plan 1(프로젝트 기반 구축 및 인증)은 완료됐다** (`worktree-plan1-foundation-auth` 브랜치, 아직 `master`에 머지하지 않음). Task 1~15 전부 구현·리뷰·수정 완료.
-- 백엔드 54개 테스트, 프론트엔드 27개 테스트 통과. 프로덕션 빌드 성공. 로그인 → 강제 비밀번호 변경 → 기기/역할 기반 랜딩 플로우까지 브라우저로 확인했다.
-- **Plan 2를 시작하기 전에 [`docs/superpowers/plans/2026-07-28-01-foundation-and-auth.md`](docs/superpowers/plans/2026-07-28-01-foundation-and-auth.md) 상단의 네 섹션을 반드시 읽을 것** — "구현 진행 상황", "구현 중 확정된 사항", "최종 전체 리뷰에서 수정된 보안 사항", "Plan 2 시작 전 권장 정비". 세션 ID 교체, 원자적 로그인 실패 카운터, `resultCode` 1012가 HTTP 200이라는 규약, `refetchSession()` 호출 의무 등 이후 Plan이 전제해야 할 사항이 정리돼 있다.
-- Plan 2~5는 아직 착수하지 않았다.
+- **Plan 1(인증)·Plan 2(부서/계정 관리)는 완료되어 `master`에 병합됐다.**
+- **Plan 3(문제 은행 관리)은 완료됐다** — `worktree-plan3-problem-bank` 브랜치, 아직 `master`에 병합하지 않음. Task 1~9 전부 구현·리뷰·수정 완료.
+- 백엔드 189개, 프론트엔드 170개 테스트 통과. 프로덕션 빌드 성공.
+- Plan 4(풀이)·Plan 5(통계)는 아직 착수하지 않았다.
+- **Plan 4를 시작하기 전에 [`docs/superpowers/plans/2026-07-28-03-problem-bank-management.md`](docs/superpowers/plans/2026-07-28-03-problem-bank-management.md) 상단의 "구현 중 확정된 사항"과 "미해결 — 판단 필요"를 반드시 읽을 것.** 특히 관리자용 `ProblemDetailResponse`에는 정답·해설이 들어 있어 풀이 화면에 그대로 쓰면 학습자에게 정답이 전송되고, `problem_choices.is_correct`는 명시적 resultMap으로만 매핑된다(자동 매핑으로 되돌리면 경고 없이 채점이 망가진다).
+- Plan 1의 전제 사항은 [`2026-07-28-01-foundation-and-auth.md`](docs/superpowers/plans/2026-07-28-01-foundation-and-auth.md) 상단에 정리돼 있다 — 세션 ID 교체, 원자적 로그인 실패 카운터, `resultCode` 1012가 HTTP 200이라는 규약, `refetchSession()` 호출 의무 등.
+
+### QA 문서
+
+- [`docs/qa/2026-08-04-plan1-2-qa-checklist.md`](docs/qa/2026-08-04-plan1-2-qa-checklist.md) — Plan 1·2 체크리스트
+- [`docs/qa/2026-08-07-p1-result.md`](docs/qa/2026-08-07-p1-result.md) — 위 체크리스트 P1 실행 결과
+- [`docs/qa/2026-08-07-plan3-qa-checklist.md`](docs/qa/2026-08-07-plan3-qa-checklist.md) — Plan 3 체크리스트 (**미실행**)
 
 ### 남은 과제
 
@@ -33,15 +41,21 @@ docker compose up -d
 - 호스트 포트: `5434` (로컬에 이미 설치된 Postgres의 기본 포트 5432, `trend_one` 프로젝트의 Docker Postgres가 쓰는 5433과 겹치지 않도록 선택)
 - 계정: `probank` / `probank_dev`, DB명: `probank_dev`
 - 스키마는 별도 초기화 스크립트 없이, 백엔드 앱이 기동 시 `spring.sql.init.mode=always`로 `backend/src/main/resources/schema.sql`을 자동 적용한다.
-- 이 컨테이너를 쓰려면 백엔드 실행 시 `DB_URL=jdbc:postgresql://localhost:5434/probank_dev` 환경변수를 지정한다(기본값은 `localhost:5432`).
+- **백엔드의 기본 접속 대상이 이 컨테이너(`localhost:5434`)다.** `DB_URL`을 지정하지 않으면 여기에 붙는다.
+
+> 기본값이 5434인 이유: 예전에는 기본값이 `localhost:5432`였는데, Docker 컨테이너가 내려간 줄 모르고 백엔드가 **로컬에 설치된 다른 Postgres에 조용히 붙는 사고**가 실제로 있었다(2026-08-07 QA, [`docs/qa/2026-08-07-p1-result.md`](docs/qa/2026-08-07-p1-result.md) §0.1). 저장소가 함께 제공하는 `docker-compose.yml`이 5434를 쓰므로 기본값도 그쪽에 맞춘다.
 
 ### 3. PostgreSQL 준비 — 로컬 설치 (대안)
 
-Docker를 쓰지 않으려면 로컬 PostgreSQL에 아래를 직접 생성한다(포트 5432 기준, `DB_URL` 재정의 불필요).
+Docker를 쓰지 않고 로컬 PostgreSQL(기본 포트 5432)을 쓰려면 아래를 직접 생성한 뒤, 실행 시 **`DB_URL`로 포트를 명시해야 한다**(기본값이 5434이므로 생략하면 붙지 않는다).
 
 ```sql
 CREATE USER probank WITH PASSWORD 'probank_dev';
 CREATE DATABASE probank_dev OWNER probank;
+```
+
+```bash
+DB_URL=jdbc:postgresql://localhost:5432/probank_dev ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
 ### 4. 백엔드 실행
@@ -50,10 +64,12 @@ CREATE DATABASE probank_dev OWNER probank;
 cd backend
 export JAVA_HOME=/path/to/jdk8
 export PATH="$JAVA_HOME/bin:$PATH"
-DB_URL=jdbc:postgresql://localhost:5434/probank_dev ./gradlew bootRun --args='--spring.profiles.active=dev'
+./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
-Docker Postgres(포트 5434)를 쓰는 경우 위처럼 `DB_URL`을 함께 지정한다. 로컬 PostgreSQL을 5432로 쓴다면 `DB_URL` 없이 실행해도 된다.
+기본 접속 대상이 Docker Postgres(`localhost:5434`)이므로 위 그대로 실행하면 된다. 다른 DB를 쓸 때만 `DB_URL`을 앞에 붙인다 — 예: 로컬 5432를 쓰려면 `DB_URL=jdbc:postgresql://localhost:5432/probank_dev ./gradlew bootRun ...`.
+
+**실행 후 어느 DB에 붙었는지 확인할 것.** 기동 로그의 HikariCP 항목이나 `docker compose ps`로 컨테이너가 떠 있는지 먼저 보면 위 사고를 피할 수 있다.
 
 앱이 처음 기동할 때 `SUPER_ADMIN` 계정이 하나도 없으면 기본 부서(`본사`, 코드 `HQ`)와 총괄관리자 계정을 자동 생성한다. 기본값은 사번 `admin` / 비밀번호 `changeme1234`이며 **최초 로그인 시 비밀번호 변경이 강제된다**. `BOOTSTRAP_ADMIN_EMPLOYEE_NO` / `BOOTSTRAP_ADMIN_PASSWORD` / `BOOTSTRAP_ADMIN_EMAIL` 환경변수로 바꿀 수 있다.
 
@@ -65,15 +81,15 @@ npm install
 npm run dev
 ```
 
-개발 서버는 5173에서 뜨고 `/api/**` 요청을 `localhost:8080`으로 프록시한다. 세션 쿠키 인증이므로 백엔드를 함께 띄워야 로그인이 동작한다.
+개발 서버는 5173에서 뜨고 `/api/**`와 `/uploads/**` 요청을 `localhost:8080`으로 프록시한다(`/uploads`가 없으면 문제 이미지 미리보기가 404가 난다). 세션 쿠키 인증이므로 백엔드를 함께 띄워야 로그인이 동작한다.
 
 ### 6. 테스트 실행
 
 ```bash
-# 백엔드 (54개) — 실제 PostgreSQL 통합 테스트를 포함하므로 DB가 떠 있어야 한다
-cd backend && DB_URL=jdbc:postgresql://localhost:5434/probank_dev ./gradlew test
+# 백엔드 (189개) — 실제 PostgreSQL 통합 테스트를 포함하므로 DB가 떠 있어야 한다
+cd backend && ./gradlew test
 
-# 프론트엔드 (27개)
+# 프론트엔드 (170개)
 cd frontend && npm test
 ```
 
