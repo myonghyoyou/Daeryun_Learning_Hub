@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.ProblemChoiceDao">
+
+    <insert id="insertAll">
+        INSERT INTO problem_choices (problem_id, choice_text, is_correct, display_order)
+        VALUES
+        <foreach collection="choices" item="choice" separator=",">
+            (#{choice.problemId}, #{choice.choiceText}, #{choice.correct}, #{choice.displayOrder})
+        </foreach>
+    </insert>
+
+    <select id="findByProblemId" resultType="ProblemChoice">
+        SELECT id, problem_id, choice_text, is_correct, display_order
+        FROM problem_choices WHERE problem_id = #{problemId} ORDER BY display_order
+    </select>
+
+    <delete id="deleteByProblemId">
+        DELETE FROM problem_choices WHERE problem_id = #{problemId}
+    </delete>
+
+</mapper>

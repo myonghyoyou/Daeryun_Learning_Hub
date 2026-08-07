@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.ProblemAnswerDao">
+
+    <insert id="insertAll">
+        INSERT INTO problem_answers (problem_id, answer_text)
+        VALUES
+        <foreach collection="answers" item="answer" separator=",">
+            (#{answer.problemId}, #{answer.answerText})
+        </foreach>
+    </insert>
+
+    <select id="findByProblemId" resultType="ProblemAnswer">
+        SELECT id, problem_id, answer_text FROM problem_answers WHERE problem_id = #{problemId}
+    </select>
+
+    <delete id="deleteByProblemId">
+        DELETE FROM problem_answers WHERE problem_id = #{problemId}
+    </delete>
+
+</mapper>
