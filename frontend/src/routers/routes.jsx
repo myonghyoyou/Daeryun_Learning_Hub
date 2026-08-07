@@ -10,6 +10,7 @@ import DepartmentListPage from "@/pages/admin/departments/DepartmentListPage.jsx
 import UserListPage from "@/pages/admin/users/UserListPage.jsx";
 import UserExcelUploadPage from "@/pages/admin/users/UserExcelUploadPage.jsx";
 import ProblemListPage from "@/pages/admin/problems/ProblemListPage.jsx";
+import ProblemFormPage from "@/pages/admin/problems/ProblemFormPage.jsx";
 import SolveHomePage from "@/pages/solve/SolveHomePage.jsx";
 
 export const router = createBrowserRouter([
@@ -38,6 +39,8 @@ export const router = createBrowserRouter([
               { path: "users", element: <UserListPage /> },
               { path: "users/excel-upload", element: <UserExcelUploadPage /> },
               { path: "problems", element: <ProblemListPage /> },
+              { path: "problems/new", element: <ProblemFormPage /> },
+              { path: "problems/:id/edit", element: <ProblemFormPage /> },
             ],
           },
         ],
