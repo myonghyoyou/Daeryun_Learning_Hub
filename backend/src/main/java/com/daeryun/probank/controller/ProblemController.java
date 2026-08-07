@@ -26,4 +26,23 @@ public class ProblemController {
         problemService.create(request, actor);
         return ResponseEntity.ok(ResponseDto.ok());
     }
+
+    @GetMapping
+    public ResponseEntity<ResponseDto<?>> list(
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) java.time.LocalDate createdFrom,
+            @RequestParam(required = false) java.time.LocalDate createdTo,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String keyword,
+            @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(problemService.list(actor, departmentId, type, status,
+                createdFrom, createdTo, tag, keyword)));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ResponseDto<?>> getDetail(@PathVariable Long id, @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(problemService.getDetail(id, actor)));
+    }
 }

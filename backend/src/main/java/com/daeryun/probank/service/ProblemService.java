@@ -11,4 +11,5 @@ public interface ProblemService {
     java.util.List<ProblemListItem> list(AuthUser actor, Long departmentId, String type, String status,
                                           java.time.LocalDate createdFrom, java.time.LocalDate createdTo,
                                           String tag, String keyword);
+    com.daeryun.probank.dto.problem.ProblemDetailResponse getDetail(Long id, AuthUser actor);
 }

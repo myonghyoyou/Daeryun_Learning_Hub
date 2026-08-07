@@ -12,6 +12,7 @@ import com.daeryun.probank.domain.*;
 import com.daeryun.probank.dto.problem.BlankInput;
 import com.daeryun.probank.dto.problem.ChoiceInput;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
+import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.exception.BizException;
 import org.springframework.stereotype.Service;
@@ -93,8 +94,34 @@ public class ProblemServiceImpl implements ProblemService {
     @Override
     public List<ProblemListItem> list(AuthUser actor, Long departmentId, String type, String status,
                                        LocalDate createdFrom, LocalDate createdTo, String tag, String keyword) {
-        // Task 3(문제 목록/상세 조회 API)에서 구현한다.
-        throw new UnsupportedOperationException("list is not implemented yet");
+        // 부서관리자는 요청 파라미터의 departmentId를 무시하고 자기 부서로 강제된다.
+        // 총괄관리자만 요청한 departmentId(전체 조회를 의미하는 null 포함)를 그대로 사용한다.
+        Long effectiveDepartmentId = actor.getRole() == UserRole.SUPER_ADMIN ? departmentId : actor.getDepartmentId();
+        return problemDao.findAll(effectiveDepartmentId, type, status, createdFrom, createdTo, tag, keyword);
+    }
+
+    @Override
+    public ProblemDetailResponse getDetail(Long id, AuthUser actor) {
+        Problem problem = problemDao.findById(id);
+        if (problem == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 문제입니다.");
+        }
+        assertOwnership(problem, actor);
+
+        List<ProblemChoice> choices = problemChoiceDao.findByProblemId(id);
+        List<String> answers = problemAnswerDao.findByProblemId(id).stream()
+                .map(ProblemAnswer::getAnswerText).collect(Collectors.toList());
+        List<ProblemBlank> blanks = problemBlankDao.findByProblemId(id);
+        List<String> tags = problemTagDao.findTagNamesByProblemId(id);
+        return ProblemDetailResponse.of(problem, choices, answers, blanks, tags);
+    }
+
+    // 부서 스코프 체크의 단일 관문. 총괄관리자는 전체 부서에 접근하고, 부서관리자는
+    // 자기 부서가 등록한 문제만 접근할 수 있다. Task 4(수정/보관)도 이 헬퍼를 재사용한다.
+    private void assertOwnership(Problem problem, AuthUser actor) {
+        if (actor.getRole() != UserRole.SUPER_ADMIN && !problem.getDepartmentId().equals(actor.getDepartmentId())) {
+            throw new BizException(ErrorCode.ACCESS_AUTH_DENIED);
+        }
     }
 
     private List<String> normalizeTags(List<String> input) {

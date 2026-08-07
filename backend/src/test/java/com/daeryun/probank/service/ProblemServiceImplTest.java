@@ -13,6 +13,8 @@ import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.problem.BlankInput;
 import com.daeryun.probank.dto.problem.ChoiceInput;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
+import com.daeryun.probank.dto.problem.ProblemDetailResponse;
+import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.exception.BizException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -236,5 +238,35 @@ class ProblemServiceImplTest {
         Mockito.verify(problemDao).insert(captor.capture());
         assertEquals(77L, captor.getValue().getDepartmentId());
         assertEquals(42L, captor.getValue().getCreatedBy());
+    }
+
+    @Test
+    void list_asDeptAdmin_forcesOwnDepartmentRegardlessOfParam() {
+        Mockito.when(problemDao.findAll(10L, null, null, null, null, null, null)).thenReturn(Collections.emptyList());
+
+        service.list(actor, 999L, null, null, null, null, null, null);
+
+        Mockito.verify(problemDao).findAll(10L, null, null, null, null, null, null);
+    }
+
+    @Test
+    void list_asSuperAdmin_usesRequestedDepartmentFilter() {
+        AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+        Mockito.when(problemDao.findAll(999L, null, null, null, null, null, null)).thenReturn(Collections.emptyList());
+
+        service.list(superAdmin, 999L, null, null, null, null, null, null);
+
+        Mockito.verify(problemDao).findAll(999L, null, null, null, null, null, null);
+    }
+
+    @Test
+    void getDetail_forOtherDepartmentAsDeptAdmin_throwsAccessDenied() {
+        com.daeryun.probank.domain.Problem problem = new com.daeryun.probank.domain.Problem();
+        problem.setId(5L);
+        problem.setDepartmentId(999L);
+        problem.setType(ProblemType.SHORT_ANSWER);
+        Mockito.when(problemDao.findById(5L)).thenReturn(problem);
+
+        assertThrows(BizException.class, () -> service.getDetail(5L, actor));
     }
 }
