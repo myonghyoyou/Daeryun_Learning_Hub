@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.ProblemTagDao">
+
+    <delete id="deleteByProblemId">
+        DELETE FROM problem_tags WHERE problem_id = #{problemId}
+    </delete>
+
+    <insert id="insertAll">
+        INSERT INTO problem_tags (problem_id, tag_id)
+        VALUES
+        <foreach collection="tagIds" item="tagId" separator=",">
+            (#{problemId}, #{tagId})
+        </foreach>
+    </insert>
+
+    <select id="findTagNamesByProblemId" resultType="String">
+        SELECT t.name
+        FROM problem_tags pt
+        JOIN tags t ON t.id = pt.tag_id
+        WHERE pt.problem_id = #{problemId}
+        ORDER BY t.name
+    </select>
+
+</mapper>

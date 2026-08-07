@@ -10,6 +10,33 @@
 
 **전제 조건:** Plan 1, Plan 2가 완료되어 있어야 한다 (인증, 부서/계정 관리, `excel_upload_logs`).
 
+## 구현 진행 상황 (2026-08-07 기준) — **Plan 3 전체 완료**
+
+- **완료:** Task 1~9 전부. 모든 Step 체크박스가 `- [x]`이다. subagent-driven-development 방식(구현 → 독립 리뷰 → 수정 라운드 → 범위 한정 재검증)으로 진행했고 전부 커밋 완료.
+- **테스트:** 백엔드 167개(실제 PostgreSQL 통합 테스트 포함), 프론트엔드 170개, 프로덕션 빌드 성공.
+- **작업 브랜치:** `worktree-plan3-problem-bank` (`master`의 `5dc2fd5`에서 분기).
+
+### 구현 중 확정된 사항 (Plan 4~5가 반드시 알아야 함)
+
+- **`problem_choices.is_correct`는 명시적 resultMap으로 매핑한다.** Lombok의 `boolean correct`가 프로퍼티명을 `correct`로 등록하는데, `map-underscore-to-camel-case`는 `is_correct`를 `ISCORRECT`로 정규화해 둘이 절대 매칭되지 않는다. 자동 매핑에 맡기면 **경고도 예외도 없이 정답 여부가 항상 `false`로 읽힌다.** Plan 4의 채점이 이 값을 쓰므로 `resultType`으로 되돌리지 말 것.
+- **`assertOwnership(Problem, AuthUser)`가 부서 스코프의 단일 chokepoint다** (`ProblemServiceImpl`). 총괄관리자는 전체, 부서관리자는 자기 부서만. 목록은 서버 측 삼항식으로 `departmentId`를 강제하며 요청 파라미터는 `SUPER_ADMIN`일 때만 존중한다. Plan 4~5도 이 패턴을 복사할 것.
+- **엑셀 행 저장은 `ProblemProvisioningService`가 `@Transactional(REQUIRES_NEW)`로 처리한다.** 부분 성공을 위해 행마다 독립 커밋이 필요하기 때문이다. 자기호출(self-invocation)로 대체하면 프록시를 타지 않아 조용히 무효화된다.
+- **빈칸 마커 문법은 `{{blank_1}}`(중괄호 2개)로 고정**이며 Task 2 검증, Task 6 엑셀, Task 8 폼이 모두 이 문법을 전제한다.
+- **`FILL_BLANK`는 엑셀 업로드를 지원하지 않는다.** 개별 등록 폼에서만 작성한다.
+- **빈 보기·빈 정답은 서버·클라이언트 양쪽에서 거부한다.** 중간에 낀 공백도 마찬가지다 — 조용히 압축하면 "정답=2"가 다른 보기를 가리키게 되어 오답 채점으로 이어진다. 이 규칙을 완화하지 말 것.
+- **이미지 저장 파일명은 UUID + 허용목록 확장자로만 만든다.** 클라이언트가 보낸 원본 파일명은 경로 구성에 절대 쓰지 않는다(임의 파일 쓰기 취약점). 허용: `png/jpg/jpeg/gif/webp`, 최대 5MB.
+- **`GET /api/tags`는 로그인 사용자면 누구나 호출할 수 있다** — 관리자 role 제한을 두지 않는다.
+- **`imageUrl`은 `/uploads/images/`로 시작하는 경로만 허용한다.** 판정 규칙(접두어·상위 경로 탈출·길이 상한)은 `ImageUrlValidator` **한 곳에만** 있고 JSON API 경로(`ProblemServiceImpl`)와 엑셀 경로(`ExcelProblemUploadServiceImpl`)가 모두 이를 호출한다. 규칙을 복제하지 말 것 — 이 플랜에서 검증 규칙이 경로별로 어긋나 실제 버그가 된 사례가 두 번 있었다. 엑셀의 이미지 컬럼은 **반드시 비워야 하며**, 이미지는 개별 등록/수정 폼에서만 첨부한다.
+- **`/uploads/**`도 세션 검사를 거친다.** `SessionCheckFilter`가 `/api/` 외에 `/uploads/` 접두사도 게이트한다. 인증만 요구하고 부서 소유권은 보지 않는다 — 풀이는 전사 공통이므로 로그인한 직원이면 누구나 문제 이미지를 볼 수 있어야 한다. Plan 4에서 이 필터를 건드릴 때 `/uploads/`를 빠뜨리지 말 것.
+
+### 미해결 — 판단 필요
+
+- **디자인 시스템 해석 차이 2건:** 8.7은 태그 필터를 기본 노출로 두지만 구현은 상세 필터 안에 넣었다(백엔드가 단일 태그 문자열만 받으므로). 8.8은 기존 태그를 고르는 multi-select TagChip을 시사하지만 구현은 콤마 입력 + 읽기 전용 칩 미리보기다(`listTags`는 미사용). Design QA에서 판단할 것.
+- **프론트엔드 컴포넌트는 렌더링 검증이 없다.** jsdom이 없어 순수 로직만 테스트했고, 마운트 정상 동작·모달 포커스·1440×1024 레이아웃은 **브라우저 수동 확인이 필요하다**(플랜의 완료 기준에도 Design QA 항목으로 들어 있다). jsdom + React Testing Library 도입은 Plan 4의 인프라 과제로 넘긴다.
+- **보관(ARCHIVED) 복원 경로가 없다.** 상태를 되돌리는 API·서비스·UI가 전혀 없어 실수로 보관하면 SQL 없이는 되돌릴 수 없다. 데이터는 보존되므로 유실은 아니다. Plan 4에서 `restore`를 추가하려면 기존 `assertOwnership`을 재사용할 것.
+- **404가 `INPUT_VALUE_INVALID`(1000)를 쓴다.** 전용 not-found 코드가 없어, 삭제된 문제의 수정 화면을 열면 프론트가 "다시 시도" 버튼을 보여주지만 눌러도 성공할 수 없다. Plan 4에서 `RESOURCE_NOT_FOUND`를 추가할 때 함께 정리할 것.
+- **페이지네이션과 인덱스가 없다.** `ProblemDao.findAll`에 `LIMIT`/`OFFSET`이 없고 `schema.sql`에 인덱스가 하나도 없다(Plan 1·2도 동일). `problems`는 수천 건에 도달할 첫 테이블이고 목록 쿼리는 이미 태그 `EXISTS` 서브쿼리 + 선행 와일드카드 `ILIKE` + `array_agg GROUP BY`를 쓴다. Plan 5의 통계 집계가 먼저 체감할 것이므로 미리 계획할 것.
+
 ## Global Constraints
 
 - 문제 유형은 MCQ_SINGLE(객관식 단일), MCQ_MULTI(객관식 다중), OX, SHORT_ANSWER(주관식 단답형), FILL_BLANK(빈칸 채우기) 5가지이며, 서술형은 범위 밖이다 (PRD 섹션 4.1).
@@ -107,7 +134,7 @@ public class TagController {
 - Consumes: Plan 1 Task 2의 `problems`/`problem_choices`/`problem_answers`/`problem_blanks` 테이블
 - Produces: `ProblemDao.insert/findById/update/updateStatus/findAll(필터)`, `ProblemChoiceDao.insertAll/findByProblemId/deleteByProblemId`, `ProblemAnswerDao.insertAll/findByProblemId/deleteByProblemId`, `ProblemBlankDao.insertAll/findByProblemId/deleteByProblemId`. Task 2~6, Plan 4·5가 사용한다.
 
-- [ ] **Step 1: 도메인 POJO 작성**
+- [x] **Step 1: 도메인 POJO 작성**
 
 `backend/src/main/java/com/daeryun/probank/domain/ProblemType.java`:
 ```java
@@ -203,7 +230,7 @@ public class ProblemBlank {
 }
 ```
 
-- [ ] **Step 2: Dao 인터페이스 작성**
+- [x] **Step 2: Dao 인터페이스 작성**
 
 `backend/src/main/java/com/daeryun/probank/dao/ProblemDao.java`:
 ```java
@@ -281,7 +308,7 @@ public interface ProblemBlankDao {
 
 (참고: `ProblemDao`가 `com.daeryun.probank.dto.problem.ProblemListItem`을 참조하므로, 컴파일을 위해 Task 3에서 해당 DTO를 만들기 전까지는 이 파일만으로 빌드되지 않는다 — Step 3에서 최소 버전을 함께 만든다.)
 
-- [ ] **Step 3: `ProblemListItem` 최소 버전 및 Mapper XML 작성**
+- [x] **Step 3: `ProblemListItem` 최소 버전 및 Mapper XML 작성**
 
 `backend/src/main/java/com/daeryun/probank/dto/problem/ProblemListItem.java`:
 ```java
@@ -440,7 +467,7 @@ public class ProblemListItem {
 </mapper>
 ```
 
-- [ ] **Step 4: Dao 통합 테스트 작성**
+- [x] **Step 4: Dao 통합 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/dao/ProblemDaoTest.java`:
 ```java
@@ -511,12 +538,12 @@ class ProblemDaoTest {
 }
 ```
 
-- [ ] **Step 5: 테스트 실행**
+- [x] **Step 5: 테스트 실행**
 
 Run: `cd backend && ./gradlew test --tests ProblemDaoTest`
 Expected: `BUILD SUCCESSFUL`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/domain backend/src/main/java/com/daeryun/probank/dao backend/src/main/java/com/daeryun/probank/dto/problem/ProblemListItem.java backend/src/main/resources/mappers/probank/Problem*.xml backend/src/test/java/com/daeryun/probank/dao/ProblemDaoTest.java
@@ -540,7 +567,7 @@ git commit -m "feat: add problem domain, dao and mapper skeleton"
 - Consumes: `ProblemDao/ProblemChoiceDao/ProblemAnswerDao/ProblemBlankDao`(Task 1), `AuthUser`(Plan 1 Task 4)
 - Produces: `ProblemService.create(ProblemCreateRequest, AuthUser)`. `POST /api/admin/problems`. Task 6(엑셀 업로드), Task 8(프론트 등록 폼)이 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java`:
 ```java
@@ -692,12 +719,12 @@ class ProblemServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemServiceImplTest`
 Expected: FAIL — 관련 클래스가 없어 컴파일 오류
 
-- [ ] **Step 3: DTO/Service/Controller 구현**
+- [x] **Step 3: DTO/Service/Controller 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/problem/ChoiceInput.java`:
 ```java
@@ -983,12 +1010,12 @@ public class ProblemController {
 }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 7 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/problem backend/src/main/java/com/daeryun/probank/service/ProblemService.java backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java
@@ -1010,7 +1037,7 @@ git commit -m "feat: add problem creation API with per-type validation"
 - Consumes: `ProblemDao.findAll/findById`, `ProblemChoiceDao/ProblemAnswerDao/ProblemBlankDao.findByProblemId`(Task 1)
 - Produces: `GET /api/admin/problems?type=&status=&keyword=`(부서관리자는 자기 부서로 강제), `GET /api/admin/problems/{id}`. Task 4(수정/삭제), Task 7(프론트 목록)이 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 `ProblemServiceImplTest`에 아래 테스트 추가 (상단 import에 `com.daeryun.probank.dto.problem.ProblemDetailResponse`, `com.daeryun.probank.dto.problem.ProblemListItem` 추가):
 ```java
@@ -1045,12 +1072,12 @@ git commit -m "feat: add problem creation API with per-type validation"
     }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemServiceImplTest`
 Expected: FAIL — `list`/`getDetail` 메서드가 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/problem/ProblemDetailResponse.java`:
 ```java
@@ -1159,12 +1186,12 @@ public class ProblemDetailResponse {
     }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 10 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/problem/ProblemDetailResponse.java backend/src/main/java/com/daeryun/probank/service/ProblemService.java backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java
@@ -1185,7 +1212,7 @@ git commit -m "feat: add problem list/detail API with department scoping"
 - Consumes: `assertOwnership`(Task 3), `ProblemDao.update/updateStatus`(Task 1)
 - Produces: `PUT /api/admin/problems/{id}`, `DELETE /api/admin/problems/{id}`(소프트 삭제). Task 7(프론트 목록/수정 화면)이 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 `ProblemServiceImplTest`에 추가:
 ```java
@@ -1243,12 +1270,12 @@ git commit -m "feat: add problem list/detail API with department scoping"
         Mockito.verify(problemChoiceDao).insertAll(Mockito.anyList());
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemServiceImplTest`
 Expected: FAIL — `update`/`archive` 메서드가 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `ProblemService`에 메서드 추가:
 ```java
@@ -1319,12 +1346,12 @@ Expected: FAIL — `update`/`archive` 메서드가 없어 컴파일 오류
     }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 13 tests 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/service/ProblemService.java backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java
@@ -1348,7 +1375,7 @@ git commit -m "feat: add problem update and soft-delete API with ownership check
 - Consumes: (없음 — 로컬 파일시스템 저장)
 - Produces: `POST /api/admin/problems/images` (multipart) → `{ imageUrl }`. `ProblemImageService.store(MultipartFile, AuthUser) : String`(저장된 파일의 공개 URL, 예: `/uploads/images/{uuid}.png`)이 파일 저장과 DB 감사 로그를 함께 수행한다. Task 8(프론트 등록 폼의 이미지 업로드)이 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/service/ProblemImageServiceImplTest.java`:
 ```java
@@ -1384,12 +1411,12 @@ class ProblemImageServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemImageServiceImplTest`
 Expected: FAIL — `ProblemImageServiceImpl` 클래스가 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/problem/ImageUploadResponse.java`:
 ```java
@@ -1522,12 +1549,12 @@ public class StaticResourceConfig implements WebMvcConfigurer {
     }
 ```
 
-- [ ] **Step 4: 테스트 실행하여 통과 확인**
+- [x] **Step 4: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests ProblemImageServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 1 test 통과
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/problem/ImageUploadResponse.java backend/src/main/java/com/daeryun/probank/service/ProblemImageService.java backend/src/main/java/com/daeryun/probank/service/ProblemImageServiceImpl.java backend/src/main/java/com/daeryun/probank/config/StaticResourceConfig.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/main/resources/application.yml backend/src/test/java/com/daeryun/probank/service/ProblemImageServiceImplTest.java
@@ -1548,7 +1575,7 @@ git commit -m "feat: add problem image upload API"
 - Consumes: `ProblemDao/ProblemChoiceDao/ProblemAnswerDao`, `ExcelUploadLogDao`(Plan 2 Task 3)
 - Produces: `POST /api/admin/problems/excel-upload`(multipart). 템플릿 컬럼: `문제유형 | 문제내용 | 이미지 | 참조지문 | 보기1 | 보기2 | 보기3 | 보기4 | 보기5 | 정답 | 해설 | 태그`(1행 헤더, 태그는 콤마 구분). `FILL_BLANK`는 지원하지 않는다. Task 9(프론트 업로드 화면)가 사용한다.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/service/ExcelProblemUploadServiceImplTest.java`:
 ```java
@@ -1670,12 +1697,12 @@ class ExcelProblemUploadServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests ExcelProblemUploadServiceImplTest`
 Expected: FAIL — `ExcelProblemUploadServiceImpl` 클래스가 없어 컴파일 오류
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `backend/src/main/java/com/daeryun/probank/service/ExcelProblemUploadService.java`:
 ```java
@@ -1910,7 +1937,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
 }
 ```
 
-- [ ] **Step 4: 컨트롤러에 업로드 엔드포인트 추가**
+- [x] **Step 4: 컨트롤러에 업로드 엔드포인트 추가**
 
 `ProblemController`에 추가 (상단 import에 `com.daeryun.probank.service.ExcelProblemUploadService` 추가, 생성자에 주입):
 ```java
@@ -1931,12 +1958,12 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     }
 ```
 
-- [ ] **Step 5: 테스트 실행하여 통과 확인**
+- [x] **Step 5: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests ExcelProblemUploadServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 4 tests 통과
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/service/ExcelProblemUploadService.java backend/src/main/java/com/daeryun/probank/service/ExcelProblemUploadServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/test/java/com/daeryun/probank/service/ExcelProblemUploadServiceImplTest.java
@@ -1959,7 +1986,7 @@ git commit -m "feat: add excel bulk problem upload excluding fill-blank type"
 - Consumes: `apiGet/apiPost/apiPut/apiDelete/apiPostForm`(Plan 1/2 client.js — `apiDelete` 추가 필요)
 - Produces: `/admin/problems` 화면. Task 8이 등록/수정 폼을 추가한다.
 
-- [ ] **Step 1: client.js에 apiDelete 추가**
+- [x] **Step 1: client.js에 apiDelete 추가**
 
 `frontend/src/api/client.js`의 `apiPut` 아래에 추가:
 ```javascript
@@ -1968,7 +1995,7 @@ export function apiDelete(path) {
 }
 ```
 
-- [ ] **Step 2: problems API 래퍼 작성**
+- [x] **Step 2: problems API 래퍼 작성**
 
 `frontend/src/api/problems.js`:
 ```javascript
@@ -2014,7 +2041,7 @@ export function uploadProblemsExcel(file) {
 }
 ```
 
-- [ ] **Step 3: 목록 화면 작성**
+- [x] **Step 3: 목록 화면 작성**
 
 `frontend/src/pages/admin/problems/ProblemListPage.jsx`:
 ```javascript
@@ -2136,7 +2163,7 @@ export default function ProblemListPage() {
 }
 ```
 
-- [ ] **Step 4: 네비게이션/라우터에 연결**
+- [x] **Step 4: 네비게이션/라우터에 연결**
 
 `AdminLayout.jsx`의 `NAV_ITEMS`에 추가:
 ```javascript
@@ -2152,7 +2179,7 @@ export default function ProblemListPage() {
 import ProblemListPage from "@/pages/admin/problems/ProblemListPage.jsx";
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api/problems.js frontend/src/api/client.js frontend/src/pages/admin/problems/ProblemListPage.jsx frontend/src/pages/admin/AdminLayout.jsx frontend/src/routers/routes.jsx
@@ -2171,7 +2198,7 @@ git commit -m "feat: add problem list screen"
 - Consumes: `createProblem/updateProblem/getProblem/uploadProblemImage`(Task 7)
 - Produces: `/admin/problems/new`, `/admin/problems/:id/edit` 화면.
 
-- [ ] **Step 1: 등록/수정 폼 작성**
+- [x] **Step 1: 등록/수정 폼 작성**
 
 `frontend/src/pages/admin/problems/ProblemFormPage.jsx`:
 ```javascript
@@ -2435,7 +2462,7 @@ export default function ProblemFormPage() {
 }
 ```
 
-- [ ] **Step 2: 라우터에 연결**
+- [x] **Step 2: 라우터에 연결**
 
 `routes.jsx`의 `/admin` 하위에 추가:
 ```javascript
@@ -2447,11 +2474,11 @@ export default function ProblemFormPage() {
 import ProblemFormPage from "@/pages/admin/problems/ProblemFormPage.jsx";
 ```
 
-- [ ] **Step 3: 수동 확인**
+- [x] **Step 3: 수동 확인**
 
 Run: 부서관리자로 로그인 → `/admin/problems/new`에서 5개 유형 각각 등록 시도 → 목록에서 수정/보관 동작 확인
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/pages/admin/problems/ProblemFormPage.jsx frontend/src/routers/routes.jsx
@@ -2471,7 +2498,7 @@ git commit -m "feat: add problem create/edit form with per-type dynamic fields"
 - Consumes: `uploadProblemsExcel`(Task 7)
 - Produces: `/admin/problems/excel-upload` 화면.
 
-- [ ] **Step 1: 업로드 화면 작성**
+- [x] **Step 1: 업로드 화면 작성**
 
 `frontend/src/pages/admin/problems/ProblemExcelUploadPage.jsx`:
 ```javascript
@@ -2531,7 +2558,7 @@ export default function ProblemExcelUploadPage() {
 }
 ```
 
-- [ ] **Step 2: 네비게이션/라우터에 연결**
+- [x] **Step 2: 네비게이션/라우터에 연결**
 
 `AdminLayout.jsx`의 `NAV_ITEMS`에 추가:
 ```javascript
@@ -2547,11 +2574,11 @@ export default function ProblemExcelUploadPage() {
 import ProblemExcelUploadPage from "@/pages/admin/problems/ProblemExcelUploadPage.jsx";
 ```
 
-- [ ] **Step 3: 수동 확인**
+- [x] **Step 3: 수동 확인**
 
 Run: 샘플 엑셀(문제유형/문제내용/보기1~5/정답 컬럼)을 만들어 업로드 → 성공/실패 건수와 사유 확인
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/pages/admin/problems/ProblemExcelUploadPage.jsx frontend/src/pages/admin/AdminLayout.jsx frontend/src/routers/routes.jsx

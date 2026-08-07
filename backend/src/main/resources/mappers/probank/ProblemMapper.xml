@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.ProblemDao">
+
+    <resultMap id="problemListItemMap" type="com.daeryun.probank.dto.problem.ProblemListItem">
+        <result property="tags" column="tags" typeHandler="com.daeryun.probank.config.TagArrayTypeHandler"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="Problem" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO problems
+            (type, content, image_url, reference_text, explanation, blank_reveal_count, status, department_id, created_by)
+        VALUES
+            (#{type}, #{content}, #{imageUrl}, #{referenceText}, #{explanation}, #{blankRevealCount}, #{status}, #{departmentId}, #{createdBy})
+    </insert>
+
+    <select id="findById" resultType="Problem">
+        SELECT id, type, content, image_url, reference_text, explanation, blank_reveal_count,
+               status, department_id, created_by, created_at, updated_at
+        FROM problems WHERE id = #{id}
+    </select>
+
+    <update id="update" parameterType="Problem">
+        UPDATE problems
+        SET content = #{content}, image_url = #{imageUrl}, reference_text = #{referenceText},
+            explanation = #{explanation}, blank_reveal_count = #{blankRevealCount}, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE problems SET status = #{status}, updated_at = now() WHERE id = #{id}
+    </update>
+
+    <select id="findAll" resultMap="problemListItemMap">
+        SELECT p.id, p.type, p.content, p.status, p.department_id, d.name AS department_name, p.created_at,
+               COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        LEFT JOIN problem_tags pt ON pt.problem_id = p.id
+        LEFT JOIN tags t ON t.id = pt.tag_id
+        <where>
+            <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+            <if test="type != null">AND p.type = #{type}</if>
+            <if test="status != null">AND p.status = #{status}</if>
+            <if test="createdFrom != null">AND p.created_at &gt;= #{createdFrom}</if>
+            <if test="createdTo != null">AND p.created_at &lt; (#{createdTo} + INTERVAL '1 day')</if>
+            <if test="tag != null and tag != ''">AND EXISTS (SELECT 1 FROM problem_tags fpt JOIN tags ft ON ft.id = fpt.tag_id WHERE fpt.problem_id = p.id AND lower(ft.name) = lower(#{tag}))</if>
+            <if test="keyword != null and keyword != ''">AND p.content ILIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+        GROUP BY p.id, d.name
+        ORDER BY p.created_at DESC
+    </select>
+
+</mapper>

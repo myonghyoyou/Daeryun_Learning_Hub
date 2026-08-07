@@ -11,7 +11,7 @@ function toPlain(groups) {
   }));
 }
 
-test("SUPER_ADMIN sees the department management and account management menus", () => {
+test("SUPER_ADMIN sees the department, account, and problem management menus", () => {
   assert.deepEqual(toPlain(buildNavGroups("SUPER_ADMIN")), [
     {
       label: "관리 메뉴",
@@ -19,6 +19,8 @@ test("SUPER_ADMIN sees the department management and account management menus", 
         { to: "/admin/departments", label: "부서 관리", end: false },
         { to: "/admin/users", label: "계정 관리", end: true },
         { to: "/admin/users/excel-upload", label: "계정 일괄 등록", end: false },
+        { to: "/admin/problems", label: "문제 관리", end: true },
+        { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
       ],
     },
   ]);
@@ -53,8 +55,16 @@ test("no menu item points at /admin while the dashboard screen does not exist", 
   }
 });
 
-test("DEPT_ADMIN does not see department or account management (hidden, not disabled)", () => {
-  assert.deepEqual(toPlain(buildNavGroups("DEPT_ADMIN")), []);
+test("DEPT_ADMIN does not see department or account management (hidden, not disabled), but does see problem management", () => {
+  assert.deepEqual(toPlain(buildNavGroups("DEPT_ADMIN")), [
+    {
+      label: "관리 메뉴",
+      items: [
+        { to: "/admin/problems", label: "문제 관리", end: true },
+        { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
+      ],
+    },
+  ]);
 });
 
 test("EMPLOYEE (should never reach AdminLayout, but defensively) sees no menu at all", () => {

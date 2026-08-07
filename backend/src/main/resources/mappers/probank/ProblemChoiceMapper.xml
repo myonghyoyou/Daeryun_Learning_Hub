@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.ProblemChoiceDao">
+
+    <!--
+        Lombok's `boolean correct` field generates getter isCorrect()/setter setCorrect(),
+        so MyBatis registers the bean property name as "correct" (not "isCorrect"). With
+        map-underscore-to-camel-case, auto-mapping would normalize column is_correct to
+        "isCorrect", which never matches the registered "correct" property — and since
+        autoMappingUnknownColumnBehavior defaults to NONE, that mismatch fails silently:
+        every row comes back with correct == false regardless of what's stored. This
+        explicit resultMap binds the column to the actual property name.
+    -->
+    <resultMap id="problemChoiceMap" type="ProblemChoice">
+        <id property="id" column="id"/>
+        <result property="problemId" column="problem_id"/>
+        <result property="choiceText" column="choice_text"/>
+        <result property="correct" column="is_correct"/>
+        <result property="displayOrder" column="display_order"/>
+    </resultMap>
+
+    <insert id="insertAll">
+        INSERT INTO problem_choices (problem_id, choice_text, is_correct, display_order)
+        VALUES
+        <foreach collection="choices" item="choice" separator=",">
+            (#{choice.problemId}, #{choice.choiceText}, #{choice.correct}, #{choice.displayOrder})
+        </foreach>
+    </insert>
+
+    <select id="findByProblemId" resultMap="problemChoiceMap">
+        SELECT id, problem_id, choice_text, is_correct, display_order
+        FROM problem_choices WHERE problem_id = #{problemId} ORDER BY display_order
+    </select>
+
+    <delete id="deleteByProblemId">
+        DELETE FROM problem_choices WHERE problem_id = #{problemId}
+    </delete>
+
+</mapper>

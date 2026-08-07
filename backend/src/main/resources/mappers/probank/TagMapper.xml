@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.TagDao">
+
+    <select id="findAll" resultType="Tag">
+        SELECT id, name, created_at FROM tags ORDER BY name
+    </select>
+
+    <insert id="insertIgnoreAll">
+        INSERT INTO tags (name)
+        VALUES
+        <foreach collection="names" item="name" separator=",">
+            (#{name})
+        </foreach>
+        ON CONFLICT (name) DO NOTHING
+    </insert>
+
+    <select id="findIdsByNames" resultType="Long">
+        SELECT id FROM tags WHERE name IN
+        <foreach collection="names" item="name" open="(" separator="," close=")">
+            #{name}
+        </foreach>
+    </select>
+
+</mapper>

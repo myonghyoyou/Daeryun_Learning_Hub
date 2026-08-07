@@ -3,3 +3,9 @@ build/
 bin/
 .idea/
 *.iml
+
+# app.upload.image-dir default (./uploads/images, relative to the process CWD — see
+# application.yml). Local `bootRun`/manual testing writes real files here; must never be
+# committed regardless of where the configured root actually resolves. Production must set
+# UPLOAD_IMAGE_DIR to an absolute path outside the deployment artifact/working tree.
+uploads/
