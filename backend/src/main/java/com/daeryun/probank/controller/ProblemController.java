@@ -7,6 +7,7 @@ import com.daeryun.probank.common.ResponseDto;
 import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.problem.ImageUploadResponse;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
+import com.daeryun.probank.service.ExcelProblemUploadService;
 import com.daeryun.probank.service.ProblemImageService;
 import com.daeryun.probank.service.ProblemService;
 import org.springframework.http.ResponseEntity;
@@ -20,10 +21,13 @@ public class ProblemController {
 
     private final ProblemService problemService;
     private final ProblemImageService problemImageService;
+    private final ExcelProblemUploadService excelProblemUploadService;
 
-    public ProblemController(ProblemService problemService, ProblemImageService problemImageService) {
+    public ProblemController(ProblemService problemService, ProblemImageService problemImageService,
+                              ExcelProblemUploadService excelProblemUploadService) {
         this.problemService = problemService;
         this.problemImageService = problemImageService;
+        this.excelProblemUploadService = excelProblemUploadService;
     }
 
     @PostMapping
@@ -68,5 +72,11 @@ public class ProblemController {
     public ResponseEntity<ResponseDto<?>> uploadImage(@RequestParam("file") MultipartFile file,
                                                         @LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(new ImageUploadResponse(problemImageService.store(file, actor))));
+    }
+
+    @PostMapping("/excel-upload")
+    public ResponseEntity<ResponseDto<?>> uploadExcel(@RequestParam("file") MultipartFile file,
+                                                        @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(excelProblemUploadService.upload(file, actor)));
     }
 }
