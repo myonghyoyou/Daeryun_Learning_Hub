@@ -72,3 +72,7 @@ export function apiPostForm(path, formData) {
 export function apiPut(path, body) {
   return request(path, { method: "PUT", body: JSON.stringify(body) });
 }
+
+export function apiDelete(path) {
+  return request(path, { method: "DELETE" });
+}
