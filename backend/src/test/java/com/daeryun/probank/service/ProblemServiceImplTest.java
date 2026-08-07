@@ -333,6 +333,85 @@ class ProblemServiceImplTest {
         Mockito.verify(problemDao, Mockito.never()).update(Mockito.any());
     }
 
+    // --- imageUrl 검증 (전체 브랜치 리뷰 F2) ---
+    // ProblemImageServiceImpl은 확장자/Content-Type 허용목록, 5MB 상한, SVG 제외, UUID 파일명,
+    // 경로 탈출 방어를 모두 적용하는데, JSON API가 imageUrl을 자유 문자열로 받아 그대로 저장하면
+    // 호출자가 그 검증을 전부 우회한다. create/update 양쪽 경로를 모두 고정한다.
+
+    private ProblemCreateRequest shortAnswerRequest(String imageUrl) {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("대한민국의 수도는?");
+        request.setAnswers(Collections.singletonList("서울"));
+        request.setImageUrl(imageUrl);
+        return request;
+    }
+
+    private Problem existingShortAnswer() {
+        Problem existing = new Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(10L);
+        existing.setType(ProblemType.SHORT_ANSWER);
+        return existing;
+    }
+
+    @Test
+    void create_withExternalImageUrl_rejects() {
+        ProblemCreateRequest request = shortAnswerRequest("https://attacker.example/track.gif");
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_withTraversalImageUrl_rejects() {
+        ProblemCreateRequest request = shortAnswerRequest("/uploads/images/../../etc/passwd");
+
+        assertThrows(BizException.class, () -> service.create(request, actor));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_withUploadedImageUrl_succeeds() {
+        ProblemCreateRequest request = shortAnswerRequest("/uploads/images/8b1f0c6e-1111-2222-3333-444455556666.png");
+
+        service.create(request, actor);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).insert(captor.capture());
+        assertEquals("/uploads/images/8b1f0c6e-1111-2222-3333-444455556666.png", captor.getValue().getImageUrl());
+    }
+
+    @Test
+    void create_withoutImageUrl_succeeds() {
+        ProblemCreateRequest request = shortAnswerRequest(null);
+
+        service.create(request, actor);
+
+        Mockito.verify(problemDao).insert(Mockito.any());
+    }
+
+    @Test
+    void update_withExternalImageUrl_rejects() {
+        Mockito.when(problemDao.findById(5L)).thenReturn(existingShortAnswer());
+        ProblemCreateRequest request = shortAnswerRequest("https://attacker.example/track.gif");
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+        Mockito.verify(problemDao, Mockito.never()).update(Mockito.any());
+    }
+
+    @Test
+    void update_withUploadedImageUrl_succeeds() {
+        Mockito.when(problemDao.findById(5L)).thenReturn(existingShortAnswer());
+        ProblemCreateRequest request = shortAnswerRequest("/uploads/images/a.png");
+
+        service.update(5L, request, actor);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).update(captor.capture());
+        assertEquals("/uploads/images/a.png", captor.getValue().getImageUrl());
+    }
+
     @Test
     void archive_ownProblem_updatesStatusToArchived() {
         com.daeryun.probank.domain.Problem existing = new com.daeryun.probank.domain.Problem();
