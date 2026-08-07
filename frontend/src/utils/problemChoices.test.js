@@ -89,8 +89,8 @@ test("validateChoices requires exactly one correct choice for MCQ_SINGLE", () =>
     { text: "a", correct: true },
     { text: "b", correct: true },
   ];
-  assert.equal(validateChoices("MCQ_SINGLE", none), "정답을 1개 선택하세요.");
-  assert.equal(validateChoices("MCQ_SINGLE", two), "정답을 1개 선택하세요.");
+  assert.equal(validateChoices("MCQ_SINGLE", none), "정답 개수가 올바르지 않습니다.");
+  assert.equal(validateChoices("MCQ_SINGLE", two), "정답 개수가 올바르지 않습니다.");
 });
 
 test("validateChoices requires at least one correct choice for MCQ_MULTI, and allows more than one", () => {
@@ -122,7 +122,7 @@ test("validateChoices requires exactly one correct choice for OX", () => {
     { text: "O", correct: false },
     { text: "X", correct: false },
   ];
-  assert.equal(validateChoices("OX", zero), "정답을 1개 선택하세요.");
+  assert.equal(validateChoices("OX", zero), "정답 개수가 올바르지 않습니다.");
 });
 
 test("validateChoices returns null for a valid MCQ_SINGLE, MCQ_MULTI, and OX set", () => {

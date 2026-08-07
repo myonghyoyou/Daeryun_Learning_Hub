@@ -36,7 +36,7 @@ test("validateProblemForm delegates to validateChoices for MCQ_SINGLE/MCQ_MULTI/
       ],
     }),
   );
-  assert.equal(errors.choices, "정답을 1개 선택하세요.");
+  assert.equal(errors.choices, "정답 개수가 올바르지 않습니다.");
 });
 
 test("validateProblemForm delegates to validateAnswers for SHORT_ANSWER and does not require choices", () => {

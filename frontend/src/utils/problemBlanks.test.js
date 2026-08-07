@@ -1,30 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createBlank, extractBlankMarkers, validateBlanks } from "./problemBlanks.js";
+import { createBlank, validateBlanks } from "./problemBlanks.js";
 
 test("createBlank returns an empty blank candidate", () => {
   assert.deepEqual(createBlank(), { blankKey: "", answerText: "" });
-});
-
-test("extractBlankMarkers finds every {{key}} marker using the agreed double-brace syntax", () => {
-  assert.deepEqual(
-    extractBlankMarkers("대한민국의 수도는 {{blank_1}}이고, 일본의 수도는 {{blank_2}}이다."),
-    ["blank_1", "blank_2"],
-  );
-});
-
-test("extractBlankMarkers de-duplicates a marker repeated in the content", () => {
-  assert.deepEqual(extractBlankMarkers("{{blank_1}} ... {{blank_1}}"), ["blank_1"]);
-});
-
-test("extractBlankMarkers returns an empty array when content has no markers", () => {
-  assert.deepEqual(extractBlankMarkers("마커가 없는 본문입니다."), []);
-  assert.deepEqual(extractBlankMarkers(""), []);
-  assert.deepEqual(extractBlankMarkers(null), []);
-});
-
-test("extractBlankMarkers ignores single-brace text (not the agreed marker syntax)", () => {
-  assert.deepEqual(extractBlankMarkers("{blank_1} is not a marker"), []);
 });
 
 const validForm = {

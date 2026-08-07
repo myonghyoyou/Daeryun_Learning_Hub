@@ -8,26 +8,8 @@
  *  5) blankRevealCount가 1 이상, 빈칸 개수 이하
  * 이 모듈은 그 다섯 규칙을 동일한 순서로 클라이언트에서 미리 검사한다.
  */
-const BLANK_MARKER_PATTERN = /\{\{([^{}]+)\}\}/g;
-
 export function createBlank() {
   return { blankKey: "", answerText: "" };
-}
-
-// 본문에 실제로 등장하는 {{key}} 마커를 등장 순서대로, 중복 없이 추출한다.
-// 단일 중괄호(`{blank_1}`)는 합의된 문법이 아니므로 매칭하지 않는다.
-export function extractBlankMarkers(content) {
-  if (!content) return [];
-  const keys = [];
-  const seen = new Set();
-  for (const match of content.matchAll(BLANK_MARKER_PATTERN)) {
-    const key = match[1];
-    if (!seen.has(key)) {
-      seen.add(key);
-      keys.push(key);
-    }
-  }
-  return keys;
 }
 
 function isBlankText(value) {

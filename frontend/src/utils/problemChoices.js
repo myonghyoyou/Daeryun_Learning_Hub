@@ -46,7 +46,7 @@ export function validateChoices(type, choices) {
       return "정답을 최소 1개 선택하세요.";
     }
   } else if (correctCount !== 1) {
-    return "정답을 1개 선택하세요.";
+    return "정답 개수가 올바르지 않습니다.";
   }
 
   return null;

@@ -403,7 +403,7 @@ export default function ProblemFormPage() {
               </p>
               <p className="mt-1 text-body-small text-ink-muted">
                 {type === "OX"
-                  ? "OX 문제는 보기 2개가 고정이며, 정답을 1개 선택하세요."
+                  ? "OX 문제는 보기 2개가 고정이며, 정답 개수는 1개여야 합니다."
                   : type === "MCQ_MULTI"
                     ? "정답을 1개 이상 선택하세요."
                     : "정답을 1개만 선택하세요."}
