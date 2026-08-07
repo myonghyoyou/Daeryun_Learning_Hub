@@ -51,3 +51,5 @@ app:
       employee-no: ${BOOTSTRAP_ADMIN_EMPLOYEE_NO:admin}
       password: ${BOOTSTRAP_ADMIN_PASSWORD:changeme1234}
       email: ${BOOTSTRAP_ADMIN_EMAIL:admin@company.local}
+  upload:
+    image-dir: ${UPLOAD_IMAGE_DIR:./uploads/images}

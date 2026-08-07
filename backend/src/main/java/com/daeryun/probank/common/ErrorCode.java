@@ -14,6 +14,8 @@ public enum ErrorCode {
     // 파일은 왔지만 열 수 없는 경우(손상·암호 설정·엑셀이 아닌 바이트·시트 없음).
     // FILE_REQUIRED(1009) 를 재사용하면 "필수 파일이 누락되었습니다"라는 정반대 상황을 안내하게 된다.
     FILE_UNREADABLE("파일을 읽을 수 없습니다.", 1013),
+    FILE_TYPE_NOT_ALLOWED("허용되지 않는 파일 형식입니다.", 1014),
+    FILE_TOO_LARGE("파일 크기가 허용 범위를 초과했습니다.", 1015),
     EMPTY_SESSION("세션 정보가 없습니다.", 980),
     ACCESS_AUTH_DENIED("접근 권한이 없습니다.", 990);
 

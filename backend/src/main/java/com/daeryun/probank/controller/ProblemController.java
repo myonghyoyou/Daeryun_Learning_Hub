@@ -5,10 +5,13 @@ import com.daeryun.probank.common.LoginUser;
 import com.daeryun.probank.common.RequireRole;
 import com.daeryun.probank.common.ResponseDto;
 import com.daeryun.probank.domain.UserRole;
+import com.daeryun.probank.dto.problem.ImageUploadResponse;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
+import com.daeryun.probank.service.ProblemImageService;
 import com.daeryun.probank.service.ProblemService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/admin/problems")
@@ -16,9 +19,11 @@ import org.springframework.web.bind.annotation.*;
 public class ProblemController {
 
     private final ProblemService problemService;
+    private final ProblemImageService problemImageService;
 
-    public ProblemController(ProblemService problemService) {
+    public ProblemController(ProblemService problemService, ProblemImageService problemImageService) {
         this.problemService = problemService;
+        this.problemImageService = problemImageService;
     }
 
     @PostMapping
@@ -57,5 +62,11 @@ public class ProblemController {
     public ResponseEntity<ResponseDto<?>> archive(@PathVariable Long id, @LoginUser AuthUser actor) {
         problemService.archive(id, actor);
         return ResponseEntity.ok(ResponseDto.ok());
+    }
+
+    @PostMapping("/images")
+    public ResponseEntity<ResponseDto<?>> uploadImage(@RequestParam("file") MultipartFile file,
+                                                        @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(new ImageUploadResponse(problemImageService.store(file, actor))));
     }
 }
