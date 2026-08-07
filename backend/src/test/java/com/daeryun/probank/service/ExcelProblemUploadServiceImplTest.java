@@ -184,4 +184,50 @@ class ExcelProblemUploadServiceImplTest {
         Mockito.verify(problemProvisioningService, Mockito.times(1))
                 .provisionWithChoices(Mockito.any(), Mockito.anyList(), Mockito.anyList());
     }
+
+    /**
+     * 이미지 열은 엑셀 업로드에서 지원하지 않는다(전체 브랜치 리뷰 F2 후속). ProblemServiceImpl은 JSON API
+     * 경로에서 imageUrl을 이미지 업로드 API가 돌려준 {@code /uploads/images/...} 경로로만 제한하는데, 엑셀에는
+     * 그런 값을 만들 API가 없어 이 열에서 "정상적으로" 쓸 수 있는 값은 외부 URL뿐이었다 — Plan 4 풀이 화면이
+     * imageUrl을 전사 공통으로 렌더링하므로 외부 URL을 저장 가능한 값으로 남겨 두면 그 자체로 저장된 추적
+     * 비콘이 된다. ImageUrlValidator(ProblemServiceImpl과 공유)가 거부하는 값이면 그 행만 실패로 표시해야
+     * 한다. 이 테스트는 가드를 지우면(이미지 열 검사를 빼면) 반드시 실패한다 — 그러면 이 행이 외부 URL을
+     * 그대로 담은 채 성공으로 처리되기 때문이다.
+     */
+    @Test
+    void upload_externalImageUrl_failsThatRowOnly() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "외부 이미지 URL 행", "https://attacker.example/track.gif", "", "1", "2", "", "", "", "1", ""},
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
+        });
+
+        ExcelUploadResult result = service.upload(file, actor);
+
+        assertEquals(2, result.getTotalRows());
+        assertEquals(1, result.getSuccessRows());
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("행 2:"),
+                "실패 행 번호(엑셀 2행)가 오류 상세에 담겨야 한다: " + result.getErrorDetail());
+        assertTrue(result.getErrorDetail().contains("이미지는 엑셀로 등록할 수 없습니다"),
+                "이미지 열 거부 사유가 담겨야 한다: " + result.getErrorDetail());
+        Mockito.verify(problemProvisioningService, Mockito.times(1))
+                .provisionWithChoices(Mockito.any(), Mockito.anyList(), Mockito.anyList());
+    }
+
+    /** 이미지 열이 비어 있는 정상 케이스가 이번 변경으로 회귀하지 않았는지 확인한다. */
+    @Test
+    void upload_blankImageCell_stillSucceeds() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
+        });
+
+        ExcelUploadResult result = service.upload(file, actor);
+
+        assertEquals(1, result.getSuccessRows());
+        assertEquals(0, result.getFailRows());
+        Mockito.verify(problemProvisioningService).provisionWithChoices(Mockito.any(), Mockito.anyList(),
+                Mockito.anyList());
+    }
 }

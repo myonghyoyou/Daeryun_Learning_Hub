@@ -200,10 +200,20 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
             return RowResult.fail(rowNumber, "정답은 필수입니다.");
         }
 
+        String imageUrl = emptyToNull(cellValue(row, COL_IMAGE, dataFormatter));
+        if (ImageUrlValidator.check(imageUrl) != ImageUrlValidator.Result.VALID) {
+            // 엑셀에는 이미지 업로드 API가 없어 유효한 /uploads/images/... 값을 만들 방법이 없다 —
+            // 외부 URL이나 상위 경로 값은 ProblemServiceImpl.validateImageUrl과 같은 규칙(ImageUrlValidator)
+            // 으로 거부하되, 메시지는 엑셀 사용자가 실제로 할 수 있는 행동(열을 비워두고 개별 화면에서
+            // 첨부)을 안내한다.
+            return RowResult.fail(rowNumber,
+                    "이미지는 엑셀로 등록할 수 없습니다. 이미지 열은 비워 두고, 문제 개별 등록/수정 화면에서 이미지를 첨부하세요.");
+        }
+
         Problem problem = new Problem();
         problem.setType(type);
         problem.setContent(content);
-        problem.setImageUrl(emptyToNull(cellValue(row, COL_IMAGE, dataFormatter)));
+        problem.setImageUrl(imageUrl);
         problem.setReferenceText(emptyToNull(cellValue(row, COL_REFERENCE, dataFormatter)));
         problem.setExplanation(emptyToNull(cellValue(row, COL_EXPLANATION, dataFormatter)));
         problem.setStatus(ProblemStatus.ACTIVE);

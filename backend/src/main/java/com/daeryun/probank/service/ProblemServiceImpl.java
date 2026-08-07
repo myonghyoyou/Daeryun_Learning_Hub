@@ -34,24 +34,14 @@ public class ProblemServiceImpl implements ProblemService {
     private static final int MAX_TAGS = 20;
     private static final int MAX_TAG_LENGTH = 100;
 
-    /**
-     * JSON API로 받는 imageUrl이 반드시 가져야 하는 접두어. 이 값은 이미지 업로드 API
-     * ({@link ProblemImageServiceImpl#store})가 돌려준 경로여야 한다 — 업로드 API는 확장자/
-     * Content-Type 허용목록, 5MB 상한, SVG 제외, UUID 파일명, 경로 탈출 방어를 모두 적용하는데,
-     * imageUrl을 자유 문자열로 받아 그대로 저장하면 호출자가 {@code {"imageUrl":"https://attacker.example/track.gif"}}
-     * 한 줄로 그 검증을 전부 우회할 수 있다. 프런트엔드는 업로드 응답 값만 넣지만 API 자체가
-     * 막혀 있지 않았다. Plan 4 풀이 화면이 이 값을 그대로 렌더링하므로 서버에서 고정한다.
-     * <p>
-     * 참고: 엑셀 업로드 경로({@link ExcelProblemUploadServiceImpl})는 <b>일부러</b> 이 제약을 받지
-     * 않는다. 엑셀 템플릿은 이미지 열을 URL 컬럼으로 안내하고 있어 외부 URL이 의도된 것일 수 있다.
-     * 두 경로의 이 비대칭은 플랜 소유자가 판단할 사항으로 남겨 둔다.
-     */
-    private static final String IMAGE_URL_PREFIX = "/uploads/images/";
+    // imageUrl 검증 규칙(접두어/경로 탈출/길이 상한)은 ImageUrlValidator 하나에만 있다. JSON API 경로
+    // (이 클래스)와 엑셀 업로드 경로(ExcelProblemUploadServiceImpl) 모두 그 클래스를 호출한다 — 규칙이
+    // 한쪽에서만 바뀌는 드리프트를 막기 위해서다. Plan 4 풀이 화면이 이 값을 전사 공통으로 렌더링하므로
+    // 두 입력 경로 모두 서버에서 고정한다.
 
     // 아래 상한은 schema.sql의 컬럼 폭과 1:1로 맞춘다. 어느 쪽도 검증하지 않으면 DB가 던지는
     // DataIntegrityViolationException이 "처리 중 오류가 발생하였습니다" + ERROR 스택트레이스로
     // 새어 나가는데, 평범한 사용자 입력(특히 50자 blank_key)으로 충분히 도달할 수 있다.
-    private static final int MAX_IMAGE_URL_LENGTH = 500;   // problems.image_url VARCHAR(500)
     private static final int MAX_CHOICE_TEXT_LENGTH = 500; // problem_choices.choice_text VARCHAR(500)
     private static final int MAX_ANSWER_TEXT_LENGTH = 500; // problem_answers/problem_blanks.answer_text VARCHAR(500)
     private static final int MAX_BLANK_KEY_LENGTH = 50;    // problem_blanks.blank_key VARCHAR(50)
@@ -312,20 +302,18 @@ public class ProblemServiceImpl implements ProblemService {
     /**
      * imageUrl은 비어 있거나, 이미지 업로드 API가 돌려준 {@code /uploads/images/...} 경로여야 한다.
      * 외부 URL(http/https), 프로토콜 상대 URL, 다른 서버 경로는 모두 거부한다. {@code ..}는 접두어를
-     * 통과하고도 상위 경로를 가리킬 수 있으므로 별도로 막는다.
+     * 통과하고도 상위 경로를 가리킬 수 있으므로 별도로 막는다. 실제 판정 규칙은 ImageUrlValidator에만
+     * 있다 — 여기서는 결과에 맞는 메시지만 고른다.
      */
     private void validateImageUrl(String imageUrl) {
-        if (isBlank(imageUrl)) {
-            return;
-        }
-        String value = imageUrl.trim();
-        if (!value.startsWith(IMAGE_URL_PREFIX) || value.contains("..")) {
+        ImageUrlValidator.Result result = ImageUrlValidator.check(imageUrl);
+        if (result == ImageUrlValidator.Result.BAD_PREFIX) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
-                    "이미지는 이미지 업로드 API로 등록한 경로(" + IMAGE_URL_PREFIX + "...)만 사용할 수 있습니다.");
+                    "이미지는 이미지 업로드 API로 등록한 경로(" + ImageUrlValidator.PREFIX + "...)만 사용할 수 있습니다.");
         }
-        if (value.length() > MAX_IMAGE_URL_LENGTH) {
+        if (result == ImageUrlValidator.Result.TOO_LONG) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
-                    "이미지 경로는 " + MAX_IMAGE_URL_LENGTH + "자 이하여야 합니다.");
+                    "이미지 경로는 " + ImageUrlValidator.MAX_LENGTH + "자 이하여야 합니다.");
         }
     }
 

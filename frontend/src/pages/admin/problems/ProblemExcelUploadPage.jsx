@@ -87,7 +87,7 @@ export default function ProblemExcelUploadPage() {
       <Surface className="p-5">
         <h2 className="text-section-title font-bold text-ink-strong">템플릿 안내</h2>
         <p className="mt-1 text-body-small text-ink-muted">
-          엑셀 1행은 헤더이며, 2행부터 아래 순서의 컬럼으로 문제를 입력합니다. 이미지·참조지문·해설·태그는
+          엑셀 1행은 헤더이며, 2행부터 아래 순서의 컬럼으로 문제를 입력합니다. 참조지문·해설·태그는
           비워둘 수 있습니다. 보기는 필요한 만큼만 채우되(최소 2개, 최대 5개) 중간 칸을 비운 채 뒤 칸을 채울 수는
           없습니다. 태그는 콤마로 구분합니다.
         </p>
@@ -97,6 +97,10 @@ export default function ProblemExcelUploadPage() {
         </p>
         <p className="mt-2 text-body-small font-semibold text-danger-text">
           빈칸 채우기(FILL_BLANK)는 엑셀 업로드를 지원하지 않습니다. 개별 등록/수정 화면을 이용하세요.
+        </p>
+        <p className="mt-2 text-body-small font-semibold text-danger-text">
+          이미지는 엑셀로 등록할 수 없습니다. 이미지 열은 비워 두고, 문제 개별 등록/수정 화면에서 이미지를
+          첨부하세요.
         </p>
         <div className="mt-4">
           <DataTable
