@@ -216,11 +216,16 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         return processChoiceBased(rowNumber, row, problem, type, answerText, tags, dataFormatter);
     }
 
+    /**
+     * ProblemServiceImpl.validateAnswers 와 같은 규칙: 콤마로 나눈 정답 토큰 중 하나라도 비어 있으면
+     * 그 행 전체를 실패로 표시한다. 이전 버전은 빈 토큰을 조용히 걸러냈는데("서울,,Seoul" ->
+     * ["서울","Seoul"]), 그러면 같은 문제가 API 경로(거부)와 엑셀 경로(통과)에서 서로 다르게 취급된다.
+     */
     private RowResult processShortAnswer(int rowNumber, Problem problem, String answerText, List<String> tags) {
-        List<String> answers = Arrays.stream(answerText.split(","))
-                .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
-        if (answers.isEmpty()) {
-            return RowResult.fail(rowNumber, "정답 형식이 올바르지 않습니다.");
+        List<String> answers = Arrays.stream(answerText.split(",", -1))
+                .map(String::trim).collect(Collectors.toList());
+        if (answers.stream().anyMatch(this::isBlank)) {
+            return RowResult.fail(rowNumber, "빈 정답은 입력할 수 없습니다.");
         }
 
         List<ProblemAnswer> answerEntities = answers.stream().map(text -> {
@@ -240,15 +245,35 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
 
     private RowResult processChoiceBased(int rowNumber, Row row, Problem problem, ProblemType type,
                                           String answerText, List<String> tags, DataFormatter dataFormatter) {
-        List<String> choiceTexts = new ArrayList<>();
+        List<String> choiceCells = new ArrayList<>();
         for (int i = 0; i < MAX_CHOICE_COLUMNS; i++) {
-            String choiceText = cellValue(row, COL_CHOICE_START + i, dataFormatter);
-            if (!isBlank(choiceText)) {
-                choiceTexts.add(choiceText);
+            choiceCells.add(cellValue(row, COL_CHOICE_START + i, dataFormatter));
+        }
+        int lastNonBlank = -1;
+        for (int i = MAX_CHOICE_COLUMNS - 1; i >= 0; i--) {
+            if (!isBlank(choiceCells.get(i))) {
+                lastNonBlank = i;
+                break;
             }
         }
-        if (choiceTexts.size() < MIN_CHOICES || choiceTexts.size() > MAX_CHOICE_COLUMNS) {
+        int choiceCount = lastNonBlank + 1;
+
+        // ProblemServiceImpl.validateChoices 와 같은 순서: 개수 검사 먼저, 그 다음 빈 보기 검사.
+        if (choiceCount < MIN_CHOICES || choiceCount > MAX_CHOICE_COLUMNS) {
             return RowResult.fail(rowNumber, "보기는 2개 이상 5개 이하이어야 합니다.");
+        }
+        List<String> choiceTexts = new ArrayList<>();
+        for (int i = 0; i < choiceCount; i++) {
+            String cell = choiceCells.get(i);
+            if (isBlank(cell)) {
+                // 보기1, 보기2에 값이 있고 보기3이 비어 있는데 보기4가 다시 채워진 경우처럼, 뒤쪽에
+                // 값이 있는데 앞선 열이 비어 있으면 "보기 번호 = 열 번호" 대응이 깨진다. 이전 버전은
+                // 빈 칸을 건너뛰고 뒤의 값들을 앞으로 당겨 채웠는데, 그러면 정답 번호가 엉뚱한 보기를
+                // 가리키게 되는 조용한 오답 버그였다. ProblemServiceImpl.validateChoices 와 같은 메시지로
+                // 거부한다.
+                return RowResult.fail(rowNumber, "빈 보기는 입력할 수 없습니다.");
+            }
+            choiceTexts.add(cell);
         }
         if (type == ProblemType.OX && choiceTexts.size() != 2) {
             return RowResult.fail(rowNumber, "OX 문제는 보기 2개(O/X)가 필요합니다.");

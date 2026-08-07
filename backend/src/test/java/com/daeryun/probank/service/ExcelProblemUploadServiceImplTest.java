@@ -112,6 +112,52 @@ class ExcelProblemUploadServiceImplTest {
     }
 
     /**
+     * 보기1, 보기2에 값이 있고 보기3이 빈 채로 보기4가 채워지면(예: 보기1=A, 보기2=blank, 보기3=C),
+     * 이전 버전은 빈 칸을 건너뛰고 [A, C] 2개짜리 목록으로 압축했다 — 그러면 "정답=2"가 원래 3번째 열의
+     * C 를 가리키게 되어 정답이 조용히 바뀌는 오답 버그였다. ProblemServiceImpl.validateChoices 와 같이
+     * 내부에 빈 보기가 있으면 그 행을 실패로 거부해야 한다. 이 테스트는 가드를 지우면(빈 칸을 건너뛰고
+     * 압축하도록 되돌리면) 반드시 실패한다 — 압축 로직에서는 이 행이 성공(2개 보기, 정답 2번=C)으로
+     * 처리되기 때문이다.
+     */
+    @Test
+    void upload_choicesWithInternalGap_fails() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "1+1=?", "", "", "A", "", "C", "", "", "2", ""},
+        });
+
+        ExcelUploadResult result = service.upload(file, actor);
+
+        assertEquals(0, result.getSuccessRows());
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("빈 보기는 입력할 수 없습니다"),
+                "빈 보기 거부 사유가 담겨야 한다: " + result.getErrorDetail());
+        Mockito.verifyNoInteractions(problemProvisioningService);
+    }
+
+    /**
+     * "서울,,Seoul" 처럼 정답 토큰 사이에 빈 값이 있으면 ProblemServiceImpl.validateAnswers 와 같이
+     * 그 행을 거부해야 한다. 이전 버전은 빈 토큰을 조용히 걸러내 ["서울","Seoul"] 로 통과시켰다 — API
+     * 경로(거부)와 엑셀 경로(통과)가 같은 입력에 서로 다르게 반응하는 불일치였다. 가드를 지우면(빈
+     * 토큰을 걸러내도록 되돌리면) 이 테스트는 반드시 실패한다.
+     */
+    @Test
+    void upload_shortAnswerWithBlankToken_fails() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,,Seoul", ""},
+        });
+
+        ExcelUploadResult result = service.upload(file, actor);
+
+        assertEquals(0, result.getSuccessRows());
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("빈 정답은 입력할 수 없습니다"),
+                "빈 정답 거부 사유가 담겨야 한다: " + result.getErrorDetail());
+        Mockito.verifyNoInteractions(problemProvisioningService);
+    }
+
+    /**
      * 이 업로드의 핵심 계약(부분 성공)을 한 파일 안에서 직접 증명한다: 유효한 행과 무효한 행이 섞여
      * 있을 때, 무효한 행이 배치 전체를 중단시키지 않고 유효한 행은 그대로 저장되어야 한다. 이전까지의
      * 4개 테스트는 모두 파일 하나에 데이터 행 하나뿐이라 "실패 행이 있어도 나머지 배치가 계속 처리된다"
