@@ -144,34 +144,34 @@ class ProblemDaoTest {
         jdbcTemplate.update("INSERT INTO problem_tags (problem_id, tag_id) VALUES (?, ?)", tagged.getId(), tagId);
         String tagName = jdbcTemplate.queryForObject("SELECT name FROM tags WHERE id = ?", String.class, tagId);
 
-        List<ProblemListItem> byTag = problemDao.findAll(department.getId(), null, null, null, null, tagName, null);
+        List<ProblemListItem> byTag = problemDao.findAll(department.getId(), null, null, null, null, tagName, null, 100, 0);
         assertEquals(1, byTag.size());
         assertEquals(tagged.getId(), byTag.get(0).getId());
         assertTrue(byTag.get(0).getTags().contains(tagName));
 
-        List<ProblemListItem> byKeyword = problemDao.findAll(department.getId(), null, null, null, null, null, "keyword-abc");
+        List<ProblemListItem> byKeyword = problemDao.findAll(department.getId(), null, null, null, null, null, "keyword-abc", 100, 0);
         assertEquals(1, byKeyword.size());
         assertEquals(tagged.getId(), byKeyword.get(0).getId());
 
-        List<ProblemListItem> untaggedResult = problemDao.findAll(department.getId(), null, null, null, null, null, "태그없는");
+        List<ProblemListItem> untaggedResult = problemDao.findAll(department.getId(), null, null, null, null, null, "태그없는", 100, 0);
         assertEquals(1, untaggedResult.size());
         assertTrue(untaggedResult.get(0).getTags().isEmpty());
 
         LocalDate today = LocalDate.now();
         List<ProblemListItem> byDateRange = problemDao.findAll(
-                department.getId(), null, null, today, today, null, null);
+                department.getId(), null, null, today, today, null, null, 100, 0);
         assertEquals(2, byDateRange.size());
 
         List<ProblemListItem> byDateBefore = problemDao.findAll(
-                department.getId(), null, null, today.minusDays(2), today.minusDays(1), null, null);
+                department.getId(), null, null, today.minusDays(2), today.minusDays(1), null, null, 100, 0);
         assertTrue(byDateBefore.isEmpty());
 
         List<ProblemListItem> byStatus = problemDao.findAll(
-                department.getId(), null, "ARCHIVED", null, null, null, null);
+                department.getId(), null, "ARCHIVED", null, null, null, null, 100, 0);
         assertTrue(byStatus.isEmpty());
 
         List<ProblemListItem> byType = problemDao.findAll(
-                department.getId(), "MCQ_SINGLE", null, null, null, null, null);
+                department.getId(), "MCQ_SINGLE", null, null, null, null, null, 100, 0);
         assertEquals(2, byType.size());
     }
 
@@ -203,5 +203,53 @@ class ProblemDaoTest {
         assertEquals(2, problemBlankDao.findByProblemId(problem.getId()).size());
         problemBlankDao.deleteByProblemId(problem.getId());
         assertTrue(problemBlankDao.findByProblemId(problem.getId()).isEmpty());
+    }
+
+    /**
+     * 653문항이 들어가면 목록을 통째로 내려줄 수 없다. LIMIT/OFFSET 이 실제로 잘리는지와
+     * countAll 이 필터를 적용한 전체 건수를 돌려주는지를 함께 고정한다.
+     */
+    @Test
+    void findAll_appliesLimitAndOffset() {
+        Department department = createDepartment();
+        User author = createAuthor(department.getId());
+        for (int i = 0; i < 3; i++) {
+            createProblem(department.getId(), author.getId(), "페이징 " + i);
+        }
+
+        List<ProblemListItem> firstPage = problemDao.findAll(department.getId(), null, null, null, null,
+                null, null, 2, 0);
+        List<ProblemListItem> secondPage = problemDao.findAll(department.getId(), null, null, null, null,
+                null, null, 2, 2);
+
+        assertEquals(2, firstPage.size());
+        assertEquals(1, secondPage.size());
+        assertEquals(3L, problemDao.countAll(department.getId(), null, null, null, null, null, null));
+    }
+
+    /**
+     * created_at 만으로는 전순서가 아니다. 엑셀 업로드는 짧은 시간에 수십~수백 행을 넣어 같은
+     * 타임스탬프가 생길 수 있고, 정렬이 결정적이지 않으면 LIMIT/OFFSET 페이징에서 어떤 문제는
+     * 두 페이지에 나오고 어떤 문제는 어느 페이지에도 안 나온다. 이 테스트는 created_at 을 모두
+     * 같은 값으로 맞춰 그 상황을 만든 뒤, 페이지를 이어 붙이면 중복·누락이 없는지 본다.
+     */
+    @Test
+    void findAll_pagesDeterministicallyWhenTimestampsTie() {
+        Department department = createDepartment();
+        User author = createAuthor(department.getId());
+        for (int i = 0; i < 5; i++) {
+            createProblem(department.getId(), author.getId(), "동시각 " + i);
+        }
+        jdbcTemplate.update("UPDATE problems SET created_at = timestamp '2026-01-01 00:00:00' WHERE department_id = ?",
+                department.getId());
+
+        List<Long> paged = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 6; offset += 2) {
+            problemDao.findAll(department.getId(), null, null, null, null, null, null, 2, offset)
+                    .forEach(item -> paged.add(item.getId()));
+        }
+
+        assertEquals(5, paged.size(), "페이지를 이어 붙이면 전체 건수와 같아야 한다");
+        assertEquals(5, new java.util.HashSet<>(paged).size(), "같은 문제가 두 페이지에 나오면 안 된다");
     }
 }

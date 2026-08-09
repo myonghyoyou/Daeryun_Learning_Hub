@@ -53,9 +53,12 @@ public class ProblemController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String keyword,
+            // 기본값을 서버가 채운다. 파라미터 없이 부르던 기존 호출이 깨지지 않고 첫 페이지를 받는다.
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
             @LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(problemService.list(actor, departmentId, type, status,
-                createdFrom, createdTo, tag, keyword)));
+                createdFrom, createdTo, tag, keyword, page, size)));
     }
 
     @GetMapping("/{id}")

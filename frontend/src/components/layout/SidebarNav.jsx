@@ -14,11 +14,15 @@ const menuLinkClass = (isActive) =>
  * 총괄 관리자에게만 렌더링되며, 부서 관리자에게는 비활성화가 아니라 아예 숨긴다).
  * 그룹 라벨 9px/메뉴 38px 행/그룹 간 18px 간격은 7.2가 명시한 값이며
  * tokens.css에 해당 정확한 값의 전용 토큰이 없어 arbitrary value로 표현한다.
+ *
+ * sticky top-0 h-screen: AppShell이 문서 스크롤로 바뀌면서 더 이상 높이를 고정하지 않는다.
+ * h-screen이 없으면 사이드바가 콘텐츠 높이만큼만 되고 아래 메뉴 영역의 flex-1이 기준 높이를
+ * 잃는다. overflow-y-auto는 여기 두지 않는다 — 메뉴 영역이 이미 갖고 있어 이중 스크롤이 된다.
  */
 export default function SidebarNav({ groups }) {
   return (
     <nav
-      className="flex w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default"
+      className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default"
       aria-label="관리자 메뉴"
     >
       <div className="flex h-[76px] items-center border-b border-line-default px-6">

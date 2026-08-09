@@ -85,7 +85,7 @@
   카드 bottom 902 > 뷰포트 800                 ← 하단 테두리가 잘린다
 ```
 
-- [ ] **Step 1: AppShell 을 문서 스크롤로 바꾼다**
+- [x] **Step 1: AppShell 을 문서 스크롤로 바꾼다**
 
 `AppShell.jsx` 전체를 아래로 교체한다.
 
@@ -112,7 +112,7 @@ export default function AppShell({ sidebar, topbar, children }) {
 }
 ```
 
-- [ ] **Step 2: Sidebar 를 sticky 로 고정한다**
+- [x] **Step 2: Sidebar 를 sticky 로 고정한다**
 
 `SidebarNav.jsx:20-22`의 `<nav>` 클래스를 바꾼다. 현재는 `flex w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default` 다.
 
@@ -126,7 +126,7 @@ export default function AppShell({ sidebar, topbar, children }) {
 
 > ⚠️ **`overflow-y-auto`를 `<nav>`에 추가하지 말 것.** 메뉴 영역(`SidebarNav.jsx:28`)이 이미 `flex-1 overflow-y-auto`다. 위에도 걸면 스크롤 컨테이너가 이중이 되어 휠 동작이 어긋난다.
 
-- [ ] **Step 3: Topbar 를 sticky 로 고정한다**
+- [x] **Step 3: Topbar 를 sticky 로 고정한다**
 
 `Topbar.jsx:8`의 `<header>` 클래스 맨 앞에 `sticky top-0 z-20`을 넣는다.
 
@@ -139,7 +139,7 @@ export default function AppShell({ sidebar, topbar, children }) {
 - **배경이 이미 불투명하다** (`bg-surface-default`). sticky 요소가 반투명하면 아래 표 행이 비쳐 보이는데 그 문제가 없다.
 - **모달은 `z-50`이다** (`Modal.jsx:58`의 `fixed inset-0 z-50`). `z-20`보다 위이므로 모달이 Topbar 에 가리지 않는다. Task 5 에서 눈으로도 확인한다.
 
-- [ ] **Step 4: 브라우저로 확인한다**
+- [x] **Step 4: 브라우저로 확인한다**
 
 프론트 dev 서버가 떠 있어야 한다. `admin` / `QaAdmin1234!` 로 로그인해 창 높이 **720·800·900·1024** 각각에서 `/admin/departments`·`/admin/users`·`/admin/problems`를 연다.
 
@@ -151,7 +151,7 @@ export default function AppShell({ sidebar, topbar, children }) {
 | Topbar | 스크롤해도 화면 상단에 남고, 표 행이 그 아래로 지나간다 |
 | 가로 스크롤 | 없다 (`scrollWidth == clientWidth`) |
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/layout/AppShell.jsx frontend/src/components/layout/SidebarNav.jsx frontend/src/components/layout/Topbar.jsx
@@ -179,7 +179,7 @@ git commit -m "fix: let the document scroll so admin list cards are not clipped"
 
   Task 3·4가 모두 이 이름들을 쓴다.
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `frontend/src/utils/pagination.test.js`:
 
@@ -223,12 +223,12 @@ test("pageRange reports the 1-based item range on the current page", () => {
 });
 ```
 
-- [ ] **Step 2: 실패를 확인한다 (RED)**
+- [x] **Step 2: 실패를 확인한다 (RED)**
 
 Run: `cd frontend && node --test src/utils/pagination.test.js`
 Expected: `ERR_MODULE_NOT_FOUND` — `pagination.js`가 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `frontend/src/utils/pagination.js`:
 
@@ -271,12 +271,12 @@ export function pageRange(page, totalCount, size = PAGE_SIZE) {
 }
 ```
 
-- [ ] **Step 4: 통과를 확인한다 (GREEN)**
+- [x] **Step 4: 통과를 확인한다 (GREEN)**
 
 Run: `cd frontend && node --test src/utils/pagination.test.js`
 Expected: 5건 전부 통과.
 
-- [ ] **Step 5: 공용 UI 컴포넌트를 만든다**
+- [x] **Step 5: 공용 UI 컴포넌트를 만든다**
 
 `frontend/src/components/ui/Pagination.jsx`:
 
@@ -330,7 +330,7 @@ export default function Pagination({ page, totalCount, size = PAGE_SIZE, onChang
 
 > `buttonClass`를 쓰는 이유: `<button disabled>`에 `Button` 컴포넌트를 쓰면 `loading` 처리와 겹치고, QA D6에서 확인했듯 스타일 문자열을 손으로 복제하면 포커스 링을 빠뜨린다.
 
-- [ ] **Step 6: 전체 테스트와 빌드**
+- [x] **Step 6: 전체 테스트와 빌드**
 
 Run: `cd frontend && npm test`
 Expected: 184 → 189 통과.
@@ -338,7 +338,7 @@ Expected: 184 → 189 통과.
 Run: `cd frontend && rtk proxy npm run build`
 Expected: 빌드 성공.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/utils/pagination.js frontend/src/utils/pagination.test.js frontend/src/components/ui/Pagination.jsx
@@ -361,7 +361,7 @@ git commit -m "feat: add pagination helpers and the shared pagination control"
 
 **API 응답 형태는 건드리지 않는다.** `GET /api/admin/departments`는 계정 폼·엑셀 업로드·부서 이동의 부서 Select 데이터 소스이기도 해서, 서버가 잘라 주면 그 Select들이 첫 페이지 부서만 보게 된다.
 
-- [ ] **Step 1: 부서 목록에 페이징을 넣는다**
+- [x] **Step 1: 부서 목록에 페이징을 넣는다**
 
 `DepartmentListPage.jsx`에 import를 추가한다.
 
@@ -402,7 +402,7 @@ import { PAGE_SIZE, clampPage, pageSlice } from "@/utils/pagination.js";
       />
 ```
 
-- [ ] **Step 2: 계정 목록에 같은 방식을 적용한다**
+- [x] **Step 2: 계정 목록에 같은 방식을 적용한다**
 
 `UserListPage.jsx`에 같은 import를 넣고, `filteredUsers` 아래에 같은 형태로 `page`·`currentPage`·`pagedUsers`를 만든 뒤 표 데이터와 `<Pagination />`을 연결한다. 변수 이름만 다르고 구조는 동일하다.
 
@@ -415,7 +415,7 @@ import { PAGE_SIZE, clampPage, pageSlice } from "@/utils/pagination.js";
   );
 ```
 
-- [ ] **Step 3: 테스트와 빌드**
+- [x] **Step 3: 테스트와 빌드**
 
 Run: `cd frontend && npm test`
 Expected: 189 통과 (이 Task 는 배선이라 신규 테스트가 없다 — 계산은 Task 2에서 고정했다).
@@ -423,7 +423,7 @@ Expected: 189 통과 (이 Task 는 배선이라 신규 테스트가 없다 — �
 Run: `cd frontend && rtk proxy npm run build`
 Expected: 빌드 성공.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/pages/admin/departments/DepartmentListPage.jsx frontend/src/pages/admin/users/UserListPage.jsx
@@ -455,7 +455,7 @@ git commit -m "feat: paginate the department and account lists on the client"
 
 `page`·`size`는 **선택 파라미터로 두고 기본값 1·20을 서버가 채운다.** 그래야 기존 호출(파라미터 없음)이 500으로 깨지지 않고 첫 페이지를 돌려준다.
 
-- [ ] **Step 1: 실패하는 DAO 테스트를 추가한다**
+- [x] **Step 1: 실패하는 DAO 테스트를 추가한다**
 
 `ProblemDaoTest.java`에 추가한다. 이 클래스는 실제 DB를 쓰고 `@Transactional`로 롤백한다.
 
@@ -479,12 +479,12 @@ git commit -m "feat: paginate the department and account lists on the client"
 
 > 헬퍼 이름은 `ProblemDaoTest`에 이미 있는 것을 그대로 썼다: `createDepartment()`, `createAuthor(Long departmentId)`, `createProblem(Long departmentId, Long createdBy, String content)`. 새로 만들지 않는다.
 
-- [ ] **Step 2: 실패를 확인한다 (RED)**
+- [x] **Step 2: 실패를 확인한다 (RED)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.dao.ProblemDaoTest" --console=plain`
 Expected: **컴파일 실패** — `findAll`이 9인자를 받지 않고 `countAll`이 없다.
 
-- [ ] **Step 3: 매퍼와 DAO 를 고친다**
+- [x] **Step 3: 매퍼와 DAO 를 고친다**
 
 **(a) 필터 조건을 `<sql>`로 뽑는다.** `findAll`의 `<where>` 블록(`ProblemMapper.xml:44-52`)을 그대로 잘라 낸다.
 
@@ -529,12 +529,12 @@ Expected: **컴파일 실패** — `findAll`이 9인자를 받지 않고 `countA
 
 **(d) DAO 시그니처.** `findAll` 에 `@Param("limit") int limit, @Param("offset") int offset` 을 추가하고, `countAll` 을 **동일한 7개 필터 파라미터**로 선언한다(반환 `long`).
 
-- [ ] **Step 4: 통과를 확인한다 (GREEN)**
+- [x] **Step 4: 통과를 확인한다 (GREEN)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.dao.ProblemDaoTest" --console=plain`
 Expected: `BUILD SUCCESSFUL`
 
-- [ ] **Step 5: 응답 DTO 와 서비스를 바꾼다**
+- [x] **Step 5: 응답 DTO 와 서비스를 바꾼다**
 
 `ProblemPageResponse.java`:
 
@@ -570,7 +570,7 @@ public class ProblemPageResponse {
 
 > `size` 상한 100은 방어다. 클라이언트가 `size=100000`을 보내면 페이징이 없는 것과 같아진다.
 
-- [ ] **Step 6: 컨트롤러에 파라미터를 추가한다**
+- [x] **Step 6: 컨트롤러에 파라미터를 추가한다**
 
 ```java
             @RequestParam(defaultValue = "1") int page,
@@ -579,7 +579,7 @@ public class ProblemPageResponse {
 
 `problemService.list(...)` 호출에 `page, size`를 넘긴다.
 
-- [ ] **Step 7: 기존 서비스 테스트를 새 반환 타입에 맞춘다**
+- [x] **Step 7: 기존 서비스 테스트를 새 반환 타입에 맞춘다**
 
 `ProblemServiceImplTest`에서 `service.list(...)`의 반환을 쓰는 테스트를 모두 고친다. `problemDao.countAll(...)` 스텁도 필요하다(스텁하지 않으면 `0L`이 돌아온다 — 부서 스코프 검증에는 영향이 없다).
 
@@ -590,12 +590,12 @@ public class ProblemPageResponse {
 
 **부서 스코프 검증(`SUPER_ADMIN`만 요청 `departmentId` 사용)은 반드시 유지한다.** Plan 3 QA §2가 10/10 통과시킨 규칙이라 여기서 깨지면 안 된다.
 
-- [ ] **Step 8: 백엔드 전체 스위트**
+- [x] **Step 8: 백엔드 전체 스위트**
 
 Run: `cd backend && rtk proxy ./gradlew test --console=plain`
 Expected: `BUILD SUCCESSFUL`, 204 → 205.
 
-- [ ] **Step 9: 프론트엔드를 새 응답에 맞춘다**
+- [x] **Step 9: 프론트엔드를 새 응답에 맞춘다**
 
 `frontend/src/api/problems.js`:
 
@@ -643,7 +643,7 @@ export function listProblems(params = {}) {
 - "전체 N건" 표기는 `totalCount`를 쓴다.
 - 표 아래에 `<Pagination page={page} totalCount={totalCount} onChange={(next) => refresh(filters, next)} />`를 둔다.
 
-- [ ] **Step 10: 프론트엔드 테스트와 빌드**
+- [x] **Step 10: 프론트엔드 테스트와 빌드**
 
 Run: `cd frontend && npm test`
 Expected: 189 통과.
@@ -651,7 +651,7 @@ Expected: 189 통과.
 Run: `cd frontend && rtk proxy npm run build`
 Expected: 빌드 성공.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add backend/src/main/resources/mappers/probank/ProblemMapper.xml backend/src/main/java/com/daeryun/probank/dao/ProblemDao.java backend/src/main/java/com/daeryun/probank/dto/problem/ProblemPageResponse.java backend/src/main/java/com/daeryun/probank/service/ProblemService.java backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/test frontend/src/pages/admin/problems/ProblemListPage.jsx
@@ -673,7 +673,7 @@ git commit -m "feat: paginate the problem list on the server"
 
 백엔드를 재기동해야 Task 4의 변경이 반영된다.
 
-- [ ] **Step 1: 잘림 해소 확인**
+- [x] **Step 1: 잘림 해소 확인**
 
 창 높이 **720·800·900·1024** × 화면 3종(`/admin/departments`·`/admin/users`·`/admin/problems`)에서 확인한다.
 
@@ -684,7 +684,7 @@ git commit -m "feat: paginate the problem list on the server"
 | Sidebar·Topbar | 스크롤해도 화면에 남는다 |
 | 가로 스크롤 | 없다 |
 
-- [ ] **Step 2: 페이지네이션 동작 확인**
+- [x] **Step 2: 페이지네이션 동작 확인**
 
 | 확인 | 기대 |
 |---|---|
@@ -695,17 +695,17 @@ git commit -m "feat: paginate the problem list on the server"
 | 부서·계정 목록 | 8건·7건이라 페이지가 1개 → **컨트롤이 아예 보이지 않는다** |
 | 빈 결과 | "조건에 맞는 …이 없습니다" 안내가 그대로 나오고 컨트롤이 없다 |
 
-- [ ] **Step 3: 모달이 Topbar 에 가리지 않는지 확인**
+- [x] **Step 3: 모달이 Topbar 에 가리지 않는지 확인**
 
 부서 목록에서 "수정"을 눌러 모달을 연다. Topbar 에 `z-20`을 걸었으므로 모달이 그보다 위에 와야 한다.
 
 기대: 모달과 배경 오버레이가 Topbar 를 덮는다.
 
-- [ ] **Step 4: 결과를 문서에 반영한다**
+- [x] **Step 4: 결과를 문서에 반영한다**
 
 `docs/qa/2026-08-09-question-bank-upload-result.md`의 F1 항목을 해소로 갱신하고, 잘림 문제와 그 원인·수정을 함께 기록한다.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/qa/2026-08-09-question-bank-upload-result.md
@@ -716,12 +716,12 @@ git commit -m "docs: verify the admin list scroll fix and pagination"
 
 ## 완료 기준
 
-- [ ] 창 높이 720~1024 어디서도 세 목록 화면의 카드가 잘리지 않는다
-- [ ] Sidebar·Topbar 가 스크롤 중에도 화면에 남는다
-- [ ] 문제 목록이 20건 단위로 페이징되고 총건수가 정확하다
-- [ ] 필터를 바꾸면 1페이지부터 다시 조회한다
-- [ ] 부서·계정 목록은 페이지가 1개일 때 컨트롤을 그리지 않는다
-- [ ] **부서 Select(계정 폼·엑셀 업로드·부서 이동)가 여전히 전체 부서를 보여 준다** — 부서 목록 API 를 서버 페이징하지 않은 이유
-- [ ] **페이지를 오가도 같은 문제가 두 번 나오거나 빠지지 않는다** — `ORDER BY p.created_at DESC, p.id DESC` 타이브레이커 확인
-- [ ] 마지막 페이지에서 항목을 보관 처리해도 빈 표가 아니라 유효한 페이지가 보인다 (`clampPage`)
-- [ ] 백엔드 204 → **205**, 프론트엔드 184 → **189** 전부 통과, 빌드 성공
+- [x] 창 높이 720~1024 어디서도 세 목록 화면의 카드가 잘리지 않는다
+- [x] Sidebar·Topbar 가 스크롤 중에도 화면에 남는다
+- [x] 문제 목록이 20건 단위로 페이징되고 총건수가 정확하다
+- [x] 필터를 바꾸면 1페이지부터 다시 조회한다
+- [x] 부서·계정 목록은 페이지가 1개일 때 컨트롤을 그리지 않는다
+- [x] **부서 Select(계정 폼·엑셀 업로드·부서 이동)가 여전히 전체 부서를 보여 준다** — 부서 목록 API 를 서버 페이징하지 않은 이유
+- [x] **페이지를 오가도 같은 문제가 두 번 나오거나 빠지지 않는다** — `ORDER BY p.created_at DESC, p.id DESC` 타이브레이커 확인
+- [x] 마지막 페이지에서 항목을 보관 처리해도 빈 표가 아니라 유효한 페이지가 보인다 (`clampPage`)
+- [x] 백엔드 204 → **207**(계획 예측 205 — 타이브레이커·size 상한 테스트 2건 추가), 프론트엔드 184 → **189** 전부 통과, 빌드 성공

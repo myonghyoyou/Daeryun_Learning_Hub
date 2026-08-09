@@ -15,6 +15,7 @@ import com.daeryun.probank.dto.problem.ChoiceInput;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
 import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
+import com.daeryun.probank.dto.problem.ProblemPageResponse;
 import com.daeryun.probank.exception.BizException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class ProblemServiceImpl implements ProblemService {
+
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private static final int MIN_CHOICES = 2;
     private static final int MAX_CHOICES = 5;
@@ -140,12 +144,20 @@ public class ProblemServiceImpl implements ProblemService {
     }
 
     @Override
-    public List<ProblemListItem> list(AuthUser actor, Long departmentId, String type, String status,
-                                       LocalDate createdFrom, LocalDate createdTo, String tag, String keyword) {
+    public ProblemPageResponse list(AuthUser actor, Long departmentId, String type, String status,
+                                     LocalDate createdFrom, LocalDate createdTo, String tag, String keyword,
+                                     int page, int size) {
         // 부서관리자는 요청 파라미터의 departmentId를 무시하고 자기 부서로 강제된다.
         // 총괄관리자만 요청한 departmentId(전체 조회를 의미하는 null 포함)를 그대로 사용한다.
         Long effectiveDepartmentId = actor.getRole() == UserRole.SUPER_ADMIN ? departmentId : actor.getDepartmentId();
-        return problemDao.findAll(effectiveDepartmentId, type, status, createdFrom, createdTo, tag, keyword);
+
+        // size 상한은 방어다. 클라이언트가 size=100000 을 보내면 페이징이 없는 것과 같아진다.
+        int safeSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+        int safePage = Math.max(page, 1);
+        long total = problemDao.countAll(effectiveDepartmentId, type, status, createdFrom, createdTo, tag, keyword);
+        List<ProblemListItem> items = problemDao.findAll(effectiveDepartmentId, type, status, createdFrom,
+                createdTo, tag, keyword, safeSize, (safePage - 1) * safeSize);
+        return new ProblemPageResponse(items, total, safePage, safeSize);
     }
 
     @Override

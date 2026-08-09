@@ -34,13 +34,10 @@
         UPDATE problems SET department_id = #{departmentId}, updated_at = now() WHERE id = #{id}
     </update>
 
-    <select id="findAll" resultMap="problemListItemMap">
-        SELECT p.id, p.type, p.content, p.status, p.department_id, d.name AS department_name, p.created_at,
-               COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
-        FROM problems p
-        JOIN departments d ON d.id = p.department_id
-        LEFT JOIN problem_tags pt ON pt.problem_id = p.id
-        LEFT JOIN tags t ON t.id = pt.tag_id
+    <!-- 목록과 카운트가 반드시 같은 조건을 써야 한다. 두 벌로 갈라지면 총건수와 실제 결과가
+         어긋나 마지막 페이지가 비는 버그가 난다. 조건은 p.* 와 상관 서브쿼리만 참조하므로
+         태그 조인 없이도 그대로 쓸 수 있다. -->
+    <sql id="problemFilter">
         <where>
             <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
             <if test="type != null">AND p.type = #{type}</if>
@@ -50,8 +47,32 @@
             <if test="tag != null and tag != ''">AND EXISTS (SELECT 1 FROM problem_tags fpt JOIN tags ft ON ft.id = fpt.tag_id WHERE fpt.problem_id = p.id AND lower(ft.name) = lower(#{tag}))</if>
             <if test="keyword != null and keyword != ''">AND p.content ILIKE CONCAT('%', #{keyword}, '%')</if>
         </where>
+    </sql>
+
+    <select id="findAll" resultMap="problemListItemMap">
+        SELECT p.id, p.type, p.content, p.status, p.department_id, d.name AS department_name, p.created_at,
+               COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        LEFT JOIN problem_tags pt ON pt.problem_id = p.id
+        LEFT JOIN tags t ON t.id = pt.tag_id
+        <include refid="problemFilter"/>
         GROUP BY p.id, d.name
-        ORDER BY p.created_at DESC
+        <!-- p.id 타이브레이커가 없으면 전순서가 아니다. 엑셀 업로드로 created_at 이 같은 행이
+             생기면 LIMIT/OFFSET 페이징에서 중복·누락이 발생한다. -->
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 태그 LEFT JOIN 을 넣지 않는다. 필터가 p.* 와 상관 서브쿼리만 참조하므로 조인이 필요 없고,
+         빼면 문제 1건당 정확히 1행이라 count(*) 가 그대로 정답이다(departments 는 NOT NULL FK 에
+         대한 1:1 조인이라 행 수를 바꾸지 않는다). 조인을 둔 채 count(*) 를 쓰면 태그 수만큼
+         부풀어 총건수가 틀린다. -->
+    <select id="countAll" resultType="long">
+        SELECT count(*)
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        <include refid="problemFilter"/>
     </select>
 
 </mapper>
