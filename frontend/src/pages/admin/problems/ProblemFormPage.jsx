@@ -280,6 +280,18 @@ export default function ProblemFormPage() {
     setImageError(null);
   }
 
+  // 이 useEffect 는 반드시 아래의 조기 return(loading/permissionDenied/loadError) 보다 위에
+  // 있어야 한다. 아래에 두면 첫 렌더에서 실행되지 않아 "Rendered more hooks than during the
+  // previous render" 로 화면이 통째로 깨진다.
+  useEffect(() => {
+    if (!canMoveDepartment) {
+      return;
+    }
+    listDepartments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]));
+  }, [canMoveDepartment]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     const formState = { type, content, choices, answers, blanks, blankRevealCount, tagsInput };
@@ -342,16 +354,6 @@ export default function ProblemFormPage() {
   }
 
   const isMcqOrOx = type === "MCQ_SINGLE" || type === "MCQ_MULTI" || type === "OX";
-
-  // 부서 목록 API 는 총괄 관리자 전용이고, 옮길 문제가 있어야 의미가 있으므로 수정 모드에서만 받는다.
-  useEffect(() => {
-    if (!canMoveDepartment) {
-      return;
-    }
-    listDepartments()
-      .then(setDepartments)
-      .catch(() => setDepartments([]));
-  }, [canMoveDepartment]);
 
   async function handleMoveDepartment() {
     if (!moveDepartmentId) {
