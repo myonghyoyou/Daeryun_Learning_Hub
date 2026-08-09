@@ -84,6 +84,8 @@ export default function ProblemFormPage() {
   const [moveDepartmentId, setMoveDepartmentId] = useState("");
   const [moving, setMoving] = useState(false);
   const canMoveDepartment = Boolean(id) && session?.role === "SUPER_ADMIN";
+  // 등록 모드에서는 귀속 부서를 고른다. 부서 관리자는 자기 부서로 고정된다.
+  const [createDepartmentId, setCreateDepartmentId] = useState("");
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -283,20 +285,40 @@ export default function ProblemFormPage() {
   // 이 useEffect 는 반드시 아래의 조기 return(loading/permissionDenied/loadError) 보다 위에
   // 있어야 한다. 아래에 두면 첫 렌더에서 실행되지 않아 "Rendered more hooks than during the
   // previous render" 로 화면이 통째로 깨진다.
+  // 부서 목록 API 는 총괄 관리자 전용이다. 부서 관리자가 호출하면 403 이 콘솔에 찍히므로
+  // 역할을 보고 호출 자체를 하지 않는다.
+  const needsDepartmentList = session?.role === "SUPER_ADMIN";
   useEffect(() => {
-    if (!canMoveDepartment) {
+    if (!needsDepartmentList) {
       return;
     }
     listDepartments()
       .then(setDepartments)
       .catch(() => setDepartments([]));
-  }, [canMoveDepartment]);
+  }, [needsDepartmentList]);
+
+  const createDepartmentField = useMemo(
+    () => buildUploadDepartmentField({ session, departments }),
+    [session, departments],
+  );
+
+  // 부서 관리자는 값이 세션에서 고정된다. 총괄 관리자는 빈 값에서 시작해 직접 고른다 —
+  // 자동 선택하면 고르는 것을 잊었을 때 조용히 본인 부서로 들어간다.
+  useEffect(() => {
+    if (createDepartmentField.disabled) {
+      setCreateDepartmentId(createDepartmentField.value);
+    }
+  }, [createDepartmentField.disabled, createDepartmentField.value]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     const formState = { type, content, choices, answers, blanks, blankRevealCount, tagsInput };
     const validationErrors = validateProblemForm(formState);
     setErrors(validationErrors);
+    if (!isEdit && !createDepartmentId) {
+      toast.error("문제가 귀속될 부서를 선택하세요.");
+      return;
+    }
     if (Object.keys(validationErrors).length > 0) {
       toast.error("입력값을 확인해 주세요.");
       return;
@@ -309,7 +331,7 @@ export default function ProblemFormPage() {
         await updateProblem(id, payload);
         toast.success("문제가 수정되었습니다.");
       } else {
-        await createProblem(payload);
+        await createProblem(payload, createDepartmentId);
         toast.success("문제가 등록되었습니다.");
       }
       navigate("/admin/problems");
@@ -409,6 +431,24 @@ export default function ProblemFormPage() {
           <p className="mt-1 text-body-small text-ink-muted">
             문제 유형은 등록 후 변경할 수 없습니다. 다른 유형이 필요하면 새 문제로 등록하세요.
           </p>
+        )}
+
+        {/* 귀속 부서는 등록할 때만 고른다. 수정 화면에서는 아래 "귀속 부서 이동" 카드가
+            같은 일을 하되 별도 API 로 즉시 적용한다. */}
+        {!isEdit && (
+          <div className="mt-4">
+            <Select
+              id="problem-create-department"
+              label="귀속 부서"
+              required
+              value={createDepartmentId}
+              disabled={createDepartmentField.disabled || saving}
+              options={createDepartmentField.options}
+              onChange={(event) => setCreateDepartmentId(event.target.value)}
+              className="w-full sm:w-64"
+            />
+            <p className="mt-1 text-body-small text-ink-muted">{createDepartmentField.helpText}</p>
+          </div>
         )}
 
         <Textarea

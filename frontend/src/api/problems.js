@@ -15,8 +15,11 @@ export function getProblem(id) {
   return apiGet(`/api/admin/problems/${id}`);
 }
 
-export function createProblem(payload) {
-  return apiPost("/api/admin/problems", payload);
+// 컨트롤러가 @RequestParam 으로 받는다. ProblemCreateRequest 는 update() 와 공유되는 DTO 라
+// 본문에 넣지 않는다 — 넣으면 수정 경로에도 부서 지정 표면이 생긴다.
+export function createProblem(payload, departmentId) {
+  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
+  return apiPost(`/api/admin/problems${query}`, payload);
 }
 
 export function updateProblem(id, payload) {

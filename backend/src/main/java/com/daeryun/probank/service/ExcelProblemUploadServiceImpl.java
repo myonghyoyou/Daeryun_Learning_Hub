@@ -2,18 +2,14 @@ package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
-import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.ExcelUploadLogDao;
-import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Problem;
 import com.daeryun.probank.domain.ProblemAnswer;
 import com.daeryun.probank.domain.ProblemChoice;
 import com.daeryun.probank.domain.ProblemStatus;
 import com.daeryun.probank.domain.ProblemType;
-import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.ExcelUploadLog;
 import com.daeryun.probank.domain.UploadTargetType;
-import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.upload.ExcelUploadResult;
 import com.daeryun.probank.dto.upload.RowResult;
 import com.daeryun.probank.exception.BizException;
@@ -80,16 +76,16 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     private final ExcelUploadLogDao excelUploadLogDao;
     private final ProblemProvisioningService problemProvisioningService;
     private final AuditLogService auditLogService;
-    private final DepartmentDao departmentDao;
+    private final OwningDepartmentResolver owningDepartmentResolver;
 
     public ExcelProblemUploadServiceImpl(ExcelUploadLogDao excelUploadLogDao,
                                           ProblemProvisioningService problemProvisioningService,
                                           AuditLogService auditLogService,
-                                          DepartmentDao departmentDao) {
+                                          OwningDepartmentResolver owningDepartmentResolver) {
         this.excelUploadLogDao = excelUploadLogDao;
         this.problemProvisioningService = problemProvisioningService;
         this.auditLogService = auditLogService;
-        this.departmentDao = departmentDao;
+        this.owningDepartmentResolver = owningDepartmentResolver;
     }
 
     @Override
@@ -98,7 +94,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
             throw new BizException(ErrorCode.FILE_REQUIRED);
         }
         validateExtension(file.getOriginalFilename());
-        Long effectiveDepartmentId = resolveDepartmentId(departmentId, actor);
+        Long effectiveDepartmentId = owningDepartmentResolver.resolve(departmentId, actor);
 
         List<RowResult> results = new ArrayList<>();
         DataFormatter dataFormatter = new DataFormatter();
@@ -179,31 +175,6 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
             throw new BizException(ErrorCode.FILE_TYPE_NOT_ALLOWED, "xlsx 또는 xls 엑셀 파일만 업로드할 수 있습니다.");
         }
-    }
-
-    /**
-     * 귀속 부서를 정한다. ProblemServiceImpl.list 와 같은 규칙이다 — 총괄 관리자만 요청값을 쓰고,
-     * 부서 관리자는 요청값을 무시하고 본인 부서로 강제된다. 화면의 disabled 는 실수 방지일 뿐이므로
-     * 파라미터 위조는 여기서 막는다.
-     */
-    private Long resolveDepartmentId(Long requested, AuthUser actor) {
-        if (actor.getRole() != UserRole.SUPER_ADMIN) {
-            return actor.getDepartmentId();
-        }
-        // 아래 검증은 행 루프에 들어가기 전에 끝나야 한다. 행마다 REQUIRES_NEW 로 커밋되므로 처리
-        // 도중에 던지면 이미 저장된 문제가 남는다 — 500행 상한을 루프 전에 보는 것과 같은 이유다.
-        if (requested == null) {
-            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "업로드할 문제가 귀속될 부서를 선택하세요.");
-        }
-        Department department = departmentDao.findById(requested);
-        if (department == null) {
-            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 부서입니다.");
-        }
-        if (department.getStatus() != Status.ACTIVE) {
-            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
-                    "비활성 부서에는 문제를 등록할 수 없습니다: " + department.getName());
-        }
-        return requested;
     }
 
     private RowResult processRow(Row row, int rowNumber, Long departmentId, AuthUser actor,
