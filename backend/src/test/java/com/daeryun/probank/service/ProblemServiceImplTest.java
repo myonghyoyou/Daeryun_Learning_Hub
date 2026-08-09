@@ -60,8 +60,11 @@ class ProblemServiceImplTest {
         problemTagDao = Mockito.mock(ProblemTagDao.class);
         auditLogService = Mockito.mock(AuditLogService.class);
         departmentDao = Mockito.mock(DepartmentDao.class);
+        // 리졸버는 모킹하지 않고 실물을 쓴다. 역할 분기·부서 검증이 검증 대상이라 모킹하면
+        // 정작 지키려던 규칙이 테스트에서 빠진다.
         service = new ProblemServiceImpl(problemDao, problemChoiceDao, problemAnswerDao, problemBlankDao,
-                tagDao, problemTagDao, auditLogService, departmentDao);
+                tagDao, problemTagDao, auditLogService, departmentDao,
+                new OwningDepartmentResolver(departmentDao));
     }
 
     // insertAll(List<T>)에 실제로 넘어간 엔티티를 들여다보기 위한 캡터. 제네릭 List에 대한
@@ -85,7 +88,7 @@ class ProblemServiceImplTest {
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("1", false), choice("2", true)));
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         Mockito.verify(problemDao).insert(Mockito.any());
         Mockito.verify(problemChoiceDao).insertAll(Mockito.anyList());
@@ -98,7 +101,7 @@ class ProblemServiceImplTest {
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("1", true), choice("2", true)));
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
     }
 
     @Test
@@ -110,7 +113,7 @@ class ProblemServiceImplTest {
                 choice("1", false), choice("2", true), choice("3", false),
                 choice("4", false), choice("5", false), choice("6", false)));
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
     }
 
     @Test
@@ -120,7 +123,7 @@ class ProblemServiceImplTest {
         request.setContent("지구는 둥글다.");
         request.setChoices(Arrays.asList(choice("O", true), choice("X", false)));
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         Mockito.verify(problemDao).insert(Mockito.any());
     }
@@ -132,7 +135,7 @@ class ProblemServiceImplTest {
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.emptyList());
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
     }
 
     @Test
@@ -146,7 +149,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Collections.singletonList(blank1));
         request.setBlankRevealCount(2);
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
     }
 
     @Test
@@ -163,7 +166,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Arrays.asList(blank1, blank2));
         request.setBlankRevealCount(1);
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         Mockito.verify(problemBlankDao).insertAll(Mockito.anyList());
     }
@@ -177,7 +180,7 @@ class ProblemServiceImplTest {
         ProblemCreateRequest request = new ProblemCreateRequest();
         request.setContent("유형이 없는 문제");
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -188,7 +191,7 @@ class ProblemServiceImplTest {
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("  ", false), choice("2", true)));
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -199,7 +202,7 @@ class ProblemServiceImplTest {
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Arrays.asList("서울", "   "));
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -217,7 +220,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Arrays.asList(blank1, blank2));
         request.setBlankRevealCount(1);
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -235,7 +238,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Arrays.asList(blank1, blank2));
         request.setBlankRevealCount(1);
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -251,7 +254,7 @@ class ProblemServiceImplTest {
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.singletonList("서울"));
 
-        service.create(request, otherDeptActor);
+        service.create(request, null, otherDeptActor);
 
         ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
         Mockito.verify(problemDao).insert(captor.capture());
@@ -399,7 +402,7 @@ class ProblemServiceImplTest {
     void create_withExternalImageUrl_rejects() {
         ProblemCreateRequest request = shortAnswerRequest("https://attacker.example/track.gif");
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -407,7 +410,7 @@ class ProblemServiceImplTest {
     void create_withTraversalImageUrl_rejects() {
         ProblemCreateRequest request = shortAnswerRequest("/uploads/images/../../etc/passwd");
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -415,7 +418,7 @@ class ProblemServiceImplTest {
     void create_withUploadedImageUrl_succeeds() {
         ProblemCreateRequest request = shortAnswerRequest("/uploads/images/8b1f0c6e-1111-2222-3333-444455556666.png");
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
         Mockito.verify(problemDao).insert(captor.capture());
@@ -426,7 +429,7 @@ class ProblemServiceImplTest {
     void create_withoutImageUrl_succeeds() {
         ProblemCreateRequest request = shortAnswerRequest(null);
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         Mockito.verify(problemDao).insert(Mockito.any());
     }
@@ -464,7 +467,7 @@ class ProblemServiceImplTest {
         request.setContent("  대한민국의 수도는?  ");
         request.setAnswers(Collections.singletonList("  서울  "));
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         ArgumentCaptor<Problem> problemCaptor = ArgumentCaptor.forClass(Problem.class);
         Mockito.verify(problemDao).insert(problemCaptor.capture());
@@ -482,7 +485,7 @@ class ProblemServiceImplTest {
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("  1  ", false), choice("  2  ", true)));
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         ArgumentCaptor<List<ProblemChoice>> choiceCaptor = listCaptor();
         Mockito.verify(problemChoiceDao).insertAll(choiceCaptor.capture());
@@ -501,7 +504,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Collections.singletonList(blank));
         request.setBlankRevealCount(1);
 
-        service.create(request, actor);
+        service.create(request, null, actor);
 
         ArgumentCaptor<List<ProblemBlank>> blankCaptor = listCaptor();
         Mockito.verify(problemBlankDao).insertAll(blankCaptor.capture());
@@ -543,7 +546,7 @@ class ProblemServiceImplTest {
             request.setAnswers(Collections.singletonList("서울"));
             request.setTags(Collections.singletonList("I"));
 
-            service.create(request, actor);
+            service.create(request, null, actor);
 
             Mockito.verify(tagDao).findOrCreateByNames(Collections.singletonList("i"));
         } finally {
@@ -571,7 +574,7 @@ class ProblemServiceImplTest {
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice(repeat('가', 501), false), choice("2", true)));
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -582,7 +585,7 @@ class ProblemServiceImplTest {
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.singletonList(repeat('가', 501)));
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -598,7 +601,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Collections.singletonList(blank));
         request.setBlankRevealCount(1);
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -613,7 +616,7 @@ class ProblemServiceImplTest {
         request.setBlanks(Collections.singletonList(blank));
         request.setBlankRevealCount(1);
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -621,7 +624,7 @@ class ProblemServiceImplTest {
     void create_withOverlongImageUrl_rejects() {
         ProblemCreateRequest request = shortAnswerRequest("/uploads/images/" + repeat('a', 500) + ".png");
 
-        assertThrows(BizException.class, () -> service.create(request, actor));
+        assertThrows(BizException.class, () -> service.create(request, null, actor));
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
@@ -695,5 +698,55 @@ class ProblemServiceImplTest {
 
         assertThrows(BizException.class, () -> service.changeDepartment(5L, 9L, superAdmin));
         Mockito.verify(problemDao, Mockito.never()).updateDepartment(Mockito.anyLong(), Mockito.anyLong());
+    }
+
+    /**
+     * 개별 등록에서도 총괄 관리자는 다른 부서 명의로 넣을 수 있어야 한다. 수동 입력 대상
+     * 69문항이 12개 팀에 흩어져 있는데, 이게 없으면 전부 등록자 부서로 들어간다.
+     */
+    @Test
+    void create_asSuperAdmin_usesRequestedDepartment() {
+        Department target = new Department();
+        target.setId(9L);
+        target.setName("영업팀");
+        target.setStatus(Status.ACTIVE);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+        ProblemCreateRequest request = shortAnswerRequest();
+
+        service.create(request, 9L, superAdmin);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).insert(captor.capture());
+        assertEquals(9L, captor.getValue().getDepartmentId().longValue());
+        assertEquals(2L, captor.getValue().getCreatedBy().longValue(), "등록자는 실제 수행자로 남는다");
+    }
+
+    /** 화면의 disabled 는 실수 방지일 뿐이다. 파라미터를 위조해도 본인 부서로 강제된다. */
+    @Test
+    void create_asDeptAdmin_ignoresRequestedDepartment() {
+        ProblemCreateRequest request = shortAnswerRequest();
+
+        service.create(request, 999L, actor);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).insert(captor.capture());
+        assertEquals(10L, captor.getValue().getDepartmentId().longValue(), "부서 관리자는 본인 부서로 강제된다");
+    }
+
+    @Test
+    void create_asSuperAdminWithoutDepartment_isRejected() {
+        AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+
+        assertThrows(BizException.class, () -> service.create(shortAnswerRequest(), null, superAdmin));
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    private ProblemCreateRequest shortAnswerRequest() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.SHORT_ANSWER);
+        request.setContent("수도는?");
+        request.setAnswers(Collections.singletonList("서울"));
+        return request;
     }
 }

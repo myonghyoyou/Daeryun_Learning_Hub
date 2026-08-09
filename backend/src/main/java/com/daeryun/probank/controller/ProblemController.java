@@ -35,8 +35,10 @@ public class ProblemController {
     }
 
     @PostMapping
-    public ResponseEntity<ResponseDto<?>> create(@RequestBody ProblemCreateRequest request, @LoginUser AuthUser actor) {
-        problemService.create(request, actor);
+    public ResponseEntity<ResponseDto<?>> create(@RequestBody ProblemCreateRequest request,
+                                                  @RequestParam(required = false) Long departmentId,
+                                                  @LoginUser AuthUser actor) {
+        problemService.create(request, departmentId, actor);
         return ResponseEntity.ok(ResponseDto.ok());
     }
 

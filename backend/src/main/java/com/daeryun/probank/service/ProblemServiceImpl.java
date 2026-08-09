@@ -59,11 +59,13 @@ public class ProblemServiceImpl implements ProblemService {
     private final ProblemTagDao problemTagDao;
     private final AuditLogService auditLogService;
     private final DepartmentDao departmentDao;
+    private final OwningDepartmentResolver owningDepartmentResolver;
 
     public ProblemServiceImpl(ProblemDao problemDao, ProblemChoiceDao problemChoiceDao,
                                ProblemAnswerDao problemAnswerDao, ProblemBlankDao problemBlankDao,
                                TagDao tagDao, ProblemTagDao problemTagDao, AuditLogService auditLogService,
-                               DepartmentDao departmentDao) {
+                               DepartmentDao departmentDao,
+                               OwningDepartmentResolver owningDepartmentResolver) {
         this.problemDao = problemDao;
         this.problemChoiceDao = problemChoiceDao;
         this.problemAnswerDao = problemAnswerDao;
@@ -72,13 +74,16 @@ public class ProblemServiceImpl implements ProblemService {
         this.problemTagDao = problemTagDao;
         this.auditLogService = auditLogService;
         this.departmentDao = departmentDao;
+        this.owningDepartmentResolver = owningDepartmentResolver;
     }
 
     @Override
     @Transactional
-    public void create(ProblemCreateRequest request, AuthUser actor) {
+    public void create(ProblemCreateRequest request, Long departmentId, AuthUser actor) {
         normalize(request);
         validate(request);
+        // 부서 검증은 어떤 행도 쓰기 전에 끝낸다.
+        Long owningDepartmentId = owningDepartmentResolver.resolve(departmentId, actor);
 
         Problem problem = new Problem();
         problem.setType(request.getType());
@@ -88,10 +93,11 @@ public class ProblemServiceImpl implements ProblemService {
         problem.setExplanation(request.getExplanation());
         problem.setBlankRevealCount(request.getType() == ProblemType.FILL_BLANK ? request.getBlankRevealCount() : null);
         problem.setStatus(ProblemStatus.ACTIVE);
-        // 문제는 등록한 관리자의 부서에 귀속된다. 클라이언트가 부서를 지정할 방법이
-        // 없도록 ProblemCreateRequest에는 departmentId 필드 자체가 없고, 오직
-        // 세션의 AuthUser(actor)에서만 가져온다 — 부서 격리를 서버가 강제한다.
-        problem.setDepartmentId(actor.getDepartmentId());
+        // 귀속 부서는 총괄 관리자만 지정할 수 있고, 부서 관리자는 본인 부서로 강제된다
+        // (OwningDepartmentResolver). departmentId 를 ProblemCreateRequest 에 넣지 않고 별도
+        // 파라미터로 받는 이유: 이 DTO 는 update() 와 공유되므로, 필드를 넣으면 수정 경로에도
+        // 부서 지정 표면이 생긴다 — 부서 이동을 전용 엔드포인트로 분리한 이유와 같다.
+        problem.setDepartmentId(owningDepartmentId);
         problem.setCreatedBy(actor.getUserId());
         problemDao.insert(problem);
 

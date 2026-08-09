@@ -37,6 +37,7 @@ class ExcelProblemUploadServiceImplTest {
     private ProblemProvisioningService problemProvisioningService;
     private AuditLogService auditLogService;
     private DepartmentDao departmentDao;
+    private OwningDepartmentResolver owningDepartmentResolver;
     private ExcelProblemUploadServiceImpl service;
     private final AuthUser actor = new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false);
     private final AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
@@ -47,8 +48,11 @@ class ExcelProblemUploadServiceImplTest {
         problemProvisioningService = Mockito.mock(ProblemProvisioningService.class);
         auditLogService = Mockito.mock(AuditLogService.class);
         departmentDao = Mockito.mock(DepartmentDao.class);
+        // 리졸버는 모킹하지 않고 실물을 쓴다. 역할 분기·부서 검증이 이 테스트들의 검증 대상이라
+        // 모킹하면 정작 지키려던 규칙이 테스트에서 빠진다.
+        owningDepartmentResolver = new OwningDepartmentResolver(departmentDao);
         service = new ExcelProblemUploadServiceImpl(excelUploadLogDao, problemProvisioningService,
-                auditLogService, departmentDao);
+                auditLogService, owningDepartmentResolver);
         // 기본값: 어떤 부서 id 를 물어도 활성 부서가 있다고 답한다. 부서 검증 자체를 보는 테스트는
         // 각자 findById 를 다시 스텁한다.
         Mockito.when(departmentDao.findById(Mockito.anyLong())).thenReturn(activeDepartment(77L));
