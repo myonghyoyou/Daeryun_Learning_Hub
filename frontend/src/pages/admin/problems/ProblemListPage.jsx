@@ -7,6 +7,8 @@ import { resolveErrorMessage } from "@/api/client.js";
 import { EMPTY_PROBLEM_FILTERS, buildProblemListParams } from "@/utils/problemListParams.js";
 import { PROBLEM_STATUS_OPTIONS, PROBLEM_TYPE_OPTIONS, problemStatusLabel, problemTypeLabel } from "@/utils/problemLabels.js";
 import { buttonClass } from "@/utils/buttonClass.js";
+import { PAGE_SIZE } from "@/utils/pagination.js";
+import Pagination from "@/components/ui/Pagination.jsx";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
@@ -30,12 +32,22 @@ export default function ProblemListPage() {
   // 보관 확인 Modal 대상. null이면 닫힌 상태다.
   const [pendingArchive, setPendingArchive] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
-  async function refresh(nextFilters = filters) {
+  // 서버가 페이징한다. nextPage 를 명시하지 않으면 현재 페이지를 유지한다(보관 처리 후 재조회).
+  async function refresh(nextFilters = filters, nextPage = page) {
     setLoading(true);
     setLoadError(null);
     try {
-      setProblems(await listProblems(buildProblemListParams(nextFilters)));
+      const result = await listProblems({
+        ...buildProblemListParams(nextFilters),
+        page: nextPage,
+        size: PAGE_SIZE,
+      });
+      setProblems(result.items);
+      setTotalCount(result.totalCount);
+      setPage(result.page);
     } catch (error) {
       const message = resolveErrorMessage(error, "문제 목록을 불러오지 못했습니다.");
       setLoadError(message);
@@ -60,12 +72,14 @@ export default function ProblemListPage() {
 
   function handleSearchSubmit(event) {
     event.preventDefault();
-    refresh(filters);
+    // 필터를 바꾸면 결과가 달라지므로 반드시 1페이지부터 다시 부른다. 3페이지에 머무르면
+    // 결과가 줄었을 때 빈 화면이 된다.
+    refresh(filters, 1);
   }
 
   function handleResetFilters() {
     setFilters(EMPTY_PROBLEM_FILTERS);
-    refresh(EMPTY_PROBLEM_FILTERS);
+    refresh(EMPTY_PROBLEM_FILTERS, 1);
   }
 
   async function confirmArchive() {
@@ -184,7 +198,7 @@ export default function ProblemListPage() {
         </form>
       </Surface>
 
-      {!loading && !loadError && <p className="text-body-small text-ink-muted">전체 {problems.length}건</p>}
+      {!loading && !loadError && <p className="text-body-small text-ink-muted">전체 {totalCount}건</p>}
 
       <ListStateSurface
         loading={loading}
@@ -238,6 +252,8 @@ export default function ProblemListPage() {
           ))}
         </DataTable>
       </ListStateSurface>
+
+      <Pagination page={page} totalCount={totalCount} onChange={(next) => refresh(filters, next)} />
 
       <ConfirmToggleModal
         open={Boolean(pendingArchive)}

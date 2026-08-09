@@ -18,7 +18,18 @@ public interface ProblemDao {
                                    @Param("createdFrom") java.time.LocalDate createdFrom,
                                    @Param("createdTo") java.time.LocalDate createdTo,
                                    @Param("tag") String tag,
-                                   @Param("keyword") String keyword);
+                                   @Param("keyword") String keyword,
+                                   @Param("limit") int limit,
+                                   @Param("offset") int offset);
+
+    /** findAll 과 동일한 필터를 적용한 전체 건수. 페이지 수 계산에 쓴다. */
+    long countAll(@Param("departmentId") Long departmentId,
+                   @Param("type") String type,
+                   @Param("status") String status,
+                   @Param("createdFrom") java.time.LocalDate createdFrom,
+                   @Param("createdTo") java.time.LocalDate createdTo,
+                   @Param("tag") String tag,
+                   @Param("keyword") String keyword);
 
     void updateDepartment(@Param("id") Long id, @Param("departmentId") Long departmentId);
 }

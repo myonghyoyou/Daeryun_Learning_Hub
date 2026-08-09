@@ -21,6 +21,7 @@ import com.daeryun.probank.dto.problem.ChoiceInput;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
 import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
+import com.daeryun.probank.dto.problem.ProblemPageResponse;
 import com.daeryun.probank.exception.BizException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -258,23 +259,44 @@ class ProblemServiceImplTest {
         assertEquals(42L, captor.getValue().getCreatedBy());
     }
 
+    // 부서 스코프 규칙은 페이징이 붙어도 그대로다 — Plan 3 QA §2 가 10/10 통과시킨 규칙이라
+    // 여기서 깨지면 안 된다. limit/offset 은 기본값(20/0)이 넘어간다.
     @Test
     void list_asDeptAdmin_forcesOwnDepartmentRegardlessOfParam() {
-        Mockito.when(problemDao.findAll(10L, null, null, null, null, null, null)).thenReturn(Collections.emptyList());
+        Mockito.when(problemDao.findAll(10L, null, null, null, null, null, null, 20, 0))
+                .thenReturn(Collections.emptyList());
 
-        service.list(actor, 999L, null, null, null, null, null, null);
+        service.list(actor, 999L, null, null, null, null, null, null, 1, 20);
 
-        Mockito.verify(problemDao).findAll(10L, null, null, null, null, null, null);
+        Mockito.verify(problemDao).findAll(10L, null, null, null, null, null, null, 20, 0);
+        Mockito.verify(problemDao).countAll(10L, null, null, null, null, null, null);
     }
 
     @Test
     void list_asSuperAdmin_usesRequestedDepartmentFilter() {
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
-        Mockito.when(problemDao.findAll(999L, null, null, null, null, null, null)).thenReturn(Collections.emptyList());
+        Mockito.when(problemDao.findAll(999L, null, null, null, null, null, null, 20, 0))
+                .thenReturn(Collections.emptyList());
 
-        service.list(superAdmin, 999L, null, null, null, null, null, null);
+        service.list(superAdmin, 999L, null, null, null, null, null, null, 1, 20);
 
-        Mockito.verify(problemDao).findAll(999L, null, null, null, null, null, null);
+        Mockito.verify(problemDao).findAll(999L, null, null, null, null, null, null, 20, 0);
+        Mockito.verify(problemDao).countAll(999L, null, null, null, null, null, null);
+    }
+
+    /** 클라이언트가 size=100000 을 보내면 페이징이 없는 것과 같아진다. 상한을 지킨다. */
+    @Test
+    void list_clampsPageAndSize() {
+        AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+        Mockito.when(problemDao.findAll(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyInt(), Mockito.anyInt()))
+                .thenReturn(Collections.emptyList());
+
+        ProblemPageResponse response = service.list(superAdmin, null, null, null, null, null, null, null, 0, 100000);
+
+        assertEquals(1, response.getPage(), "0 이하 페이지는 1로 올린다");
+        assertEquals(100, response.getSize(), "size 는 100 을 넘지 않는다");
+        Mockito.verify(problemDao).findAll(null, null, null, null, null, null, null, 100, 0);
     }
 
     @Test

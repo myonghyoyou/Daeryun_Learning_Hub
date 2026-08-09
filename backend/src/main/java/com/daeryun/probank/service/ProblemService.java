@@ -8,9 +8,10 @@ public interface ProblemService {
     void create(ProblemCreateRequest request, AuthUser actor);
     void update(Long id, ProblemCreateRequest request, AuthUser actor);
     void archive(Long id, AuthUser actor);
-    java.util.List<ProblemListItem> list(AuthUser actor, Long departmentId, String type, String status,
-                                          java.time.LocalDate createdFrom, java.time.LocalDate createdTo,
-                                          String tag, String keyword);
+    com.daeryun.probank.dto.problem.ProblemPageResponse list(AuthUser actor, Long departmentId, String type,
+                                                              String status, java.time.LocalDate createdFrom,
+                                                              java.time.LocalDate createdTo, String tag,
+                                                              String keyword, int page, int size);
     com.daeryun.probank.dto.problem.ProblemDetailResponse getDetail(Long id, AuthUser actor);
 
     void changeDepartment(Long id, Long departmentId, AuthUser actor);
