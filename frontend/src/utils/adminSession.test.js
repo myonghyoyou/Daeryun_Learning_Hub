@@ -17,10 +17,19 @@ test("departmentScopeLabel always shows 전체 부서 for SUPER_ADMIN", () => {
   assert.equal(departmentScopeLabel({ role: "SUPER_ADMIN", departmentId: null }), "전체 부서");
 });
 
-test("departmentScopeLabel falls back to a department id for other roles", () => {
-  assert.equal(departmentScopeLabel({ role: "DEPT_ADMIN", departmentId: 5 }), "부서 5번");
+test("departmentScopeLabel shows the department name for other roles", () => {
+  assert.equal(
+    departmentScopeLabel({ role: "DEPT_ADMIN", departmentId: 862, departmentName: "개발팀" }),
+    "개발팀"
+  );
   assert.equal(departmentScopeLabel({ role: "DEPT_ADMIN", departmentId: null }), "-");
   assert.equal(departmentScopeLabel(null), "-");
+});
+
+// QA D2 회귀 방지: 이름이 없다고 내부 DB ID 로 돌아가면 안 된다. `부서 862번`이 화면에
+// 노출된 것이 결함의 실체였다.
+test("departmentScopeLabel never falls back to the internal department id", () => {
+  assert.equal(departmentScopeLabel({ role: "DEPT_ADMIN", departmentId: 862 }), "-");
 });
 
 test("sessionStatusMeta maps each known store status to a label with its own tone", () => {

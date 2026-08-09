@@ -500,8 +500,8 @@ export default function ProblemFormPage() {
               </p>
               <p className="mt-1 text-body-small text-ink-muted">
                 각 키는 위 문제 내용에 <code className="rounded-xs bg-surface-subtle px-1">{"{{키}}"}</code>{" "}
-                형태로 반드시 등장해야 합니다. 실제 출제 시 무작위로 노출할 빈칸은 Plan 4에서 정합니다 — 여기서는
-                후보와 노출 개수만 저장합니다.
+                형태로 반드시 등장해야 합니다. 실제 출제 시에는 등록한 빈칸 후보 중 위에서 지정한 개수만큼
+                무작위로 노출됩니다. 여기서는 후보와 노출 개수만 저장합니다.
               </p>
               <div className="mt-3 space-y-2">
                 {blanks.map((blank, index) => (

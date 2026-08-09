@@ -7,9 +7,10 @@
 
 | ID | 심각도 | 요약 | 상태 |
 |---|---|---|---|
-| [D1](#d1) | **Major** | 등록일 필터가 전면 동작 불가 — 걸면 목록 자체가 오류로 막힘 | 신규 |
-| [D2](#d2) | Minor | Topbar에 부서명 대신 내부 DB ID가 노출됨 | 신규 |
-| [D3](#d3) | Minor | 사용자 화면 안내문에 내부 용어 "Plan 4"가 노출됨 | 신규 |
+| [D1](#d1) | **Major** | 등록일 필터가 전면 동작 불가 — 걸면 목록 자체가 오류로 막힘 | **수정 완료 (2026-08-09)** |
+| [D2](#d2) | Minor | Topbar에 부서명 대신 내부 DB ID가 노출됨 | **수정 완료 (2026-08-09)** |
+| [D3](#d3) | Minor | 사용자 화면 안내문에 내부 용어 "Plan 4"가 노출됨 | **수정 완료 (2026-08-09)** |
+| [D4](#d4) | Major(개발) | QA를 한 번이라도 한 DB에서는 백엔드 테스트 3건이 영구 실패 | **수정 완료 (2026-08-09)** |
 
 > 아래 두 건은 체크리스트의 "알려진 미해결"에 이미 기록된 항목이며, 이번 QA에서 **재현을 확인**했다. 신규 결함이 아니므로 별도 번호를 부여하지 않는다.
 > - 부서관리자가 로그인하면 `/admin/departments`로 랜딩해 "접근 권한이 없습니다" 화면을 만난다 (Plan 5에서 관리자 대시보드 추가 시 해소 예정)
@@ -125,6 +126,56 @@ employeeNo · name · role · departmentId · mustChangePassword
 사용자 관점의 표현으로 바꾼다. 예: *"실제 출제 시에는 등록한 빈칸 후보 중 위에서 지정한 개수만큼 무작위로 노출됩니다. 여기서는 후보와 개수만 저장합니다."*
 
 같은 계열의 문구가 다른 화면에도 있는지 함께 훑어볼 것을 권한다.
+
+---
+
+<a id="d4"></a>
+## D4. (Major — 개발 환경) QA를 한 번이라도 한 DB에서는 백엔드 테스트 3건이 영구히 실패한다
+
+| 항목 | 내용 |
+|---|---|
+| 심각도 | **Major (제품 아님 — 개발 환경)** |
+| 대상 | `backend/src/test/java/com/daeryun/probank/dao/UserDaoTest.java` |
+| 검출일 | 2026-08-09 (D1~D3 수정 착수 전 기준선 확인 중) |
+| 재현 절차 | 1. 관리자 화면으로 부서·계정을 한 번이라도 생성한다(= `audit_logs`에 행이 생긴다)<br>2. `cd backend && ./gradlew test` |
+| 기대 | 189개 전부 통과 |
+| 실제 | `existsSuperAdmin_falseThenTrueAfterInsertingSuperAdmin`, `existsSuperAdmin_ignoresInactiveSuperAdmins`, `countActiveSuperAdminsExcluding_countsOnlyOtherActiveSuperAdmins` **3건 실패** |
+
+```
+DataIntegrityViolationException: SQL [DELETE FROM users WHERE role = 'SUPER_ADMIN'];
+  ERROR: update or delete on table "users" violates foreign key constraint
+         "audit_logs_actor_id_fkey" on table "audit_logs"
+  Detail: Key (id)=(1) is still referenced from table "audit_logs".
+```
+
+### 원인
+
+세 테스트는 "총괄 관리자가 하나도 없다"는 전제를 만들려고 셋업에서 `DELETE FROM users WHERE role = 'SUPER_ADMIN'`을 실행했다. `UserDaoTest:221-223`의 주석을 보면 작성자는 **부트스트랩 러너가 남긴 SUPER_ADMIN 행**까지는 고려했으나, **그 관리자가 감사 로그를 남기는 경우**를 놓쳤다.
+
+`users(id)`를 참조하는 테이블은 네 개다.
+
+| 테이블 | 컬럼 |
+|---|---|
+| `problems` | `created_by` |
+| `attempts` | `user_id` |
+| `excel_upload_logs` | `uploaded_by` |
+| `audit_logs` | `actor_id` |
+
+지금은 `audit_logs`가 먼저 걸리지만, QA 데이터로 문제를 등록하면 `problems.created_by`도 같은 이유로 걸린다. **DELETE 방식 자체가 참조 테이블이 늘어날 때마다 깨진다.**
+
+이 결함의 실질적 피해는 "기준선을 신뢰할 수 없다"는 것이다. Plan 3 QA 결함 수정 계획은 *"백엔드 189개 통과를 하나도 깨뜨리지 않는다"*를 제약으로 걸었는데, QA를 수행한 DB에서는 그 기준선이 애초에 성립하지 않았다.
+
+### 수정
+
+지우지 않고 **강등**한다.
+
+```java
+private void demoteAllSuperAdmins() {
+    jdbcTemplate.update("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'SUPER_ADMIN'");
+}
+```
+
+`existsSuperAdmin`과 `countActiveSuperAdminsExcluding`은 `role`과 `status`만 보므로(`UserMapper.xml:17-24`) 강등으로 전제가 충족되고, 외래키를 전혀 건드리지 않아 참조 테이블이 늘어나도 깨지지 않는다. `@Transactional` 롤백 범위 안이라 개발 DB의 실제 데이터는 그대로다.
 
 ---
 

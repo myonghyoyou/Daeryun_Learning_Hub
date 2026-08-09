@@ -23,6 +23,25 @@
 - 현재 테스트 기준선: **백엔드 189개 / 프론트엔드 170개, 프로덕션 빌드 성공.** 하나도 깨뜨리지 않는다.
 - 커밋 메시지는 이 저장소의 기존 관례(`fix:`/`feat:`/`test:`/`docs:` 영문 Conventional Commits)를 따른다.
 
+> ⚠️ **기준선 정정 (2026-08-09 실측):** 프론트엔드 170개는 그대로 통과하지만, **백엔드는 189개 중 3개가 실패한다.** 코드 문제가 아니라 **테스트 격리 결함**이다.
+>
+> `UserDaoTest`의 세 테스트(`existsSuperAdmin_falseThenTrue…`, `existsSuperAdmin_ignoresInactiveSuperAdmins`, `countActiveSuperAdminsExcluding_…`)가 셋업에서 `DELETE FROM users WHERE role = 'SUPER_ADMIN'`을 실행하는데, 그 관리자가 `audit_logs`에 행을 남긴 적이 있으면 FK 제약(`audit_logs_actor_id_fkey`)에 걸려 DELETE 자체가 터진다.
+>
+> ```
+> DataIntegrityViolationException: SQL [DELETE FROM users WHERE role = 'SUPER_ADMIN'];
+>   ERROR: update or delete on table "users" violates foreign key constraint
+>          "audit_logs_actor_id_fkey" on table "audit_logs"
+>   Detail: Key (id)=(1) is still referenced from table "audit_logs".
+> ```
+>
+> `UserDaoTest:221-223`의 주석은 "부트스트랩이 남긴 SUPER_ADMIN 행"까지만 고려했고 **그 관리자가 감사 로그를 남기는 경우를 놓쳤다.** 즉 **관리자 화면으로 QA를 한 번이라도 한 DB에서는 이 3개가 영구히 실패한다.**
+>
+> 결과적으로 이 계획의 "하나도 깨뜨리지 않는다"는 **QA 데이터가 있는 DB에서는 달성 불가능**하다. 착수 전에 다음 중 하나를 정할 것:
+> - (A) 테스트용 DB와 QA용 DB를 분리한다 (`DB_URL`로 테스트만 다른 DB를 가리킴)
+> - (B) `UserDaoTest`의 셋업을 감사 로그까지 고려하도록 고친다 — 별도 결함(**D4 후보**)으로 기록하고 이 계획에 Task를 추가
+>
+> 어느 쪽이든 **Task 1~3의 GREEN 판정은 `--tests ProblemListQueryBindingTest`로 좁혀서 내리고**, 전체 스위트는 "기존 3개 실패 외 신규 실패 없음"으로 판정한다.
+
 ---
 
 ## File Structure
@@ -38,6 +57,50 @@
 | `frontend/src/utils/adminSession.js` | `departmentScopeLabel`이 `departmentName`을 쓰도록 수정 | 5 |
 | `frontend/src/utils/adminSession.test.js` | 위 동작 고정 | 5 |
 | `frontend/src/pages/admin/problems/ProblemFormPage.jsx` | 빈칸 안내 문구에서 내부 용어 제거 | 6 |
+
+---
+
+### Task 0: QA 데이터 최소 재구축 (신설 — 2026-08-09)
+
+**이 Task는 코드를 고치지 않는다.** Task 7(QA 재실행)의 전제를 세운다.
+
+**배경 — 원안의 전제가 틀렸다.** Task 7 Step 1은 *"QA 계정은 DB에 남아 있다: `admin`/`dev_admin`/`sales_admin`/`emp001`, 비밀번호 모두 `QaPlan3!2026`"* 이라고 적었으나, 2026-08-09 실측 결과 `localhost:5434/probank_dev`의 실제 상태는 다르다.
+
+```
+users      : admin, admin2, deptadmin, emp001, emp002, legacy01   ← Plan 1·2 QA 계정
+departments: 8건
+problems   : 0건                                                   ← 검증 대상이 아예 없다
+```
+
+`dev_admin`·`sales_admin`은 존재하지 않고 **문제가 0건**이다. §4 필터 조합 검증(4.3~4.5, 4.8~4.11)은 문제 데이터가 있어야 성립하므로 그대로는 Task 7을 수행할 수 없다.
+
+**범위 결정: 필터 검증에 필요한 최소치만 만든다.** 653행 전체 투입은 하지 않는다 — 필터가 동작하는지 보는 데 필요한 것은 각 축(유형·상태·등록일·태그·키워드)에서 결과가 갈리는 데이터뿐이다.
+
+- [ ] **Step 1: 부서관리자 계정 확보**
+
+`admin`으로 로그인해 `/admin/users`에서 부서관리자 2개를 만든다(부서 격리 검증용으로 서로 다른 부서). 임시 비밀번호는 MailHog(`http://localhost:8025`)에서 확인하고, 첫 로그인의 강제 변경까지 마쳐 둔다.
+
+> `admin`의 비밀번호를 모르면 부트스트랩 기본값(`changeme1234`)을 먼저 시도하고, 그것도 아니면 `docs/qa/2026-08-04-plan1-2-qa-checklist.md` §0.3.4의 SQL로 복구한다.
+
+- [ ] **Step 2: 필터가 갈리도록 문제 투입**
+
+부서관리자 A로 로그인해 `/admin/problems/excel-upload`에 최소 데이터를 올린다. 필요한 최소 조건:
+
+| 축 | 필요한 것 |
+|---|---|
+| 유형 | `MCQ_SINGLE`·`MCQ_MULTI`·`OX`·`SHORT_ANSWER` 각 1건 이상 |
+| 상태 | 그중 1건을 보관 처리해 `활성`/`보관` 양쪽이 존재 |
+| 태그 | 서로 다른 태그 2종 이상 |
+| 키워드 | 본문에 특정 단어가 있는 것과 없는 것 |
+| 부서 | 부서관리자 B로도 1건 이상 등록해 부서 격리 확인 가능 |
+
+[`docs/문제은행_엑셀/문제_01_공통.xlsx`](../../문제은행_엑셀/문제_01_공통.xlsx)에서 상위 몇 행만 잘라 쓰면 된다. 대략 **10~15건이면 충분**하다.
+
+> 등록일 축(§4.8·§4.9)은 오늘 등록한 것만 있어도 검증된다 — 종료일에 오늘을 넣었을 때 포함되는지가 핵심이기 때문이다.
+
+- [ ] **Step 3: 만든 데이터를 Task 7이 참조할 수 있게 기록**
+
+`docs/qa/2026-08-07-plan3-result.md`의 "준비한 QA 데이터" 절을 실제 값으로 갱신한다(계정 사번·비밀번호·부서·문제 건수·유형 분포). 다음 회차가 또 헛짚지 않게 하는 것이 목적이다.
 
 ---
 
@@ -213,11 +276,27 @@ git commit -m "fix: bind ISO date query parameters on problem list API"
 
 **Interfaces:**
 - Consumes: `ErrorCode.INPUT_VALUE_INVALID`(1000), `ErrorResponse`(Plan 1 Task 3)
-- Produces: 타입 불일치 파라미터에 대한 `resultCode 1000` 응답. 프론트는 `resolveErrorMessage`로 이 메시지를 그대로 표시한다.
+- Produces: 타입 불일치 파라미터에 대한 **`HTTP 400` + `resultCode 1000`** 응답. 프론트는 `resolveErrorMessage`로 이 메시지를 그대로 표시한다.
 
 **배경:** 현재 `GlobalExceptionHandler`는 `BizException` / `MethodArgumentNotValidException`·`BindException` / `HttpMessageNotReadableException` / `MultipartException` / catch-all `Exception` 다섯 가지를 처리한다. **`MethodArgumentTypeMismatchException` 전용 핸들러가 없어** 사용자 입력 오류가 catch-all로 떨어지고, 그 결과 (1) 사용자는 `resultCode -1` "처리 중 오류가 발생하였습니다"만 보고 (2) 평범한 입력 오류에 ERROR 레벨 스택 트레이스가 쌓인다.
 
+**HTTP 상태 결정 (2026-08-09):** 이 핸들러는 **HTTP 400을 반환한다.** 기존 `ErrorResponse` 반환 핸들러 3개(`handleValidationException`, `handleMessageNotReadableException`, catch-all)는 `ResponseEntity`를 쓰지 않아 **HTTP 200**으로 나가는데, 새 핸들러는 그 관행을 따르지 않고 `handleBizException`(400/401/403)과 같은 규약을 택한다.
+
+이 결정이 안전한 근거는 프론트엔드가 **HTTP 상태를 아예 보지 않기 때문**이다.
+
+```js
+// frontend/src/api/client.js:45-55 — response.status 를 읽는 곳이 없다
+const json = await response.json();
+if (json.resultCode !== 200) throw new ApiError(json.resultCode, json.resultMsg, ...);
+```
+
+`fetch`는 4xx에도 reject하지 않고 본문 파싱도 그대로 되므로, 200→400 변경은 화면 동작에 영향이 없다. 다만 **본문에 `resultCode`가 반드시 실려야 한다**는 제약은 그대로다.
+
+> 남은 불일치는 이 Task의 범위 밖이다. `ErrorResponse`를 반환하는 나머지 3개 핸들러는 여전히 HTTP 200이며, 특히 catch-all이 서버 오류를 200으로 내보내는 문제는 Plan 1·2 QA의 D2로 별도 기록돼 있다([2026-08-07-p1-result.md](../../qa/2026-08-07-p1-result.md)). 규약 전체 정리는 별도 안건으로 다룬다.
+
 > ⚠️ Plan 1 최종 리뷰에서 이 클래스를 손볼 때 "HTTP 상태·응답 본문을 바꾸지 말라"는 제약이 있었다. 그것은 **로깅 추가 작업에 한정된 제약**이었고, 특정 예외에 전용 핸들러를 새로 다는 것은 성격이 다르다. 다만 이 케이스의 `resultCode`가 `-1` → `1000`으로 바뀐다는 점은 의도된 변경임을 인지할 것.
+
+> 🔧 **계획 정정:** 아래 Step 1의 원안은 `$.code`를 단언했으나 **틀렸다.** `ErrorResponse`의 빌더 인자 이름은 `code`/`message`/`data`지만 실제 필드는 `resultCode`/`resultMsg`/`errorList`이고(`ErrorResponse.java:14-16`), Jackson은 필드명으로 직렬화한다. `$.resultCode`를 봐야 한다.
 
 - [ ] **Step 1: 실패하는 테스트 추가**
 
@@ -229,16 +308,17 @@ git commit -m "fix: bind ISO date query parameters on problem list API"
         mockMvc.perform(get("/api/admin/problems")
                         .param("createdFrom", "2026-13-99")
                         .session(superAdminSession()))
-                .andExpect(jsonPath("$.code").value(1000));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.resultCode").value(1000));
     }
 ```
 
-> `ErrorResponse`는 `code`/`message`/`data` 형태로 직렬화되므로 `$.resultCode`가 아니라 `$.code`를 본다. `handleValidationException`이 같은 형태를 쓴다.
+> `ErrorResponse`의 JSON 필드는 `resultCode`/`resultMsg`/`errorList`다(빌더 인자 이름 `code`/`message`/`data`와 다르다 — `ErrorResponse.java:14-16` 확인). `status().isBadRequest()`를 함께 단언해 HTTP 상태 결정이 회귀하지 않게 고정한다.
 
 - [ ] **Step 2: 테스트를 실행해 실패 확인 (RED)**
 
 Run: `cd backend && ./gradlew test --tests ProblemListQueryBindingTest`
-Expected: **`잘못된_날짜_형식은_입력값_오류로_안내한다`가 FAIL** — 현재는 catch-all에 걸려 `code`가 `-1`(`MSG_PROC_FAIL`)로 나온다.
+Expected: **`잘못된_날짜_형식은_입력값_오류로_안내한다`가 FAIL** — 현재는 catch-all에 걸려 HTTP 200 + `resultCode -1`(`MSG_PROC_FAIL`)이 나온다. 상태 단언에서 먼저 깨진다.
 
 - [ ] **Step 3: 전용 핸들러 추가**
 
@@ -257,16 +337,18 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
      * 평범한 입력 오류에 ERROR 스택 트레이스가 쌓인다(QA D1에서 실제로 그랬다).
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ErrorResponse handleTypeMismatchException(MethodArgumentTypeMismatchException exception) {
+    public ResponseEntity<ErrorResponse> handleTypeMismatchException(MethodArgumentTypeMismatchException exception) {
         log.warn("요청 파라미터 타입이 올바르지 않습니다: name={}, value={}",
                 exception.getName(), exception.getValue());
-        return ErrorResponse.builder()
+        return ResponseEntity.badRequest().body(ErrorResponse.builder()
                 .code(ErrorCode.INPUT_VALUE_INVALID.getCode())
                 .message("요청 값의 형식이 올바르지 않습니다: " + exception.getName())
                 .data(null)
-                .build();
+                .build());
     }
 ```
+
+`ResponseEntity`로 감싸는 것이 400을 내는 방법이다. `@ResponseStatus`로도 되지만, 이 클래스는 `handleBizException`이 이미 `ResponseEntity`로 상태를 정하고 있어 그 쪽에 맞춘다.
 
 - [ ] **Step 4: 테스트를 실행해 통과 확인 (GREEN)**
 
@@ -653,7 +735,7 @@ cd backend && MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_SMTP_
 
 별도 터미널에서 `cd frontend && npm run dev`.
 
-QA 계정은 DB에 남아 있다: `admin` / `dev_admin` / `sales_admin` / `emp001`, 비밀번호 모두 `QaPlan3!2026`.
+> 🔧 **계획 정정 (2026-08-09):** 원안은 *"QA 계정은 DB에 남아 있다: `admin`/`dev_admin`/`sales_admin`/`emp001`, 비밀번호 모두 `QaPlan3!2026`"* 이라고 적었으나 **실제 DB에는 그 계정들이 없고 문제도 0건이다.** 신설된 **Task 0**에서 만든 계정·데이터를 쓴다. Task 0을 건너뛰면 §4 재검증이 불가능하다.
 
 - [ ] **Step 2: D1 재검증 — 등록일 필터**
 

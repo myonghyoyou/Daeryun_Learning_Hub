@@ -10,9 +10,12 @@ import com.daeryun.probank.dto.problem.ProblemCreateRequest;
 import com.daeryun.probank.service.ExcelProblemUploadService;
 import com.daeryun.probank.service.ProblemImageService;
 import com.daeryun.probank.service.ProblemService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/admin/problems")
@@ -41,8 +44,12 @@ public class ProblemController {
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) java.time.LocalDate createdFrom,
-            @RequestParam(required = false) java.time.LocalDate createdTo,
+            // @DateTimeFormat 이 없으면 "2026-08-01" 문자열이 LocalDate 로 변환되지 않아
+            // MethodArgumentTypeMismatchException 이 나고, 목록 조회 전체가 실패한다(QA D1).
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdFrom,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String keyword,
             @LoginUser AuthUser actor) {

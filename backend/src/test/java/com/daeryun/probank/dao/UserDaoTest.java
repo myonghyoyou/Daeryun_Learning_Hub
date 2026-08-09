@@ -216,12 +216,25 @@ class UserDaoTest {
         assertFalse(found.isMustChangePassword());
     }
 
+    /**
+     * "총괄 관리자가 하나도 없다"는 전제를 만든다. 이 테스트는 개발 DB를 공유하는데, 앱을 dev
+     * 프로파일로 한 번이라도 띄우면 SuperAdminBootstrapRunner가 SUPER_ADMIN 행을 남기기 때문이다.
+     * <p>
+     * 지우지 않고 <b>강등</b>하는 이유: users(id)를 참조하는 테이블이 problems.created_by,
+     * attempts.user_id, excel_upload_logs.uploaded_by, audit_logs.actor_id 로 네 개다. DELETE 는
+     * 그 관리자가 무언가를 한 흔적이 있는 순간 외래키 제약에 걸려 터진다 — 관리자 화면으로 QA를
+     * 한 번이라도 한 DB에서는 영구히 실패했다. existsSuperAdmin/countActiveSuperAdminsExcluding
+     * 은 role 과 status 만 보므로 강등으로 충분하고, 이 방식은 참조 테이블이 늘어나도 깨지지 않는다.
+     * <p>
+     * {@code @Transactional} 롤백 범위 안에서만 바꾸므로 개발 DB의 실제 데이터는 보존된다.
+     */
+    private void demoteAllSuperAdmins() {
+        jdbcTemplate.update("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'SUPER_ADMIN'");
+    }
+
     @Test
     void existsSuperAdmin_falseThenTrueAfterInsertingSuperAdmin() {
-        // 이 테스트는 개발 DB를 공유한다. 앱을 dev 프로파일로 한 번이라도 띄우면
-        // SuperAdminBootstrapRunner가 SUPER_ADMIN 행을 남기므로 "아직 없다"는 전제가 깨진다.
-        // @Transactional 롤백 범위 안에서만 지우므로 개발 DB의 실제 데이터는 보존된다.
-        jdbcTemplate.update("DELETE FROM users WHERE role = 'SUPER_ADMIN'");
+        demoteAllSuperAdmins();
 
         assertFalse(userDao.existsSuperAdmin());
 
@@ -239,7 +252,7 @@ class UserDaoTest {
      */
     @Test
     void existsSuperAdmin_ignoresInactiveSuperAdmins() {
-        jdbcTemplate.update("DELETE FROM users WHERE role = 'SUPER_ADMIN'");
+        demoteAllSuperAdmins();
         Department department = insertDepartment();
         insertUser(department, UserRole.SUPER_ADMIN, Status.INACTIVE);
 
@@ -253,7 +266,7 @@ class UserDaoTest {
 
     @Test
     void countActiveSuperAdminsExcluding_countsOnlyOtherActiveSuperAdmins() {
-        jdbcTemplate.update("DELETE FROM users WHERE role = 'SUPER_ADMIN'");
+        demoteAllSuperAdmins();
         Department department = insertDepartment();
         User first = insertUser(department, UserRole.SUPER_ADMIN, Status.ACTIVE);
 

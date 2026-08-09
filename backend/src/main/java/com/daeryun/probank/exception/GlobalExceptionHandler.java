@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MultipartException;
 
 import java.util.List;
@@ -47,6 +48,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ErrorResponse handleMessageNotReadableException() {
         return buildFieldErrors(ErrorCode.INPUT_VALUE_INVALID, null);
+    }
+
+    /**
+     * 쿼리 파라미터·경로 변수의 타입 변환 실패를 처리한다. 예: createdFrom=2026-13-99.
+     * 전용 핸들러가 없으면 catch-all 로 떨어져 사용자에게는 "처리 중 오류"만 보이고,
+     * 평범한 입력 오류에 ERROR 스택 트레이스가 쌓인다(QA D1 에서 실제로 그랬다).
+     * <p>
+     * 이 핸들러만 HTTP 400 을 낸다. ErrorResponse 를 그대로 반환하는 다른 핸들러들은 200 으로
+     * 나가지만, 입력 오류에 200 을 주는 것은 handleBizException(400) 과도 어긋나고 프록시·
+     * 모니터링에서 실패가 성공으로 집계된다. 프런트엔드는 HTTP 상태를 보지 않고 본문의
+     * resultCode 로만 분기하므로(api/client.js) 화면 동작에는 영향이 없다.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatchException(MethodArgumentTypeMismatchException exception) {
+        log.warn("요청 파라미터 타입이 올바르지 않습니다: name={}, value={}",
+                exception.getName(), exception.getValue());
+        return ResponseEntity.badRequest().body(ErrorResponse.builder()
+                .code(ErrorCode.INPUT_VALUE_INVALID.getCode())
+                .message("요청 값의 형식이 올바르지 않습니다: " + exception.getName())
+                .data(null)
+                .build());
     }
 
     @ExceptionHandler(MultipartException.class)
