@@ -114,23 +114,30 @@ export default function AppShell({ sidebar, topbar, children }) {
 
 - [ ] **Step 2: Sidebar 를 sticky 로 고정한다**
 
-`SidebarNav.jsx`의 최상위 `<nav>` 클래스에서 높이·스크롤 관련 부분을 찾아 아래를 반영한다. 현재 클래스는 `flex w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default` 이다.
+`SidebarNav.jsx:20-22`의 `<nav>` 클래스를 바꾼다. 현재는 `flex w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default` 다.
 
 ```jsx
-className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col overflow-y-auto border-r border-line-default bg-surface-default"
+      className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default"
 ```
 
-`h-screen`을 여기에 두는 것이 핵심이다 — 부모가 더 이상 높이를 고정하지 않으므로 사이드바가 스스로 화면 높이를 갖고 `sticky top-0`으로 남는다. 메뉴가 많아 넘칠 때를 위해 `overflow-y-auto`도 함께 둔다.
+**추가하는 것은 `sticky top-0`과 `h-screen` 둘뿐이다.**
+
+`h-screen`이 반드시 필요하다. 부모가 더 이상 높이를 고정하지 않으므로, 이게 없으면 사이드바 높이가 콘텐츠만큼만 되고 안쪽 메뉴 영역의 `flex-1`이 기준 높이를 잃는다.
+
+> ⚠️ **`overflow-y-auto`를 `<nav>`에 추가하지 말 것.** 메뉴 영역(`SidebarNav.jsx:28`)이 이미 `flex-1 overflow-y-auto`다. 위에도 걸면 스크롤 컨테이너가 이중이 되어 휠 동작이 어긋난다.
 
 - [ ] **Step 3: Topbar 를 sticky 로 고정한다**
 
-`Topbar.jsx`의 최상위 `<header>` 클래스 앞부분에 추가한다.
+`Topbar.jsx:8`의 `<header>` 클래스 맨 앞에 `sticky top-0 z-20`을 넣는다.
 
 ```jsx
-className="sticky top-0 z-20 ..."
+    <header className="sticky top-0 z-20 flex h-[76px] shrink-0 items-center justify-between border-b border-line-default bg-surface-default px-7">
 ```
 
-`z-20`은 아래 콘텐츠(표·카드)보다 위에 오게 하기 위한 것이다. 모달은 더 높은 z를 쓰므로 가려지지 않는다 — Task 5에서 모달을 열어 확인한다.
+두 가지를 확인해 두었다.
+
+- **배경이 이미 불투명하다** (`bg-surface-default`). sticky 요소가 반투명하면 아래 표 행이 비쳐 보이는데 그 문제가 없다.
+- **모달은 `z-50`이다** (`Modal.jsx:58`의 `fixed inset-0 z-50`). `z-20`보다 위이므로 모달이 Topbar 에 가리지 않는다. Task 5 에서 눈으로도 확인한다.
 
 - [ ] **Step 4: 브라우저로 확인한다**
 
@@ -377,7 +384,13 @@ import { PAGE_SIZE, clampPage, pageSlice } from "@/utils/pagination.js";
   );
 ```
 
-표에 넘기는 데이터를 `filteredDepartments` → `pagedDepartments`로 바꾼다. **`isEmpty` 판정은 `filteredDepartments.length === 0`을 그대로 유지한다** — 페이지에 항목이 없는 것과 목록 자체가 비어 있는 것은 다르다.
+`DataTable` 안의 행 렌더링(`DepartmentListPage.jsx:233`)에서 소스만 바꾼다.
+
+```jsx
+          {pagedDepartments.map((department) => (
+```
+
+**`ListStateSurface`의 `isEmpty`(`:218`)는 `filteredDepartments.length === 0`을 그대로 둔다.** 페이지에 항목이 없는 것과 목록 자체가 비어 있는 것은 다르다 — `pagedDepartments`로 바꾸면 마지막 페이지를 지웠을 때 "등록된 부서가 없습니다"가 잘못 뜬다.
 
 표(`ListStateSurface` 또는 `DataTable`) 바로 아래에 추가한다.
 
@@ -449,10 +462,10 @@ git commit -m "feat: paginate the department and account lists on the client"
 ```java
     @Test
     void findAll_appliesLimitAndOffset() {
-        Department department = insertDepartment();
-        User user = insertUser(department);
+        Department department = createDepartment();
+        User author = createAuthor(department.getId());
         for (int i = 0; i < 3; i++) {
-            insertProblem(department, user, "페이징 " + i);
+            createProblem(department.getId(), author.getId(), "페이징 " + i);
         }
 
         List<ProblemListItem> firstPage = problemDao.findAll(department.getId(), null, null, null, null, null, null, 2, 0);
@@ -460,11 +473,11 @@ git commit -m "feat: paginate the department and account lists on the client"
 
         assertEquals(2, firstPage.size());
         assertEquals(1, secondPage.size());
-        assertEquals(3, problemDao.countAll(department.getId(), null, null, null, null, null, null));
+        assertEquals(3L, problemDao.countAll(department.getId(), null, null, null, null, null, null));
     }
 ```
 
-> `insertDepartment`·`insertUser`·`insertProblem` 헬퍼의 실제 이름·시그니처는 `ProblemDaoTest`를 열어 확인하고 그대로 쓴다. 없으면 기존 테스트가 문제를 만드는 방식을 그대로 따라 만든다.
+> 헬퍼 이름은 `ProblemDaoTest`에 이미 있는 것을 그대로 썼다: `createDepartment()`, `createAuthor(Long departmentId)`, `createProblem(Long departmentId, Long createdBy, String content)`. 새로 만들지 않는다.
 
 - [ ] **Step 2: 실패를 확인한다 (RED)**
 
@@ -473,27 +486,48 @@ Expected: **컴파일 실패** — `findAll`이 9인자를 받지 않고 `countA
 
 - [ ] **Step 3: 매퍼와 DAO 를 고친다**
 
-`ProblemMapper.xml`의 `findAll` `<select>`에서 `ORDER BY p.created_at DESC` 뒤에 추가한다.
+**(a) 필터 조건을 `<sql>`로 뽑는다.** `findAll`의 `<where>` 블록(`ProblemMapper.xml:44-52`)을 그대로 잘라 낸다.
 
 ```xml
-        ORDER BY p.created_at DESC
+    <sql id="problemFilter">
+        <where>
+            <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+            <if test="type != null">AND p.type = #{type}</if>
+            <if test="status != null">AND p.status = #{status}</if>
+            <if test="createdFrom != null">AND p.created_at &gt;= #{createdFrom}</if>
+            <if test="createdTo != null">AND p.created_at &lt; (#{createdTo} + INTERVAL '1 day')</if>
+            <if test="tag != null and tag != ''">AND EXISTS (SELECT 1 FROM problem_tags fpt JOIN tags ft ON ft.id = fpt.tag_id WHERE fpt.problem_id = p.id AND lower(ft.name) = lower(#{tag}))</if>
+            <if test="keyword != null and keyword != ''">AND p.content ILIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+    </sql>
+```
+
+`findAll`의 `<where>` 자리에 `<include refid="problemFilter"/>`를 넣는다. **조건이 두 벌로 갈라지면 목록과 총건수가 다른 기준으로 계산돼 마지막 페이지가 비는 버그가 난다.**
+
+**(b) 정렬을 결정적으로 만들고 LIMIT/OFFSET 을 붙인다.**
+
+```xml
+        GROUP BY p.id, d.name
+        ORDER BY p.created_at DESC, p.id DESC
         LIMIT #{limit} OFFSET #{offset}
 ```
 
-같은 `<where>` 조건을 재사용하기 위해 조건 블록을 `<sql id="problemFilter">`로 뽑고 `findAll`과 새 `countAll`이 모두 `<include refid="problemFilter"/>`를 쓰게 한다. **조건이 두 벌로 갈라지면 목록과 총건수가 서로 다른 기준으로 계산돼 마지막 페이지가 비는 버그가 난다.**
+> ⚠️ **`p.id DESC` 타이브레이커가 반드시 필요하다.** `created_at`만으로는 전순서가 아니다. 엑셀 업로드는 짧은 시간에 수십~수백 행을 넣으므로 같은 타임스탬프가 생길 수 있고, **정렬이 결정적이지 않으면 LIMIT/OFFSET 페이징에서 어떤 문제는 두 페이지에 나오고 어떤 문제는 어느 페이지에도 안 나온다.** PK 를 마지막 정렬 키로 두면 전순서가 보장된다.
+
+**(c) `countAll` 을 추가한다.**
 
 ```xml
     <select id="countAll" resultType="long">
-        SELECT count(DISTINCT p.id)
+        SELECT count(*)
         FROM problems p
         JOIN departments d ON d.id = p.department_id
         <include refid="problemFilter"/>
     </select>
 ```
 
-> `findAll`이 `GROUP BY p.id, d.name`으로 태그를 집계하므로 카운트는 `count(DISTINCT p.id)`여야 한다. `count(*)`를 쓰면 그룹 수가 아니라 조인 후 행 수가 나온다.
+> **태그 LEFT JOIN 을 넣지 않는 것이 핵심이다.** 필터 조건은 `p.*` 와 상관 서브쿼리(EXISTS)만 참조하므로 태그 조인이 필요 없다. 조인을 빼면 문제 1건당 정확히 1행이라 `count(*)` 가 그대로 정답이다(`departments` 는 `NOT NULL` FK 에 대한 1:1 조인이라 행 수를 바꾸지 않는다). 반대로 `findAll` 처럼 태그를 LEFT JOIN 한 채 `count(*)` 를 쓰면 태그 개수만큼 부풀어 **총건수가 틀린다** — 그때는 `count(DISTINCT p.id)` 가 필요하다. 조인을 빼는 쪽이 더 단순하고 빠르다.
 
-`ProblemDao.java`의 `findAll` 시그니처에 `@Param("limit") int limit, @Param("offset") int offset`을 추가하고 `countAll`을 같은 필터 파라미터로 선언한다.
+**(d) DAO 시그니처.** `findAll` 에 `@Param("limit") int limit, @Param("offset") int offset` 을 추가하고, `countAll` 을 **동일한 7개 필터 파라미터**로 선언한다(반환 `long`).
 
 - [ ] **Step 4: 통과를 확인한다 (GREEN)**
 
@@ -657,6 +691,7 @@ git commit -m "feat: paginate the problem list on the server"
 | 문제 목록 | 20건만 표시, "1–20 / 전체 119건", 페이지 `1 / 6` |
 | 다음/이전 | 페이지가 바뀌고 첫 페이지에서 "이전", 마지막에서 "다음"이 disabled |
 | 필터 후 조회 | **1페이지부터** 다시 시작 |
+| 1→2→3페이지 이동 | 중복·누락 없이 이어진다. `SELECT id FROM problems ORDER BY created_at DESC, id DESC` 결과와 화면 순서를 대조한다 |
 | 부서·계정 목록 | 8건·7건이라 페이지가 1개 → **컨트롤이 아예 보이지 않는다** |
 | 빈 결과 | "조건에 맞는 …이 없습니다" 안내가 그대로 나오고 컨트롤이 없다 |
 
@@ -687,4 +722,6 @@ git commit -m "docs: verify the admin list scroll fix and pagination"
 - [ ] 필터를 바꾸면 1페이지부터 다시 조회한다
 - [ ] 부서·계정 목록은 페이지가 1개일 때 컨트롤을 그리지 않는다
 - [ ] **부서 Select(계정 폼·엑셀 업로드·부서 이동)가 여전히 전체 부서를 보여 준다** — 부서 목록 API 를 서버 페이징하지 않은 이유
+- [ ] **페이지를 오가도 같은 문제가 두 번 나오거나 빠지지 않는다** — `ORDER BY p.created_at DESC, p.id DESC` 타이브레이커 확인
+- [ ] 마지막 페이지에서 항목을 보관 처리해도 빈 표가 아니라 유효한 페이지가 보인다 (`clampPage`)
 - [ ] 백엔드 204 → **205**, 프론트엔드 184 → **189** 전부 통과, 빌드 성공
