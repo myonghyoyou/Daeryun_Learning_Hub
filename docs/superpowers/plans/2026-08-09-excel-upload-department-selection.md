@@ -1183,7 +1183,7 @@ git commit -m "feat: add the department move card to the problem edit screen"
 
 **배경:** 서버 테스트는 역할 분기를 증명하지만 화면의 disabled 상태·403 미발생·실제 귀속 결과는 브라우저로만 확인된다. **부서 관리자 계정이 필요하다** — `dev_admin` / `QaPlan3!2026`(정보시스템팀)이 DB에 있다.
 
-- [ ] **Step 1: 환경 기동**
+- [x] **Step 1: 환경 기동**
 
 ```bash
 docker start probank-postgres probank-mailhog
@@ -1191,7 +1191,7 @@ cd backend && ./gradlew bootRun     # 8080 점유 확인 후. 기동 로그에�
 cd frontend && npm run dev
 ```
 
-- [ ] **Step 2: 총괄 관리자 — 타부서 업로드**
+- [x] **Step 2: 총괄 관리자 — 타부서 업로드**
 
 `admin` / `QaAdmin1234!`로 로그인해 `/admin/problems/excel-upload` 진입.
 
@@ -1214,7 +1214,7 @@ SELECT detail FROM audit_logs WHERE action = 'PROBLEM_EXCEL_UPLOADED' ORDER BY i
 
 기대: 문제 61건이 정보시스템팀 귀속, `excel_upload_logs.department_id`가 **같은 부서**, 감사 로그 detail에 `departmentId`.
 
-- [ ] **Step 3: 부서 관리자 — 고정 확인**
+- [x] **Step 3: 부서 관리자 — 고정 확인**
 
 `dev_admin` / `QaPlan3!2026`으로 로그인해 같은 화면 진입.
 
@@ -1224,7 +1224,7 @@ SELECT detail FROM audit_logs WHERE action = 'PROBLEM_EXCEL_UPLOADED' ORDER BY i
 | 브라우저 콘솔 | 부서 목록 403 **없음** |
 | 업로드 | 자기 부서로 정상 등록 |
 
-- [ ] **Step 4: 파라미터 위조 시도 (보안)**
+- [x] **Step 4: 파라미터 위조 시도 (보안)**
 
 `dev_admin` 세션으로 개발자 도구 콘솔에서 직접 호출한다.
 
@@ -1237,7 +1237,7 @@ await fetch("/api/admin/problems/excel-upload?departmentId=1", { method: "POST",
 
 기대: 요청은 성공하되 **문제가 정보시스템팀에 저장된다**(본사 아님). DB로 확인한다. 본사로 들어가면 **Critical** — 즉시 중단하고 보고한다.
 
-- [ ] **Step 5: 부서 이동 확인**
+- [x] **Step 5: 부서 이동 확인**
 
 `admin`으로 방금 올린 문제 중 하나의 수정 화면(`/admin/problems/{id}/edit`)에 들어간다.
 
@@ -1254,11 +1254,11 @@ SELECT detail FROM audit_logs WHERE action = 'PROBLEM_DEPARTMENT_CHANGED' ORDER 
 
 기대: `{"from":1,"to":2}` 형태의 유효한 JSON.
 
-- [ ] **Step 6: 결과를 문서에 반영한다**
+- [x] **Step 6: 결과를 문서에 반영한다**
 
 `docs/qa/2026-08-09-question-bank-upload-result.md` 하단에 `## 부서 지정 기능 검증 (<실행일>)` 절을 추가한다(실행일은 `date +%Y-%m-%d`). Step 2~4의 실제 화면·응답·SQL 결과를 담는다.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/qa/2026-08-09-question-bank-upload-result.md
@@ -1321,8 +1321,8 @@ git commit -m "docs: allow super admins to pick the owning department in the PRD
 
 아래는 **Task 8(브라우저 검증)에서 확인한다.** 서버 단위 테스트로는 역할 분기까지만 증명되고, 실제 HTTP 경로·화면 상태·DB 결과는 덮이지 않는다.
 
-- [ ] 총괄 관리자가 타부서 명의로 업로드 가능, `excel_upload_logs.department_id`가 문제 귀속과 일치
-- [ ] 부서 관리자 화면의 Select가 disabled이고 콘솔에 403이 없음
-- [ ] **부서 관리자가 파라미터를 위조해도 본인 부서로 저장됨** (보안 회귀 방지 — 단위 테스트는 통과, 실제 요청 경로 미확인)
-- [ ] 총괄 관리자가 수정 화면에서 귀속 부서를 옮길 수 있고, `PROBLEM_DEPARTMENT_CHANGED` 감사 로그가 유효한 JSON 으로 남음
-- [ ] **부서 관리자가 부서 이동 API 를 직접 호출하면 403** (보안)
+- [x] 총괄 관리자가 타부서 명의로 업로드 가능, `excel_upload_logs.department_id`가 문제 귀속과 일치
+- [x] 부서 관리자 화면의 Select가 disabled이고 콘솔에 403이 없음
+- [x] **부서 관리자가 파라미터를 위조해도 본인 부서로 저장됨** (보안 회귀 방지 — 단위 테스트는 통과, 실제 요청 경로 미확인)
+- [x] 총괄 관리자가 수정 화면에서 귀속 부서를 옮길 수 있고, `PROBLEM_DEPARTMENT_CHANGED` 감사 로그가 유효한 JSON 으로 남음
+- [x] **부서 관리자가 부서 이동 API 를 직접 호출하면 403** (보안)
