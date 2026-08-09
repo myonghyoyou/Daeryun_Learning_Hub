@@ -70,7 +70,7 @@ PRD 섹션 1.4 용어 정의는 *"출제 부서 = 문제를 등록한 관리자�
 
 기존 테스트의 `actor`는 `new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false)`로 **부서 관리자**다. 총괄 관리자 fixture를 새로 만든다.
 
-- [ ] **Step 1: 실패하는 테스트를 추가한다**
+- [x] **Step 1: 실패하는 테스트를 추가한다**
 
 `ExcelProblemUploadServiceImplTest.java`의 클래스 상단 필드 옆에 총괄 관리자 fixture를 추가한다.
 
@@ -129,7 +129,7 @@ import org.mockito.ArgumentCaptor;
 
 > 확인된 시그니처: `void provisionWithChoices(Problem problem, List<ProblemChoice> choices, List<String> tagNames)`. 보기형(MCQ_SINGLE/MCQ_MULTI/OX)은 이 메서드를, SHORT_ANSWER는 `provisionWithAnswers(Problem, List<ProblemAnswer>, List<String>)`를 탄다. 위 테스트는 `MCQ_SINGLE` 행이라 `provisionWithChoices`가 맞다.
 
-- [ ] **Step 2: 컴파일 실패를 확인한다 (RED)**
+- [x] **Step 2: 컴파일 실패를 확인한다 (RED)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ExcelProblemUploadServiceImplTest" --console=plain`
 
@@ -137,7 +137,7 @@ Expected: **컴파일 실패** — `upload(MultipartFile, Long, AuthUser)` 메�
 
 > `deptAdminRequestedDepartmentIsIgnored`는 시그니처만 생기면 **수정 없이도 통과**한다. 의도된 것이다 — 새 기능을 검증하는 테스트가 아니라 기존 보안 규칙이 깨지지 않는지 지키는 회귀 방지 테스트다.
 
-- [ ] **Step 3: 인터페이스 시그니처를 바꾼다**
+- [x] **Step 3: 인터페이스 시그니처를 바꾼다**
 
 `ExcelProblemUploadService.java`:
 
@@ -150,7 +150,7 @@ public interface ExcelProblemUploadService {
 }
 ```
 
-- [ ] **Step 4: 구현에서 유효 부서를 1회 결정한다**
+- [x] **Step 4: 구현에서 유효 부서를 1회 결정한다**
 
 `ExcelProblemUploadServiceImpl.java`의 `upload` 시그니처를 바꾸고, 확장자 검증 바로 뒤에 결정 로직을 넣는다.
 
@@ -186,7 +186,7 @@ import를 추가한다.
 import com.daeryun.probank.domain.UserRole;
 ```
 
-- [ ] **Step 5: 두 지점에 같은 값을 흘린다**
+- [x] **Step 5: 두 지점에 같은 값을 흘린다**
 
 행 처리 호출(`:106` 부근)을 바꾼다.
 
@@ -214,7 +214,7 @@ import com.daeryun.probank.domain.UserRole;
         log.setDepartmentId(effectiveDepartmentId);
 ```
 
-- [ ] **Step 6: 컨트롤러가 파라미터를 받게 한다**
+- [x] **Step 6: 컨트롤러가 파라미터를 받게 한다**
 
 `ProblemController.java:84-88`:
 
@@ -227,17 +227,17 @@ import com.daeryun.probank.domain.UserRole;
     }
 ```
 
-- [ ] **Step 7: 테스트가 통과하는지 확인한다 (GREEN)**
+- [x] **Step 7: 테스트가 통과하는지 확인한다 (GREEN)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ExcelProblemUploadServiceImplTest" --console=plain`
 Expected: `BUILD SUCCESSFUL`, 신규 2건 포함 전부 통과.
 
-- [ ] **Step 8: 전체 스위트로 회귀를 확인한다**
+- [x] **Step 8: 전체 스위트로 회귀를 확인한다**
 
 Run: `cd backend && rtk proxy ./gradlew test --console=plain`
 Expected: `BUILD SUCCESSFUL`. 테스트 수 194 → 196.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/service/ExcelProblemUploadService.java \
@@ -270,7 +270,7 @@ git commit -m "feat: let super admins choose the owning department on problem ex
 
 **검증은 행 루프 진입 전에 끝나야 한다.** 행마다 `REQUIRES_NEW`로 커밋되므로 중간에 예외가 나면 이미 저장된 문제가 남는다 — 500행 상한을 루프 전에 검사하는 것과 같은 이유다. `resolveDepartmentId`가 `upload` 진입부에 있으므로 이 조건은 이미 만족한다.
 
-- [ ] **Step 1: 실패하는 테스트 3건을 추가한다**
+- [x] **Step 1: 실패하는 테스트 3건을 추가한다**
 
 `ExcelProblemUploadServiceImplTest.java`에 `DepartmentDao` mock을 추가한다. 필드·`setUp`·헬퍼를 아래처럼 고친다.
 
@@ -352,12 +352,12 @@ import com.daeryun.probank.exception.BizException;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 ```
 
-- [ ] **Step 2: 실패를 확인한다 (RED)**
+- [x] **Step 2: 실패를 확인한다 (RED)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ExcelProblemUploadServiceImplTest" --console=plain`
 Expected: **컴파일 실패** — 4인자 생성자가 없다.
 
-- [ ] **Step 3: 생성자에 DepartmentDao를 주입하고 검증을 채운다**
+- [x] **Step 3: 생성자에 DepartmentDao를 주입하고 검증을 채운다**
 
 `ExcelProblemUploadServiceImpl.java`:
 
@@ -405,12 +405,12 @@ import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Status;
 ```
 
-- [ ] **Step 4: 통과를 확인한다 (GREEN)**
+- [x] **Step 4: 통과를 확인한다 (GREEN)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ExcelProblemUploadServiceImplTest" --console=plain`
 Expected: `BUILD SUCCESSFUL`
 
-- [ ] **Step 5: 서블릿 체인 바인딩 테스트를 추가한다**
+- [x] **Step 5: 서블릿 체인 바인딩 테스트를 추가한다**
 
 `backend/src/test/java/com/daeryun/probank/controller/ProblemExcelUploadBindingTest.java`:
 
@@ -486,17 +486,17 @@ class ProblemExcelUploadBindingTest {
 
 > 두 테스트 모두 `ErrorCode.INPUT_VALUE_INVALID`(1000)를 기대한다. 부서 검증이 워크북 열기보다 앞서므로 바이트가 유효한 엑셀일 필요는 없다.
 
-- [ ] **Step 6: 실행해 확인한다**
+- [x] **Step 6: 실행해 확인한다**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.controller.ProblemExcelUploadBindingTest" --console=plain`
 Expected: 2건 통과. 실패하면 `.andDo(print())`를 붙여 **실제 응답 본문을 눈으로 확인한 뒤** 원인을 고친다 — 기대값을 결과에 맞추는 방향으로 고치지 않는다.
 
-- [ ] **Step 7: 전체 스위트**
+- [x] **Step 7: 전체 스위트**
 
 Run: `cd backend && rtk proxy ./gradlew test --console=plain`
 Expected: `BUILD SUCCESSFUL`, 196 → 201.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/service/ExcelProblemUploadServiceImpl.java \
@@ -519,7 +519,7 @@ git commit -m "fix: reject missing, unknown and inactive departments on excel up
 
 **배경:** 이 계획은 PRD의 *"출제 부서 = 등록한 관리자의 소속 부서"* 등식을 깬다. `created_by`와 `department_id`가 갈라지므로 **"누가 어느 부서 명의로 올렸는지"** 가 감사 로그에 남아야 추적이 된다. 현재 detail은 `{"failRows":0,"fileName":"...","totalRows":43,"successRows":43}`이다.
 
-- [ ] **Step 1: 실패하는 테스트를 추가한다**
+- [x] **Step 1: 실패하는 테스트를 추가한다**
 
 ```java
     @Test
@@ -541,12 +541,12 @@ git commit -m "fix: reject missing, unknown and inactive departments on excel up
 
 > 확인된 시그니처: `void record(Long actorId, String action, String targetType, Long targetId, String detail)`. 현재 호출은 `record(actor.getUserId(), "PROBLEM_EXCEL_UPLOADED", "EXCEL_UPLOAD_LOG", log.getId(), "{...}")`이다.
 
-- [ ] **Step 2: 실패를 확인한다 (RED)**
+- [x] **Step 2: 실패를 확인한다 (RED)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ExcelProblemUploadServiceImplTest" --console=plain`
 Expected: `auditDetailCarriesTheOwningDepartment` FAIL — detail에 `departmentId`가 없다.
 
-- [ ] **Step 3: detail에 부서를 추가한다**
+- [x] **Step 3: detail에 부서를 추가한다**
 
 `ExcelProblemUploadServiceImpl.java:138-140`의 현재 코드는 문자열 연결이다.
 
@@ -567,12 +567,12 @@ Expected: `auditDetailCarriesTheOwningDepartment` FAIL — detail에 `department
 
 > `log.getDepartmentId()`는 Task 1에서 `effectiveDepartmentId`로 채워졌으므로 `null`이 될 수 없다(총괄 관리자는 Task 2가 `null`을 거부하고, 부서 관리자는 세션 값이 들어간다). 그래도 QA §5.11이 `detail::jsonb` 파싱을 검사하므로, Task 6에서 실제 저장된 값이 유효한 JSON인지 SQL로 확인한다.
 
-- [ ] **Step 4: 통과를 확인한다 (GREEN)**
+- [x] **Step 4: 통과를 확인한다 (GREEN)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ExcelProblemUploadServiceImplTest" --console=plain`
 Expected: `BUILD SUCCESSFUL`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/service/ExcelProblemUploadServiceImpl.java \
@@ -598,7 +598,7 @@ git commit -m "feat: record the owning department in the excel upload audit log"
 
 기존 `buildDepartmentOptions`(`departmentOptions.js`)와 형제 함수지만, 그쪽은 계정 폼 전용(수정 시 비활성 부서를 남기는 규칙)이라 재사용하지 않고 별도로 둔다.
 
-- [ ] **Step 1: 실패하는 테스트를 작성한다**
+- [x] **Step 1: 실패하는 테스트를 작성한다**
 
 `frontend/src/utils/uploadDepartmentField.test.js`:
 
@@ -668,12 +668,12 @@ test("falls back to a dash when the session has no department name", () => {
 });
 ```
 
-- [ ] **Step 2: 실패를 확인한다 (RED)**
+- [x] **Step 2: 실패를 확인한다 (RED)**
 
 Run: `cd frontend && node --test src/utils/uploadDepartmentField.test.js`
 Expected: `ERR_MODULE_NOT_FOUND` — `uploadDepartmentField.js`가 없다.
 
-- [ ] **Step 3: 최소 구현을 작성한다**
+- [x] **Step 3: 최소 구현을 작성한다**
 
 `frontend/src/utils/uploadDepartmentField.js`:
 
@@ -716,12 +716,12 @@ export function buildUploadDepartmentField({ session, departments = [] }) {
 }
 ```
 
-- [ ] **Step 4: 통과를 확인한다 (GREEN)**
+- [x] **Step 4: 통과를 확인한다 (GREEN)**
 
 Run: `cd frontend && node --test src/utils/uploadDepartmentField.test.js`
 Expected: 5건 전부 통과.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/utils/uploadDepartmentField.js frontend/src/utils/uploadDepartmentField.test.js
@@ -742,7 +742,7 @@ git commit -m "feat: add the upload department field builder"
 
 **배경:** 현재 이 화면은 `useRef` + `useState` 3개(file/result/uploading)로만 이뤄져 있고 세션도 부서 목록도 쓰지 않는다. Select 하나와 그 데이터 로딩을 더한다.
 
-- [ ] **Step 1: API 함수에 부서를 싣는다**
+- [x] **Step 1: API 함수에 부서를 싣는다**
 
 `frontend/src/api/problems.js`:
 
@@ -757,7 +757,7 @@ export function uploadProblemsExcel(file, departmentId) {
 
 > 컨트롤러가 `@RequestParam`으로 받으므로 쿼리스트링으로 보낸다. `FormData`에 넣어도 Spring이 읽지만, 쿼리스트링이 컨트롤러 시그니처와 1:1로 대응해 읽기 쉽다.
 
-- [ ] **Step 2: 화면에 세션·부서 목록·선택 상태를 추가한다**
+- [x] **Step 2: 화면에 세션·부서 목록·선택 상태를 추가한다**
 
 `ProblemExcelUploadPage.jsx` 상단 import에 추가한다.
 
@@ -798,7 +798,7 @@ import Select from "@/components/ui/Select.jsx";
   }, [departmentField.disabled, departmentField.value]);
 ```
 
-- [ ] **Step 3: 제출 전 검사와 전송을 고친다**
+- [x] **Step 3: 제출 전 검사와 전송을 고친다**
 
 `handleUpload` 안의 파일 검사 바로 뒤에 부서 검사를 넣고, 호출에 부서를 싣는다.
 
@@ -813,7 +813,7 @@ import Select from "@/components/ui/Select.jsx";
       const uploadResult = await uploadProblemsExcel(file, departmentId);
 ```
 
-- [ ] **Step 4: Select를 렌더링한다**
+- [x] **Step 4: Select를 렌더링한다**
 
 "파일 업로드" Surface 안, 파일 선택 버튼 **위**에 넣는다.
 
@@ -831,7 +831,7 @@ import Select from "@/components/ui/Select.jsx";
         <p className="mb-4 text-body-small text-ink-muted">{departmentField.helpText}</p>
 ```
 
-- [ ] **Step 5: 테스트와 빌드를 확인한다**
+- [x] **Step 5: 테스트와 빌드를 확인한다**
 
 Run: `cd frontend && npm test`
 Expected: 179 → 184 통과, 실패 0.
@@ -839,7 +839,7 @@ Expected: 179 → 184 통과, 실패 0.
 Run: `cd frontend && rtk proxy npm run build`
 Expected: 빌드 성공.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/api/problems.js frontend/src/pages/admin/problems/ProblemExcelUploadPage.jsx
@@ -869,7 +869,7 @@ git commit -m "feat: add the owning department select to the problem excel uploa
 
 `RoleCheckInterceptor:27-29`가 **메서드 애너테이션을 먼저 보고 없을 때만 클래스 것을 쓰므로**, 클래스가 `{SUPER_ADMIN, DEPT_ADMIN}`이어도 메서드에 `SUPER_ADMIN`을 달면 부서 관리자는 차단된다.
 
-- [ ] **Step 1: 실패하는 테스트를 추가한다**
+- [x] **Step 1: 실패하는 테스트를 추가한다**
 
 `ProblemServiceImplTest.java`에 추가한다. 기존 테스트가 쓰는 mock 이름(`problemDao`, `auditLogService`)을 그대로 따르고, `departmentDao` mock이 없으면 `setUp`에 추가한다.
 
@@ -916,12 +916,12 @@ git commit -m "feat: add the owning department select to the problem excel uploa
     }
 ```
 
-- [ ] **Step 2: 실패를 확인한다 (RED)**
+- [x] **Step 2: 실패를 확인한다 (RED)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ProblemServiceImplTest" --console=plain`
 Expected: **컴파일 실패** — `changeDepartment`와 `updateDepartment`가 없다.
 
-- [ ] **Step 3: DAO와 매퍼를 추가한다**
+- [x] **Step 3: DAO와 매퍼를 추가한다**
 
 `ProblemDao.java`에 추가한다.
 
@@ -943,7 +943,7 @@ import org.apache.ibatis.annotations.Param;
     </update>
 ```
 
-- [ ] **Step 4: 서비스에 메서드를 추가한다**
+- [x] **Step 4: 서비스에 메서드를 추가한다**
 
 `ProblemService.java`에 추가한다.
 
@@ -994,12 +994,12 @@ import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Status;
 ```
 
-- [ ] **Step 5: 통과를 확인한다 (GREEN)**
+- [x] **Step 5: 통과를 확인한다 (GREEN)**
 
 Run: `cd backend && rtk proxy ./gradlew test --tests "com.daeryun.probank.service.ProblemServiceImplTest" --console=plain`
 Expected: `BUILD SUCCESSFUL`
 
-- [ ] **Step 6: 엔드포인트를 추가한다**
+- [x] **Step 6: 엔드포인트를 추가한다**
 
 `backend/src/main/java/com/daeryun/probank/dto/problem/DepartmentChangeRequest.java`:
 
@@ -1038,12 +1038,12 @@ import를 추가한다.
 import com.daeryun.probank.dto.problem.DepartmentChangeRequest;
 ```
 
-- [ ] **Step 7: 전체 스위트**
+- [x] **Step 7: 전체 스위트**
 
 Run: `cd backend && rtk proxy ./gradlew test --console=plain`
 Expected: `BUILD SUCCESSFUL`, 201 → 203.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dao/ProblemDao.java backend/src/main/resources/mappers/probank/ProblemMapper.xml backend/src/main/java/com/daeryun/probank/service/ProblemService.java backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/main/java/com/daeryun/probank/dto/problem/DepartmentChangeRequest.java backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java
@@ -1065,7 +1065,7 @@ git commit -m "feat: let super admins move a problem to another department"
 
 **배경:** 수정 화면에 두되 **저장 버튼과 분리한다.** 일반 저장(`PUT`)과 부서 이동(`PATCH`)은 별도 API라, 한 버튼으로 묶으면 한쪽만 성공하는 부분 실패가 생긴다. 총괄 관리자에게만 보인다.
 
-- [ ] **Step 1: API 함수를 추가한다**
+- [x] **Step 1: API 함수를 추가한다**
 
 `frontend/src/api/client.js`에 `apiPatch`가 없으면 `apiPut` 아래에 추가한다.
 
@@ -1083,7 +1083,7 @@ export function changeProblemDepartment(id, departmentId) {
 }
 ```
 
-- [ ] **Step 2: 수정 화면에 이동 카드를 넣는다**
+- [x] **Step 2: 수정 화면에 이동 카드를 넣는다**
 
 `ProblemFormPage.jsx`에 import를 추가한다.
 
@@ -1155,7 +1155,7 @@ import Select from "@/components/ui/Select.jsx";
       )}
 ```
 
-- [ ] **Step 3: 테스트와 빌드를 확인한다**
+- [x] **Step 3: 테스트와 빌드를 확인한다**
 
 Run: `cd frontend && npm test`
 Expected: 184건 전부 통과. 신규 테스트는 없다 — 옵션 구성 로직은 Task 4에서 이미 고정했고 이 Task는 배선뿐이다.
@@ -1163,7 +1163,7 @@ Expected: 184건 전부 통과. 신규 테스트는 없다 — 옵션 구성 로
 Run: `cd frontend && rtk proxy npm run build`
 Expected: 빌드 성공.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/api/client.js frontend/src/api/problems.js frontend/src/pages/admin/problems/ProblemFormPage.jsx
@@ -1279,7 +1279,7 @@ git commit -m "docs: verify department selection on problem excel upload"
 
 **배경:** PRD가 *"출제 부서 = 문제를 등록한 관리자의 소속 부서"* 로 못 박고 있어, 이 기능은 현재 문서와 모순된다. 문서를 고치지 않으면 다음 QA가 이 동작을 결함으로 보고한다.
 
-- [ ] **Step 1: 용어 정의를 고친다**
+- [x] **Step 1: 용어 정의를 고친다**
 
 `docs/PRD.md:33`을 바꾼다.
 
@@ -1287,7 +1287,7 @@ git commit -m "docs: verify department selection on problem excel upload"
 | 출제 부서 | 문제가 귀속된 부서 (문제의 "소유자" 개념이며, 풀이 접근권한과는 무관). 기본값은 등록한 관리자의 소속 부서이며, **총괄 관리자는 엑셀 일괄 업로드 시 다른 부서를 지정할 수 있다** (등록자는 `created_by`로 따로 남는다) |
 ```
 
-- [ ] **Step 2: 섹션 4.2에 규칙을 추가한다**
+- [x] **Step 2: 섹션 4.2에 규칙을 추가한다**
 
 `docs/PRD.md`의 "2. **엑셀 일괄 업로드**" 항목 하위에 한 줄을 추가한다.
 
@@ -1296,7 +1296,7 @@ git commit -m "docs: verify department selection on problem excel upload"
    - 잘못 지정한 경우 **총괄 관리자가 문제 수정 화면에서 귀속 부서를 다른 부서로 옮길 수 있다.** 부서 관리자에게는 열려 있지 않다.
 ```
 
-- [ ] **Step 3: Plan 3 문서의 Architecture를 갱신한다**
+- [x] **Step 3: Plan 3 문서의 Architecture를 갱신한다**
 
 `docs/superpowers/plans/2026-07-28-03-problem-bank-management.md`의 Architecture 문단에서 *"문제는 등록한 관리자의 부서에 귀속되지만(`department_id` = 등록자 소속 부서)"* 부분에 단서를 단다.
 
@@ -1304,7 +1304,7 @@ git commit -m "docs: verify department selection on problem excel upload"
 문제는 등록한 관리자의 부서에 귀속된다(`department_id` = 등록자 소속 부서). 다만 엑셀 일괄 업로드에 한해 총괄 관리자가 귀속 부서를 지정할 수 있다 — 상세는 `docs/superpowers/plans/2026-08-09-excel-upload-department-selection.md` 참고.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/PRD.md docs/superpowers/plans/2026-07-28-03-problem-bank-management.md
@@ -1315,11 +1315,14 @@ git commit -m "docs: allow super admins to pick the owning department in the PRD
 
 ## 완료 기준
 
-- [ ] 백엔드 테스트 194 → **203** 전부 통과
-- [ ] 프론트엔드 테스트 179 → **184** 전부 통과, 프로덕션 빌드 성공
+- [x] 백엔드 테스트 194 → **204** 전부 통과 (계획 예측 203 — Task 2 의 MockMvc 테스트가 2건이라 1건 더 늘었다)
+- [x] 프론트엔드 테스트 179 → **184** 전부 통과, 프로덕션 빌드 성공
+- [x] PRD 용어 정의·섹션 4.2·4.3 과 Plan 3 Architecture 가 실제 동작과 일치
+
+아래는 **Task 8(브라우저 검증)에서 확인한다.** 서버 단위 테스트로는 역할 분기까지만 증명되고, 실제 HTTP 경로·화면 상태·DB 결과는 덮이지 않는다.
+
 - [ ] 총괄 관리자가 타부서 명의로 업로드 가능, `excel_upload_logs.department_id`가 문제 귀속과 일치
 - [ ] 부서 관리자 화면의 Select가 disabled이고 콘솔에 403이 없음
-- [ ] **부서 관리자가 파라미터를 위조해도 본인 부서로 저장됨** (보안 회귀 방지)
-- [ ] 총괄 관리자가 수정 화면에서 귀속 부서를 옮길 수 있고, `PROBLEM_DEPARTMENT_CHANGED` 감사 로그가 남음
+- [ ] **부서 관리자가 파라미터를 위조해도 본인 부서로 저장됨** (보안 회귀 방지 — 단위 테스트는 통과, 실제 요청 경로 미확인)
+- [ ] 총괄 관리자가 수정 화면에서 귀속 부서를 옮길 수 있고, `PROBLEM_DEPARTMENT_CHANGED` 감사 로그가 유효한 JSON 으로 남음
 - [ ] **부서 관리자가 부서 이동 API 를 직접 호출하면 403** (보안)
-- [ ] PRD 용어 정의와 섹션 4.2가 실제 동작과 일치

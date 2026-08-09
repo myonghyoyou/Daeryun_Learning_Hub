@@ -6,6 +6,8 @@
 
 **Architecture:** Plan 1의 계층 구조와 `@RequireRole`, Plan 2의 `excel_upload_logs`(`target_type`) 인프라를 재사용한다. 문제는 등록한 관리자의 부서에 귀속되지만(`department_id` = 등록자 소속 부서), 풀이 대상은 전사 공통이다(Plan 4에서 다룸). 부서 관리자는 자기 부서 문제만 조회/수정/삭제할 수 있고, 총괄 관리자는 전체 부서 문제에 접근한다.
 
+> **후속 변경 (2026-08-09):** 이 Plan 이후 총괄 관리자에 한해 **엑셀 업로드 시 귀속 부서를 지정**하고 **등록 후 다른 부서로 옮기는** 기능이 추가됐다. 즉 `department_id`가 항상 등록자 소속 부서와 같지는 않다. 부서 관리자에게는 여전히 닫혀 있고 서버가 요청 값을 무시한다 — 이 Plan이 세운 부서 격리 규칙 자체는 그대로다. 상세는 [`2026-08-09-excel-upload-department-selection.md`](2026-08-09-excel-upload-department-selection.md) 참고.
+
 **Tech Stack:** Plan 1/2와 동일
 
 **전제 조건:** Plan 1, Plan 2가 완료되어 있어야 한다 (인증, 부서/계정 관리, `excel_upload_logs`).
