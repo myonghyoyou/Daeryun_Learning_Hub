@@ -6,6 +6,7 @@ import { archiveProblem, listProblems, listTags } from "@/api/problems.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { EMPTY_PROBLEM_FILTERS, buildProblemListParams } from "@/utils/problemListParams.js";
 import { PROBLEM_STATUS_OPTIONS, PROBLEM_TYPE_OPTIONS, problemStatusLabel, problemTypeLabel } from "@/utils/problemLabels.js";
+import { buttonClass } from "@/utils/buttonClass.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
@@ -89,11 +90,12 @@ export default function ProblemListPage() {
           <h1 className="text-page-title font-extrabold tracking-title text-ink-strong">문제 관리</h1>
           <p className="mt-1 text-body-small text-ink-muted">문제를 등록·수정하고 상태를 관리합니다.</p>
         </div>
-        {/* Link는 Button 컴포넌트를 감쌀 수 없어(버튼은 폴리모픽하지 않다) primary 버튼과
-            동일한 시각 스타일을 직접 적용한다 — 페이지 헤더의 유일한 Primary Action이다. */}
+        {/* Link는 Button 컴포넌트를 감쌀 수 없어(버튼은 폴리모픽하지 않다) 같은 스타일을
+            buttonClass 로 가져다 쓴다. 손으로 복제하던 시절 포커스 링을 빠뜨린 링크가
+            있었다(QA D6). */}
         <Link
           to="/admin/problems/new"
-          className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-sm bg-action-primary-bg px-4 text-body-small font-semibold text-white transition-colors hover:bg-action-primary-hover focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+          className={buttonClass({ variant: "primary", size: "md" })}
         >
           <Plus size={16} aria-hidden="true" />
           문제 등록
@@ -223,7 +225,7 @@ export default function ProblemListPage() {
                 <div className="flex gap-2">
                   <Link
                     to={`/admin/problems/${problem.id}/edit`}
-                    className="inline-flex h-8 items-center rounded-sm border border-line-strong px-3 text-[11px] font-semibold text-action-secondary-text hover:bg-surface-subtle"
+                    className={buttonClass({ variant: "secondary", size: "sm" })}
                   >
                     수정
                   </Link>

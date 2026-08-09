@@ -12,6 +12,7 @@ import { validateImageFile } from "@/utils/problemImageValidation.js";
 import { validateProblemForm } from "@/utils/problemFormValidation.js";
 import { buildProblemPayload } from "@/utils/problemFormPayload.js";
 import { formatFileSize } from "@/utils/formatFileSize.js";
+import { buttonClass } from "@/utils/buttonClass.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
@@ -308,10 +309,7 @@ export default function ProblemFormPage() {
         <p className="text-body-small text-ink-muted">
           다른 부서가 등록한 문제는 총괄 관리자만 열람·수정할 수 있습니다.
         </p>
-        <Link
-          to="/admin/problems"
-          className="inline-flex h-[38px] items-center rounded-sm border border-line-strong px-4 text-body-small font-semibold text-action-secondary-text hover:bg-surface-subtle"
-        >
+        <Link to="/admin/problems" className={buttonClass({ variant: "secondary", size: "md" })}>
           목록으로
         </Link>
       </Surface>
@@ -424,6 +422,7 @@ export default function ProblemFormPage() {
                         name="problem-correct-choice"
                         checked={choice.correct}
                         onChange={() => handleChoiceCorrectChange(index)}
+                        className="focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
                       />
                       정답
                     </label>
