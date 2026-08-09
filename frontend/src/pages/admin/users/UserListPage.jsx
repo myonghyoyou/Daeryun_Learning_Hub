@@ -17,6 +17,8 @@ import StatusBadge from "@/components/ui/StatusBadge.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
 import Modal from "@/components/ui/Modal.jsx";
 import ListStateSurface from "@/components/admin/ListStateSurface.jsx";
+import Pagination from "@/components/ui/Pagination.jsx";
+import { PAGE_SIZE, clampPage, pageSlice } from "@/utils/pagination.js";
 import ConfirmToggleModal from "@/components/admin/ConfirmToggleModal.jsx";
 
 const STATUS_FILTER_OPTIONS = [
@@ -74,6 +76,14 @@ export default function UserListPage() {
   }, []);
 
   const filteredUsers = useMemo(() => filterUsers(users, { keyword, status: statusFilter }), [users, keyword, statusFilter]);
+
+  const [page, setPage] = useState(1);
+  // 부서 목록과 같은 규칙 — 필터·삭제로 페이지 수가 줄면 유효 범위로 당긴다.
+  const currentPage = clampPage(page, filteredUsers.length, PAGE_SIZE);
+  const pagedUsers = useMemo(
+    () => pageSlice(filteredUsers, currentPage, PAGE_SIZE),
+    [filteredUsers, currentPage],
+  );
 
   // 생성 폼: 비활성 부서는 배정 대상에서 제외한다. 수정 폼: 편집 중인 계정의 현재 부서는
   // 비활성이어도 목록에 남기고(라벨에 "(비활성)" 표시), 그 외 비활성 부서는 제외한다.
@@ -308,7 +318,7 @@ export default function UserListPage() {
             { key: "actions", label: "관리" },
           ]}
         >
-          {filteredUsers.map((user) => (
+          {pagedUsers.map((user) => (
             <TableRow key={user.id}>
               <TableCell className="font-medium text-ink-strong">{user.employeeNo}</TableCell>
               <TableCell>{user.name}</TableCell>
@@ -343,6 +353,8 @@ export default function UserListPage() {
           ))}
         </DataTable>
       </ListStateSurface>
+
+      <Pagination page={currentPage} totalCount={filteredUsers.length} onChange={setPage} />
 
       <Modal
         open={Boolean(editingUser)}

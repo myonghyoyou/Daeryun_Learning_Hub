@@ -13,6 +13,8 @@ import StatusBadge from "@/components/ui/StatusBadge.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
 import Modal from "@/components/ui/Modal.jsx";
 import ListStateSurface from "@/components/admin/ListStateSurface.jsx";
+import Pagination from "@/components/ui/Pagination.jsx";
+import { PAGE_SIZE, clampPage, pageSlice } from "@/utils/pagination.js";
 import ConfirmToggleModal from "@/components/admin/ConfirmToggleModal.jsx";
 
 const STATUS_FILTER_OPTIONS = [
@@ -67,6 +69,15 @@ export default function DepartmentListPage() {
   const filteredDepartments = useMemo(
     () => filterDepartments(departments, { keyword, status: statusFilter }),
     [departments, keyword, statusFilter],
+  );
+
+  const [page, setPage] = useState(1);
+  // 필터를 바꾸거나 항목을 지우면 결과 수가 달라져 현재 페이지가 범위를 벗어날 수 있다.
+  // 그대로 두면 빈 표가 보이므로 매 렌더마다 유효 범위로 당긴다.
+  const currentPage = clampPage(page, filteredDepartments.length, PAGE_SIZE);
+  const pagedDepartments = useMemo(
+    () => pageSlice(filteredDepartments, currentPage, PAGE_SIZE),
+    [filteredDepartments, currentPage],
   );
 
   function handleFieldChange(field) {
@@ -230,7 +241,7 @@ export default function DepartmentListPage() {
             { key: "actions", label: "관리" },
           ]}
         >
-          {filteredDepartments.map((department) => (
+          {pagedDepartments.map((department) => (
             <TableRow key={department.id}>
               <TableCell className="font-medium text-ink-strong">{department.name}</TableCell>
               <TableCell>{department.code}</TableCell>
@@ -256,6 +267,8 @@ export default function DepartmentListPage() {
           ))}
         </DataTable>
       </ListStateSurface>
+
+      <Pagination page={currentPage} totalCount={filteredDepartments.length} onChange={setPage} />
 
       <Modal
         open={Boolean(editingDepartment)}
