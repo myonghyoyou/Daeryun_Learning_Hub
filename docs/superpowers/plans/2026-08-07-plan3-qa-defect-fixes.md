@@ -76,13 +76,13 @@ problems   : 0건                                                   ← 검증 �
 
 **범위 결정: 필터 검증에 필요한 최소치만 만든다.** 653행 전체 투입은 하지 않는다 — 필터가 동작하는지 보는 데 필요한 것은 각 축(유형·상태·등록일·태그·키워드)에서 결과가 갈리는 데이터뿐이다.
 
-- [ ] **Step 1: 부서관리자 계정 확보**
+- [x] **Step 1: 부서관리자 계정 확보**
 
 `admin`으로 로그인해 `/admin/users`에서 부서관리자 2개를 만든다(부서 격리 검증용으로 서로 다른 부서). 임시 비밀번호는 MailHog(`http://localhost:8025`)에서 확인하고, 첫 로그인의 강제 변경까지 마쳐 둔다.
 
 > `admin`의 비밀번호를 모르면 부트스트랩 기본값(`changeme1234`)을 먼저 시도하고, 그것도 아니면 `docs/qa/2026-08-04-plan1-2-qa-checklist.md` §0.3.4의 SQL로 복구한다.
 
-- [ ] **Step 2: 필터가 갈리도록 문제 투입**
+- [x] **Step 2: 필터가 갈리도록 문제 투입**
 
 부서관리자 A로 로그인해 `/admin/problems/excel-upload`에 최소 데이터를 올린다. 필요한 최소 조건:
 
@@ -98,7 +98,7 @@ problems   : 0건                                                   ← 검증 �
 
 > 등록일 축(§4.8·§4.9)은 오늘 등록한 것만 있어도 검증된다 — 종료일에 오늘을 넣었을 때 포함되는지가 핵심이기 때문이다.
 
-- [ ] **Step 3: 만든 데이터를 Task 7이 참조할 수 있게 기록**
+- [x] **Step 3: 만든 데이터를 Task 7이 참조할 수 있게 기록**
 
 `docs/qa/2026-08-07-plan3-result.md`의 "준비한 QA 데이터" 절을 실제 값으로 갱신한다(계정 사번·비밀번호·부서·문제 건수·유형 분포). 다음 회차가 또 헛짚지 않게 하는 것이 목적이다.
 
@@ -117,7 +117,7 @@ problems   : 0건                                                   ← 검증 �
 
 **배경:** 기존 `ProblemServiceImplTest`는 `ProblemService.list(...)`를 `LocalDate` 객체로 **직접 호출**한다. Spring MVC의 문자열→`LocalDate` 변환 단계를 지나가지 않으므로 바인딩 실패가 드러날 수 없었다. 전례로 `backend/src/test/java/com/daeryun/probank/filter/UploadedImageAccessIntegrationTest.java`가 같은 방식(`@SpringBootTest` + `@AutoConfigureMockMvc`)으로 서블릿 체인을 통과시킨다 — 그 파일을 먼저 읽고 구조를 맞출 것.
 
-- [ ] **Step 1: 테스트 클래스 작성**
+- [x] **Step 1: 테스트 클래스 작성**
 
 `backend/src/test/java/com/daeryun/probank/controller/ProblemListQueryBindingTest.java`:
 
@@ -181,7 +181,7 @@ class ProblemListQueryBindingTest {
 }
 ```
 
-- [ ] **Step 2: 테스트를 실행해 첫 번째가 실패하는 것을 확인 (RED)**
+- [x] **Step 2: 테스트를 실행해 첫 번째가 실패하는 것을 확인 (RED)**
 
 Run: `cd backend && ./gradlew test --tests ProblemListQueryBindingTest`
 
@@ -196,7 +196,7 @@ MethodArgumentTypeMismatchException: Failed to convert value of type 'java.lang.
 
 > ⚠️ **두 번째 테스트까지 실패한다면 멈추고 보고할 것.** 그건 날짜 바인딩이 아니라 테스트 설정(세션·프로파일·DB) 문제이며, 이 Task의 전제가 틀렸다는 뜻이다.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/src/test/java/com/daeryun/probank/controller/ProblemListQueryBindingTest.java
@@ -218,7 +218,7 @@ git commit -m "test: pin problem list query parameter binding (currently failing
 
 **배경:** 이 프로젝트에서 `LocalDate` 타입 `@RequestParam`은 이 두 개가 전부이고 `@DateTimeFormat` 전례가 없다. 전역 설정(`spring.mvc.format.date: iso`)도 Spring Boot 2.7.3에서 가능하지만, 이 코드베이스는 일관되게 **명시적 지역 선언**을 택해 왔다(Plan 1 최종 리뷰에서 전역 Gradle 프로파일 스위치를 클래스별 `@ActiveProfiles`로 좁힌 전례, MyBatis 자동 매핑 대신 명시적 `resultMap`을 쓴 전례). 여기서도 명시적 방식을 쓴다.
 
-- [ ] **Step 1: import 추가**
+- [x] **Step 1: import 추가**
 
 `ProblemController.java` 상단의 import 블록에 두 줄을 추가한다. 기존 import는 그대로 둔다.
 
@@ -228,7 +228,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 ```
 
-- [ ] **Step 2: `list` 메서드의 날짜 파라미터 수정**
+- [x] **Step 2: `list` 메서드의 날짜 파라미터 수정**
 
 기존:
 
@@ -249,17 +249,17 @@ import java.time.LocalDate;
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo,
 ```
 
-- [ ] **Step 3: 테스트를 실행해 통과 확인 (GREEN)**
+- [x] **Step 3: 테스트를 실행해 통과 확인 (GREEN)**
 
 Run: `cd backend && ./gradlew test --tests ProblemListQueryBindingTest`
 Expected: **2개 모두 PASS**
 
-- [ ] **Step 4: 전체 스위트 실행**
+- [x] **Step 4: 전체 스위트 실행**
 
 Run: `cd backend && ./gradlew test`
 Expected: `BUILD SUCCESSFUL`. 테스트 수는 **189 + 2 = 191**, 실패 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/controller/ProblemController.java
@@ -298,7 +298,7 @@ if (json.resultCode !== 200) throw new ApiError(json.resultCode, json.resultMsg,
 
 > 🔧 **계획 정정:** 아래 Step 1의 원안은 `$.code`를 단언했으나 **틀렸다.** `ErrorResponse`의 빌더 인자 이름은 `code`/`message`/`data`지만 실제 필드는 `resultCode`/`resultMsg`/`errorList`이고(`ErrorResponse.java:14-16`), Jackson은 필드명으로 직렬화한다. `$.resultCode`를 봐야 한다.
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 `ProblemListQueryBindingTest.java`에 메서드를 추가한다.
 
@@ -315,12 +315,12 @@ if (json.resultCode !== 200) throw new ApiError(json.resultCode, json.resultMsg,
 
 > `ErrorResponse`의 JSON 필드는 `resultCode`/`resultMsg`/`errorList`다(빌더 인자 이름 `code`/`message`/`data`와 다르다 — `ErrorResponse.java:14-16` 확인). `status().isBadRequest()`를 함께 단언해 HTTP 상태 결정이 회귀하지 않게 고정한다.
 
-- [ ] **Step 2: 테스트를 실행해 실패 확인 (RED)**
+- [x] **Step 2: 테스트를 실행해 실패 확인 (RED)**
 
 Run: `cd backend && ./gradlew test --tests ProblemListQueryBindingTest`
 Expected: **`잘못된_날짜_형식은_입력값_오류로_안내한다`가 FAIL** — 현재는 catch-all에 걸려 HTTP 200 + `resultCode -1`(`MSG_PROC_FAIL`)이 나온다. 상태 단언에서 먼저 깨진다.
 
-- [ ] **Step 3: 전용 핸들러 추가**
+- [x] **Step 3: 전용 핸들러 추가**
 
 `GlobalExceptionHandler.java`의 import 블록에 추가:
 
@@ -350,17 +350,17 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 `ResponseEntity`로 감싸는 것이 400을 내는 방법이다. `@ResponseStatus`로도 되지만, 이 클래스는 `handleBizException`이 이미 `ResponseEntity`로 상태를 정하고 있어 그 쪽에 맞춘다.
 
-- [ ] **Step 4: 테스트를 실행해 통과 확인 (GREEN)**
+- [x] **Step 4: 테스트를 실행해 통과 확인 (GREEN)**
 
 Run: `cd backend && ./gradlew test --tests ProblemListQueryBindingTest`
 Expected: **3개 모두 PASS**
 
-- [ ] **Step 5: 전체 스위트 실행**
+- [x] **Step 5: 전체 스위트 실행**
 
 Run: `cd backend && ./gradlew test`
 Expected: `BUILD SUCCESSFUL`, 테스트 **192개**, 실패 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/exception/GlobalExceptionHandler.java backend/src/test/java/com/daeryun/probank/controller/ProblemListQueryBindingTest.java
@@ -384,7 +384,7 @@ git commit -m "fix: return input-value error for malformed request parameters"
 
 대안으로 `AuthUser`에 `departmentName`을 담는 방법이 있으나, `new AuthUser(...)` 호출이 **26곳(프로덕션 1 + 테스트 10개 파일)** 이고 로그인·비밀번호 변경(세션 회전) 두 곳 모두에서 채워야 하며 부서명 변경 시 세션이 만료될 때까지 옛 이름이 남는다. 지금 필요한 것은 Topbar 한 곳의 표기이므로 **세션 조회 시점에 읽는 방식**을 택한다. 세션 조회는 zustand 전역 스토어가 중복 호출을 막아 페이지 로드당 1회 수준이다.
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 `AuthServiceImplTest.java`에 추가한다. `import` 블록에 필요한 것을 더한다.
 
@@ -442,12 +442,12 @@ import com.daeryun.probank.domain.Department;
     }
 ```
 
-- [ ] **Step 2: 테스트를 실행해 실패 확인 (RED)**
+- [x] **Step 2: 테스트를 실행해 실패 확인 (RED)**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: **컴파일 실패** — `AuthServiceImpl` 생성자 인자 수가 맞지 않고 `SessionStatusResponse.getDepartmentName()`이 없다. 이것이 예상된 실패 형태다.
 
-- [ ] **Step 3: `SessionStatusResponse`에 필드 추가**
+- [x] **Step 3: `SessionStatusResponse`에 필드 추가**
 
 ```java
 @Data
@@ -472,7 +472,7 @@ public class SessionStatusResponse {
 
 > `notLoggedIn()`의 인자가 6개 → 7개로 는다. 빠뜨리면 컴파일되지 않으므로 자동으로 드러난다.
 
-- [ ] **Step 4: `AuthServiceImpl` 수정**
+- [x] **Step 4: `AuthServiceImpl` 수정**
 
 import 추가:
 
@@ -529,19 +529,19 @@ import com.daeryun.probank.domain.Department;
     }
 ```
 
-- [ ] **Step 5: 테스트를 실행해 통과 확인 (GREEN)**
+- [x] **Step 5: 테스트를 실행해 통과 확인 (GREEN)**
 
 Run: `cd backend && ./gradlew test --tests AuthServiceImplTest`
 Expected: 기존 테스트 전부 + 신규 2개 PASS
 
-- [ ] **Step 6: 전체 스위트 실행**
+- [x] **Step 6: 전체 스위트 실행**
 
 Run: `cd backend && ./gradlew test`
 Expected: `BUILD SUCCESSFUL`, **194개**, 실패 0.
 
 > 다른 테스트가 `new AuthServiceImpl(...)`을 호출한다면 여기서 컴파일 오류로 드러난다. 확인된 호출부는 `AuthServiceImplTest` 한 곳뿐이지만, 오류가 나면 같은 방식으로 `departmentDao` mock을 넣어 고칠 것.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/auth/SessionStatusResponse.java backend/src/main/java/com/daeryun/probank/service/AuthServiceImpl.java backend/src/test/java/com/daeryun/probank/service/AuthServiceImplTest.java
@@ -562,7 +562,7 @@ git commit -m "feat: include department name in session status response"
 
 **배경:** 현재 코드에는 Plan 2 작성자의 주석이 남아 있다 — *"부서 관리자용 부서명 표기는 Plan 3에서 부서 관리자 화면을 만들 때 함께 다룬다."* `부서 ${departmentId}번`은 의도된 임시 표기였고 Plan 3이 인계받았어야 할 항목이다. 주석도 함께 갱신한다.
 
-- [ ] **Step 1: 실패하는 테스트로 교체**
+- [x] **Step 1: 실패하는 테스트로 교체**
 
 `adminSession.test.js`의 기존 테스트를 아래로 **교체**한다(현재는 `"부서 5번"`을 기대하고 있어 그대로 두면 새 동작과 충돌한다).
 
@@ -601,12 +601,12 @@ test("departmentScopeLabel keeps 전체 부서 for SUPER_ADMIN even when a name 
 });
 ```
 
-- [ ] **Step 2: 테스트를 실행해 실패 확인 (RED)**
+- [x] **Step 2: 테스트를 실행해 실패 확인 (RED)**
 
 Run: `cd frontend && npm test`
 Expected: **`departmentScopeLabel shows the department name for a department admin`가 FAIL** — 현재 구현은 `"부서 862번"`을 반환한다.
 
-- [ ] **Step 3: 구현 수정**
+- [x] **Step 3: 구현 수정**
 
 `adminSession.js`의 `departmentScopeLabel`을 주석까지 함께 교체한다.
 
@@ -630,17 +630,17 @@ export function departmentScopeLabel(session) {
 }
 ```
 
-- [ ] **Step 4: 테스트를 실행해 통과 확인 (GREEN)**
+- [x] **Step 4: 테스트를 실행해 통과 확인 (GREEN)**
 
 Run: `cd frontend && npm test`
 Expected: 전부 PASS. 테스트 수는 **170 + 2 = 172**(기존 1개를 3개로 나눴으므로 순증 2).
 
-- [ ] **Step 5: 빌드 확인**
+- [x] **Step 5: 빌드 확인**
 
 Run: `cd frontend && npm run build`
 Expected: 성공
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/utils/adminSession.js frontend/src/utils/adminSession.test.js
@@ -660,7 +660,7 @@ git commit -m "fix: show department name instead of id in admin topbar"
 
 **배경:** `grep`으로 `Plan [0-9]`를 훑으면 12곳이 나오지만 **11곳은 코드 주석이라 사용자에게 보이지 않는다**(개발자용 설명이므로 그대로 둔다). 화면에 렌더링되는 것은 이 한 곳뿐이다. `ProblemExcelUploadPage.jsx`의 "Plan 3에서 …"도 검색에 걸리지만 `{/* … */}` JSX 주석 안이라 렌더링되지 않는다 — **건드리지 말 것.**
 
-- [ ] **Step 1: 문구 교체**
+- [x] **Step 1: 문구 교체**
 
 `ProblemFormPage.jsx`에서 아래 문단을 찾는다(빈칸 후보 라벨 바로 아래, `text-body-small text-ink-muted` 클래스를 가진 `<p>`).
 
@@ -686,7 +686,7 @@ git commit -m "fix: show department name instead of id in admin topbar"
 
 > 바뀐 핵심은 **일정 정보("Plan 4에서 정합니다")를 빼고 사용자가 알아야 할 동작만 남긴 것**이다. `<code>` 부분과 클래스는 그대로 둔다.
 
-- [ ] **Step 2: 화면에 내부 용어가 남아 있지 않은지 확인**
+- [x] **Step 2: 화면에 내부 용어가 남아 있지 않은지 확인**
 
 Run:
 
@@ -696,12 +696,12 @@ cd frontend && grep -rn 'Plan [0-9]' src --include=*.jsx | grep -v '^\s*\*' | gr
 
 Expected: **결과 없음.** 결과가 나온다면 그것도 렌더링되는 텍스트인지 확인한다(주석이면 무시).
 
-- [ ] **Step 3: 테스트·빌드 확인**
+- [x] **Step 3: 테스트·빌드 확인**
 
 Run: `cd frontend && npm test && npm run build`
 Expected: 테스트 172개 PASS, 빌드 성공
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/pages/admin/problems/ProblemFormPage.jsx
@@ -721,7 +721,7 @@ git commit -m "fix: remove internal planning jargon from fill-blank guidance"
 
 **배경:** D1 때문에 §4의 필터 조합 검증(4.3~4.5, 4.10, 4.11)을 중단했고, **§4.9(등록일 종료일 포함)는 검증 자체가 불가능했다.** 서버 SQL은 `created_at < createdTo + INTERVAL '1 day'`로 되어 있어 논리상 종료일이 포함되지만 실제로 확인된 적이 없다. 수정만 하고 재검증하지 않으면 그 상태가 그대로 남는다.
 
-- [ ] **Step 1: 환경 기동**
+- [x] **Step 1: 환경 기동**
 
 ```bash
 docker compose up -d
@@ -737,7 +737,7 @@ cd backend && MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_SMTP_
 
 > 🔧 **계획 정정 (2026-08-09):** 원안은 *"QA 계정은 DB에 남아 있다: `admin`/`dev_admin`/`sales_admin`/`emp001`, 비밀번호 모두 `QaPlan3!2026`"* 이라고 적었으나 **실제 DB에는 그 계정들이 없고 문제도 0건이다.** 신설된 **Task 0**에서 만든 계정·데이터를 쓴다. Task 0을 건너뛰면 §4 재검증이 불가능하다.
 
-- [ ] **Step 2: D1 재검증 — 등록일 필터**
+- [x] **Step 2: D1 재검증 — 등록일 필터**
 
 `dev_admin`으로 로그인해 `/admin/problems` → "상세 필터"에서 아래를 확인한다.
 
@@ -748,7 +748,7 @@ cd backend && MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_SMTP_
 | — | 시작·종료를 모두 비우고 조회 | 전체 목록 |
 | — | 잘못된 값(예: 브라우저가 허용하면 `2026-13-99`)을 API로 직접 호출 | `resultCode 1000`과 형식 안내 메시지 |
 
-- [ ] **Step 3: §4 나머지 필터 조합 재검증**
+- [x] **Step 3: §4 나머지 필터 조합 재검증**
 
 | # | 절차 | 기대 |
 |---|---|---|
@@ -757,7 +757,7 @@ cd backend && MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_SMTP_
 | 4.10 | 유형 + 상태 + 키워드 동시 | AND 조건 |
 | 4.11 | 초기화 버튼 | 모든 입력이 비워지고 전체 목록 |
 
-- [ ] **Step 4: D2 재검증 — Topbar 부서 표기**
+- [x] **Step 4: D2 재검증 — Topbar 부서 표기**
 
 `dev_admin`(개발팀)으로 로그인해 관리자 화면 우상단을 확인한다.
 
@@ -765,13 +765,13 @@ cd backend && MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_SMTP_
 
 `admin`으로도 확인한다. 기대: `총괄 관리자 · 전체 부서` (변화 없음)
 
-- [ ] **Step 5: D3 재검증 — 빈칸 안내 문구**
+- [x] **Step 5: D3 재검증 — 빈칸 안내 문구**
 
 `/admin/problems/new` → 문제 유형을 "빈칸 채우기"로 변경 → 빈칸 후보 영역의 안내 문구를 확인한다.
 
 기대: **"Plan"이라는 단어가 없다.** 등록한 후보 중 지정 개수만큼 노출된다는 설명만 있다.
 
-- [ ] **Step 6: 결과를 QA 문서에 반영**
+- [x] **Step 6: 결과를 QA 문서에 반영**
 
 `docs/qa/2026-08-07-plan3-result.md` 하단에 `## 수정 후 재검증 (<실행일>)` 섹션을 추가한다(실행일은 `date +%Y-%m-%d` 결과를 쓴다). 담을 내용:
 
@@ -781,7 +781,7 @@ cd backend && MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_SMTP_
 
 기존 §4 항목의 판정도 갱신한다 — 결과 요약 표의 "실패 3"과 §4.8·§4.9의 "실패 → D1" 표기가 낡은 값이 된다.
 
-- [ ] **Step 7: 환경 정리**
+- [x] **Step 7: 환경 정리**
 
 백엔드·프론트를 중지한다. **gradle 래퍼를 끊어도 JVM이 남으므로 포트 점유를 반드시 확인할 것** — 남아 있으면 다음 기동이 조용히 실패한다.
 
@@ -801,7 +801,7 @@ foreach ($port in 8080,5173) {
 
 MailHog는 남겨 두어도 무방하다(`docker rm -f probank-mailhog`로 정리 가능).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs/qa/2026-08-07-plan3-result.md
@@ -825,9 +825,9 @@ git commit -m "docs: record Plan 3 defect fix verification"
 
 ## 완료 기준
 
-- [ ] 백엔드 테스트 **194개** 통과, 실패 0
-- [ ] 프론트엔드 테스트 **172개** 통과, 실패 0
-- [ ] `npm run build` 성공
-- [ ] Task 7의 재검증에서 D1·D2·D3이 모두 해소됨을 브라우저로 확인
-- [ ] **§4.9(등록일 종료일 포함)가 처음으로 검증됨**
-- [ ] QA 결과 문서에 재검증 기록이 남음
+- [x] 백엔드 테스트 **194개** 통과, 실패 0
+- [x] 프론트엔드 테스트 **172개** 통과, 실패 0
+- [x] `npm run build` 성공
+- [x] Task 7의 재검증에서 D1·D2·D3이 모두 해소됨을 브라우저로 확인
+- [x] **§4.9(등록일 종료일 포함)가 처음으로 검증됨**
+- [x] QA 결과 문서에 재검증 기록이 남음
