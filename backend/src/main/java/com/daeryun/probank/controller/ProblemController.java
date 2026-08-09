@@ -83,7 +83,8 @@ public class ProblemController {
 
     @PostMapping("/excel-upload")
     public ResponseEntity<ResponseDto<?>> uploadExcel(@RequestParam("file") MultipartFile file,
+                                                        @RequestParam(required = false) Long departmentId,
                                                         @LoginUser AuthUser actor) {
-        return ResponseEntity.ok(ResponseDto.ok(excelProblemUploadService.upload(file, actor)));
+        return ResponseEntity.ok(ResponseDto.ok(excelProblemUploadService.upload(file, departmentId, actor)));
     }
 }

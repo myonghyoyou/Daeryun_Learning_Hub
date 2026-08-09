@@ -3,12 +3,14 @@ package com.daeryun.probank.service;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.dao.ExcelUploadLogDao;
 import com.daeryun.probank.domain.UserRole;
+import com.daeryun.probank.domain.Problem;
 import com.daeryun.probank.dto.upload.ExcelUploadResult;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -31,6 +33,7 @@ class ExcelProblemUploadServiceImplTest {
     private AuditLogService auditLogService;
     private ExcelProblemUploadServiceImpl service;
     private final AuthUser actor = new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false);
+    private final AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
 
     @BeforeEach
     void setUp() {
@@ -55,6 +58,44 @@ class ExcelProblemUploadServiceImplTest {
         }
     }
 
+    /**
+     * 총괄 관리자는 자기 부서가 아닌 부서 명의로 올릴 수 있어야 한다. 초기 문제은행 적재처럼
+     * 한 사람이 여러 팀 파일을 넣는 상황이 실제로 있다.
+     */
+    @Test
+    void superAdminUploadsIntoTheRequestedDepartment() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+        });
+
+        service.upload(file, 77L, superAdmin);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemProvisioningService)
+                .provisionWithChoices(captor.capture(), Mockito.anyList(), Mockito.anyList());
+        assertEquals(77L, captor.getValue().getDepartmentId().longValue());
+    }
+
+    /**
+     * 화면의 disabled 는 실수 방지일 뿐 보안이 아니다. 부서 관리자가 요청 파라미터를 위조해도
+     * 서버가 값을 버리고 본인 부서로 강제해야 한다 — 이 테스트는 그 규칙의 회귀 방지 장치다.
+     */
+    @Test
+    void deptAdminRequestedDepartmentIsIgnored() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+        });
+
+        service.upload(file, 999L, actor);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemProvisioningService)
+                .provisionWithChoices(captor.capture(), Mockito.anyList(), Mockito.anyList());
+        assertEquals(10L, captor.getValue().getDepartmentId().longValue(), "부서 관리자는 본인 부서로 강제된다");
+    }
+
     @Test
     void upload_mcqSingleRow_succeeds() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
@@ -62,7 +103,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(1, result.getSuccessRows());
         assertEquals(0, result.getFailRows());
@@ -77,7 +118,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,Seoul", ""},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(1, result.getSuccessRows());
         Mockito.verify(problemProvisioningService).provisionWithAnswers(Mockito.any(), Mockito.anyList(),
@@ -91,7 +132,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"FILL_BLANK", "{{blank_1}}은 수도이다.", "", "", "", "", "", "", "", "", ""},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(0, result.getSuccessRows());
         assertEquals(1, result.getFailRows());
@@ -105,7 +146,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "", "", "", "5", ""},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(0, result.getSuccessRows());
         assertEquals(1, result.getFailRows());
@@ -126,7 +167,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"MCQ_SINGLE", "1+1=?", "", "", "A", "", "C", "", "", "2", ""},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(0, result.getSuccessRows());
         assertEquals(1, result.getFailRows());
@@ -148,7 +189,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,,Seoul", ""},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(0, result.getSuccessRows());
         assertEquals(1, result.getFailRows());
@@ -174,7 +215,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(2, result.getTotalRows());
         assertEquals(1, result.getSuccessRows());
@@ -202,7 +243,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(2, result.getTotalRows());
         assertEquals(1, result.getSuccessRows());
@@ -223,7 +264,7 @@ class ExcelProblemUploadServiceImplTest {
                 {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
         });
 
-        ExcelUploadResult result = service.upload(file, actor);
+        ExcelUploadResult result = service.upload(file, null, actor);
 
         assertEquals(1, result.getSuccessRows());
         assertEquals(0, result.getFailRows());

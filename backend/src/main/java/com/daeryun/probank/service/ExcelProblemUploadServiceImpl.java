@@ -10,6 +10,7 @@ import com.daeryun.probank.domain.ProblemStatus;
 import com.daeryun.probank.domain.ProblemType;
 import com.daeryun.probank.domain.ExcelUploadLog;
 import com.daeryun.probank.domain.UploadTargetType;
+import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.upload.ExcelUploadResult;
 import com.daeryun.probank.dto.upload.RowResult;
 import com.daeryun.probank.exception.BizException;
@@ -86,11 +87,12 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     }
 
     @Override
-    public ExcelUploadResult upload(MultipartFile file, AuthUser actor) {
+    public ExcelUploadResult upload(MultipartFile file, Long departmentId, AuthUser actor) {
         if (file == null || file.isEmpty()) {
             throw new BizException(ErrorCode.FILE_REQUIRED);
         }
         validateExtension(file.getOriginalFilename());
+        Long effectiveDepartmentId = resolveDepartmentId(departmentId, actor);
 
         List<RowResult> results = new ArrayList<>();
         DataFormatter dataFormatter = new DataFormatter();
@@ -108,7 +110,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
                 if (row == null) {
                     continue;
                 }
-                results.add(processRow(row, rowIndex + 1, actor, dataFormatter));
+                results.add(processRow(row, rowIndex + 1, effectiveDepartmentId, actor, dataFormatter));
             }
         } catch (IOException e) {
             // try-with-resources 의 close() 만 남은 경로. 여는 실패는 openWorkbook 이 이미 변환한다.
@@ -124,9 +126,10 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
 
         ExcelUploadLog log = new ExcelUploadLog();
         log.setUploadedBy(actor.getUserId());
-        // 문제는 업로드한 관리자의 부서에 귀속된다. 엑셀 셀이나 요청 파라미터에는 부서를 지정할 컬럼이
-        // 없고, 오직 세션의 AuthUser(actor)에서만 가져온다 — 부서 격리를 서버가 강제한다.
-        log.setDepartmentId(actor.getDepartmentId());
+        // 귀속 부서는 총괄 관리자가 지정할 수 있다(부서 관리자는 본인 부서로 강제된다). 문제 행과 이
+        // 이력이 같은 값을 써야 excel_upload_logs 와 실제 귀속이 어긋나지 않는다 — QA §8.22 가 그것을
+        // 검사한다.
+        log.setDepartmentId(effectiveDepartmentId);
         log.setTargetType(UploadTargetType.PROBLEM);
         log.setFileName(file.getOriginalFilename());
         log.setTotalRows(results.size());
@@ -171,7 +174,20 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         }
     }
 
-    private RowResult processRow(Row row, int rowNumber, AuthUser actor, DataFormatter dataFormatter) {
+    /**
+     * 귀속 부서를 정한다. ProblemServiceImpl.list 와 같은 규칙이다 — 총괄 관리자만 요청값을 쓰고,
+     * 부서 관리자는 요청값을 무시하고 본인 부서로 강제된다. 화면의 disabled 는 실수 방지일 뿐이므로
+     * 파라미터 위조는 여기서 막는다.
+     */
+    private Long resolveDepartmentId(Long requested, AuthUser actor) {
+        if (actor.getRole() != UserRole.SUPER_ADMIN) {
+            return actor.getDepartmentId();
+        }
+        return requested;
+    }
+
+    private RowResult processRow(Row row, int rowNumber, Long departmentId, AuthUser actor,
+                                  DataFormatter dataFormatter) {
         String typeText = cellValue(row, COL_TYPE, dataFormatter);
         String content = cellValue(row, COL_CONTENT, dataFormatter);
 
@@ -217,7 +233,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         problem.setReferenceText(emptyToNull(cellValue(row, COL_REFERENCE, dataFormatter)));
         problem.setExplanation(emptyToNull(cellValue(row, COL_EXPLANATION, dataFormatter)));
         problem.setStatus(ProblemStatus.ACTIVE);
-        problem.setDepartmentId(actor.getDepartmentId());
+        problem.setDepartmentId(departmentId);
         problem.setCreatedBy(actor.getUserId());
 
         if (type == ProblemType.SHORT_ANSWER) {
