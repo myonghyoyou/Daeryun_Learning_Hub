@@ -163,6 +163,26 @@ class ExcelProblemUploadServiceImplTest {
         Mockito.verifyNoInteractions(problemProvisioningService);
     }
 
+    /**
+     * 이 기능은 PRD 의 "출제 부서 = 등록한 관리자의 소속 부서" 등식을 깬다. created_by 와
+     * department_id 가 갈라지므로 "누가 어느 부서 명의로 올렸는지"가 감사 로그에 남아야 추적된다.
+     */
+    @Test
+    void auditDetailCarriesTheOwningDepartment() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+        });
+
+        service.upload(file, 77L, superAdmin);
+
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(auditLogService).record(Mockito.eq(2L), Mockito.eq("PROBLEM_EXCEL_UPLOADED"),
+                Mockito.eq("EXCEL_UPLOAD_LOG"), Mockito.any(), detail.capture());
+        assertTrue(detail.getValue().contains("\"departmentId\":77"),
+                "귀속 부서가 감사 로그에 남아야 한다: " + detail.getValue());
+    }
+
     @Test
     void upload_mcqSingleRow_succeeds() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{

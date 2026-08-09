@@ -146,7 +146,8 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
 
         auditLogService.record(actor.getUserId(), "PROBLEM_EXCEL_UPLOADED", "EXCEL_UPLOAD_LOG", log.getId(),
                 "{\"fileName\":\"" + escapeJson(log.getFileName()) + "\",\"totalRows\":" + log.getTotalRows()
-                        + ",\"successRows\":" + log.getSuccessRows() + ",\"failRows\":" + log.getFailRows() + "}");
+                        + ",\"successRows\":" + log.getSuccessRows() + ",\"failRows\":" + log.getFailRows()
+                        + ",\"departmentId\":" + log.getDepartmentId() + "}");
 
         return new ExcelUploadResult(results.size(), successRows, failRows, log.getErrorDetail());
     }
