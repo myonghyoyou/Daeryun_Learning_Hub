@@ -2,7 +2,9 @@ package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.SessionKeys;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.UserDao;
+import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.User;
 import com.daeryun.probank.domain.UserRole;
@@ -28,14 +30,23 @@ import static org.junit.jupiter.api.Assertions.*;
 class AuthServiceImplTest {
 
     private UserDao userDao;
+    private DepartmentDao departmentDao;
     private PasswordEncoder passwordEncoder;
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
         userDao = Mockito.mock(UserDao.class);
+        departmentDao = Mockito.mock(DepartmentDao.class);
         passwordEncoder = new BCryptPasswordEncoder();
-        authService = new AuthServiceImpl(userDao, passwordEncoder, 5, 15);
+        authService = new AuthServiceImpl(userDao, departmentDao, passwordEncoder, 5, 15);
+    }
+
+    private Department department(Long id, String name) {
+        Department department = new Department();
+        department.setId(id);
+        department.setName(name);
+        return department;
     }
 
     private User activeUser(String rawPassword) {
@@ -263,6 +274,49 @@ class AuthServiceImplTest {
         assertEquals(UserRole.DEPT_ADMIN, status.getRole());
         assertEquals(77L, status.getDepartmentId().longValue());
         assertTrue(status.isMustChangePassword());
+    }
+
+    /**
+     * QA D2: Topbar 가 "부서 862번"처럼 내부 DB ID 를 노출했다. 부서 목록 API 는 SUPER_ADMIN
+     * 전용이라 프런트엔드가 id → 이름 변환을 할 수 없으므로 세션 응답이 이름을 실어야 한다.
+     * <p>
+     * fixture 가 DEPT_ADMIN 인 것이 중요하다. SUPER_ADMIN 은 화면에서 "전체 부서"로 조기
+     * 반환되어 이 결함이 드러나지 않는다 — 실제로 그래서 지금까지 발견되지 않았다.
+     */
+    @Test
+    void getSessionStatus_deptAdmin_carriesDepartmentName() {
+        User user = activeUser("correct-password");
+        user.setEmployeeNo("3003");
+        user.setRole(UserRole.DEPT_ADMIN);
+        user.setDepartmentId(862L);
+        Mockito.when(userDao.findByEmployeeNo("3003")).thenReturn(user);
+        Mockito.when(departmentDao.findById(862L)).thenReturn(department(862L, "개발팀"));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("3003");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        SessionStatusResponse status = authService.getSessionStatus(request);
+
+        assertEquals("개발팀", status.getDepartmentName());
+    }
+
+    @Test
+    void getSessionStatus_unknownDepartment_leavesNameNullInsteadOfFailing() {
+        User user = activeUser("correct-password");
+        Mockito.when(userDao.findByEmployeeNo("1001")).thenReturn(user);
+        Mockito.when(departmentDao.findById(10L)).thenReturn(null);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setEmployeeNo("1001");
+        loginRequest.setPassword("correct-password");
+        authService.login(loginRequest, request);
+
+        SessionStatusResponse status = authService.getSessionStatus(request);
+
+        assertTrue(status.isLoggedIn());
+        assertNull(status.getDepartmentName());
     }
 
     @Test

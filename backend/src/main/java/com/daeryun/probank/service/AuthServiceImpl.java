@@ -3,7 +3,9 @@ package com.daeryun.probank.service;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.common.SessionKeys;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.UserDao;
+import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.User;
 import com.daeryun.probank.dto.auth.LoginRequest;
@@ -24,16 +26,19 @@ public class AuthServiceImpl implements AuthService {
     private static final int MIN_PASSWORD_LENGTH = 8;
 
     private final UserDao userDao;
+    private final DepartmentDao departmentDao;
     private final PasswordEncoder passwordEncoder;
     private final int maxFailedAttempts;
     private final int lockoutMinutes;
 
     public AuthServiceImpl(
             UserDao userDao,
+            DepartmentDao departmentDao,
             PasswordEncoder passwordEncoder,
             @Value("${app.auth.max-failed-attempts:5}") int maxFailedAttempts,
             @Value("${app.auth.lockout-minutes:15}") int lockoutMinutes) {
         this.userDao = userDao;
+        this.departmentDao = departmentDao;
         this.passwordEncoder = passwordEncoder;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutMinutes = lockoutMinutes;
@@ -83,9 +88,16 @@ public class AuthServiceImpl implements AuthService {
         if (authUser == null) {
             return SessionStatusResponse.notLoggedIn();
         }
+        // 세션에는 departmentId 만 들어 있다. 부서명을 세션에 캐시하지 않고 매번 조회하는 이유는
+        // 부서명이 바뀌어도 항상 최신값이 나가야 하기 때문이다. 프런트엔드가 전역 세션 스토어로
+        // 중복 호출을 막고 있어 실질 비용은 페이지 로드당 1회다.
+        Department department = authUser.getDepartmentId() == null
+                ? null
+                : departmentDao.findById(authUser.getDepartmentId());
         return new SessionStatusResponse(
                 true, authUser.getEmployeeNo(), authUser.getName(), authUser.getRole(),
-                authUser.getDepartmentId(), authUser.isMustChangePassword());
+                authUser.getDepartmentId(), department == null ? null : department.getName(),
+                authUser.isMustChangePassword());
     }
 
     @Override

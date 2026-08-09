@@ -9,16 +9,20 @@ export function roleLabel(role) {
 
 /**
  * 관리자 Topbar의 부서 범위 표기.
- * 세션에는 departmentId만 있고 부서 이름이 없다(useSessionStatus 참고). 이 Plan의
- * 관리자 화면은 SUPER_ADMIN 전용이므로, 총괄 관리자는 Topbar 라벨을 위해 별도
- * 부서 API를 호출하지 않고 "전체 부서"로 고정 표시한다. 부서 관리자용 부서명
- * 표기는 Plan 3에서 부서 관리자 화면을 만들 때 함께 다룬다.
+ * 총괄 관리자는 특정 부서에 매이지 않으므로 "전체 부서"로 고정한다.
+ *
+ * 그 외 역할은 세션 응답의 departmentName을 쓴다. 부서 목록 API는 SUPER_ADMIN
+ * 전용이라 프런트엔드가 id → 이름 변환을 할 수 없어, 백엔드가 세션 응답에 이름을
+ * 실어 보낸다(AuthServiceImpl.getSessionStatus 참고).
+ *
+ * 이름이 없을 때 id로 돌아가지 않는 것이 의도다. `부서 862번` 같은 내부 식별자를
+ * 보여 주는 것은 사용자에게 아무 의미가 없고, 그것이 QA D2로 보고된 결함이었다.
  */
 export function departmentScopeLabel(session) {
   if (session?.role === "SUPER_ADMIN") {
     return "전체 부서";
   }
-  return session?.departmentId ? `부서 ${session.departmentId}번` : "-";
+  return session?.departmentName ?? "-";
 }
 
 const SESSION_STATUS_META = {
