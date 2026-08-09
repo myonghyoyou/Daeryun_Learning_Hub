@@ -1,11 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { Upload } from "@phosphor-icons/react";
 import { uploadProblemsExcel } from "@/api/problems.js";
+import { listDepartments } from "@/api/departments.js";
+import { useSessionStatus } from "@/hooks/useSessionStatus.js";
+import { buildUploadDepartmentField } from "@/utils/uploadDepartmentField.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { parseExcelErrorDetail } from "@/utils/excelUploadResult.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
+import Select from "@/components/ui/Select.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
 
 const TEMPLATE_COLUMNS = [
@@ -42,6 +46,32 @@ export default function ProblemExcelUploadPage() {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const { session } = useSessionStatus();
+  const [departments, setDepartments] = useState([]);
+  const [departmentId, setDepartmentId] = useState("");
+
+  // 부서 목록 API 는 총괄 관리자 전용이다. 부서 관리자가 호출하면 403 이 콘솔에 찍히므로
+  // 역할을 보고 호출 자체를 하지 않는다.
+  useEffect(() => {
+    if (session?.role !== "SUPER_ADMIN") {
+      return;
+    }
+    listDepartments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]));
+  }, [session?.role]);
+
+  const departmentField = useMemo(
+    () => buildUploadDepartmentField({ session, departments }),
+    [session, departments],
+  );
+
+  // 부서 관리자는 값이 세션에서 고정된다. 총괄 관리자는 빈 값에서 시작해 직접 고른다.
+  useEffect(() => {
+    if (departmentField.disabled) {
+      setDepartmentId(departmentField.value);
+    }
+  }, [departmentField.disabled, departmentField.value]);
 
   function handleChooseFile() {
     fileInputRef.current?.click();
@@ -59,10 +89,14 @@ export default function ProblemExcelUploadPage() {
       toast.error("업로드할 엑셀 파일을 선택하세요.");
       return;
     }
+    if (!departmentId) {
+      toast.error("업로드할 문제가 귀속될 부서를 선택하세요.");
+      return;
+    }
     setUploading(true);
     setResult(null);
     try {
-      const uploadResult = await uploadProblemsExcel(file);
+      const uploadResult = await uploadProblemsExcel(file, departmentId);
       setResult(uploadResult);
       toast.success(`업로드 완료: 성공 ${uploadResult.successRows}건 / 실패 ${uploadResult.failRows}건`);
     } catch (error) {
@@ -122,6 +156,23 @@ export default function ProblemExcelUploadPage() {
         <p className="mt-1 text-body-small text-ink-muted">
           xlsx 또는 xls 파일만 업로드할 수 있으며, 한 번에 최대 500행까지 처리됩니다.
         </p>
+
+        {/* 귀속 부서. 총괄 관리자만 고를 수 있고 부서 관리자는 자기 부서로 고정된다 — 다만
+            이 disabled 는 실수 방지용이고 권한 판정은 서버가 한다. */}
+        <div className="mt-4">
+          <Select
+            id="problem-excel-department"
+            label="귀속 부서"
+            required
+            value={departmentId}
+            disabled={departmentField.disabled || uploading}
+            options={departmentField.options}
+            onChange={(event) => setDepartmentId(event.target.value)}
+            className="w-72"
+          />
+          <p className="mt-1 text-body-small text-ink-muted">{departmentField.helpText}</p>
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
             ref={fileInputRef}

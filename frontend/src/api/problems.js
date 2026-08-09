@@ -33,8 +33,10 @@ export function uploadProblemImage(file) {
   return apiPostForm("/api/admin/problems/images", formData);
 }
 
-export function uploadProblemsExcel(file) {
+export function uploadProblemsExcel(file, departmentId) {
   const formData = new FormData();
   formData.append("file", file);
-  return apiPostForm("/api/admin/problems/excel-upload", formData);
+  // 컨트롤러가 @RequestParam 으로 받으므로 쿼리스트링으로 보낸다.
+  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
+  return apiPostForm(`/api/admin/problems/excel-upload${query}`, formData);
 }
