@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Plus, Trash } from "@phosphor-icons/react";
-import { createProblem, getProblem, updateProblem, uploadProblemImage } from "@/api/problems.js";
+import {
+  changeProblemDepartment,
+  createProblem,
+  getProblem,
+  updateProblem,
+  uploadProblemImage,
+} from "@/api/problems.js";
+import { listDepartments } from "@/api/departments.js";
+import { useSessionStatus } from "@/hooks/useSessionStatus.js";
+import { buildUploadDepartmentField } from "@/utils/uploadDepartmentField.js";
 import { ApiError, resolveErrorMessage } from "@/api/client.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
 import { MAX_CHOICES, MIN_CHOICES, createChoice, setChoiceCorrect } from "@/utils/problemChoices.js";
@@ -70,6 +79,11 @@ export default function ProblemFormPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
+  const { session } = useSessionStatus();
+  const [departments, setDepartments] = useState([]);
+  const [moveDepartmentId, setMoveDepartmentId] = useState("");
+  const [moving, setMoving] = useState(false);
+  const canMoveDepartment = Boolean(id) && session?.role === "SUPER_ADMIN";
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -328,6 +342,32 @@ export default function ProblemFormPage() {
   }
 
   const isMcqOrOx = type === "MCQ_SINGLE" || type === "MCQ_MULTI" || type === "OX";
+
+  // 부서 목록 API 는 총괄 관리자 전용이고, 옮길 문제가 있어야 의미가 있으므로 수정 모드에서만 받는다.
+  useEffect(() => {
+    if (!canMoveDepartment) {
+      return;
+    }
+    listDepartments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]));
+  }, [canMoveDepartment]);
+
+  async function handleMoveDepartment() {
+    if (!moveDepartmentId) {
+      toast.error("옮길 부서를 선택하세요.");
+      return;
+    }
+    setMoving(true);
+    try {
+      await changeProblemDepartment(id, moveDepartmentId);
+      toast.success("문제의 귀속 부서를 변경했습니다.");
+    } catch (error) {
+      toast.error(resolveErrorMessage(error, "부서를 변경하지 못했습니다."));
+    } finally {
+      setMoving(false);
+    }
+  }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-6">
@@ -642,6 +682,30 @@ export default function ProblemFormPage() {
           </Surface>
         </div>
       </div>
+
+      {/* 귀속 부서 이동. 저장(PUT)과 다른 API(PATCH)라 버튼을 분리한다 — 한 버튼으로 묶으면
+          한쪽만 성공하는 부분 실패가 생긴다. 총괄 관리자에게만 보인다. */}
+      {canMoveDepartment && (
+        <Surface className="p-5">
+          <p className="text-body font-semibold text-ink-strong">귀속 부서 이동</p>
+          <p className="mt-1 text-body-small text-ink-muted">
+            이 문제를 다른 부서 소유로 옮깁니다. 위 저장과 별개로 즉시 적용됩니다.
+          </p>
+          <div className="mt-3 flex items-end gap-3">
+            <Select
+              id="problem-move-department"
+              label="옮길 부서"
+              value={moveDepartmentId}
+              options={buildUploadDepartmentField({ session, departments }).options}
+              onChange={(event) => setMoveDepartmentId(event.target.value)}
+              className="w-64"
+            />
+            <Button type="button" variant="secondary" loading={moving} onClick={handleMoveDepartment}>
+              부서 이동
+            </Button>
+          </div>
+        </Surface>
+      )}
     </form>
   );
 }

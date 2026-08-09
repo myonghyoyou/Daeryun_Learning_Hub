@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPostForm, apiPut, apiDelete } from "@/api/client.js";
+import { apiGet, apiPost, apiPostForm, apiPut, apiPatch, apiDelete } from "@/api/client.js";
 
 export function listProblems(params = {}) {
   const query = new URLSearchParams(
@@ -21,6 +21,10 @@ export function createProblem(payload) {
 
 export function updateProblem(id, payload) {
   return apiPut(`/api/admin/problems/${id}`, payload);
+}
+
+export function changeProblemDepartment(id, departmentId) {
+  return apiPatch(`/api/admin/problems/${id}/department`, { departmentId: Number(departmentId) });
 }
 
 export function archiveProblem(id) {
