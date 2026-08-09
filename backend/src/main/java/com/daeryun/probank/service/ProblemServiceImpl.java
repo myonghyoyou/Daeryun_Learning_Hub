@@ -2,6 +2,7 @@ package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.ProblemAnswerDao;
 import com.daeryun.probank.dao.ProblemBlankDao;
 import com.daeryun.probank.dao.ProblemChoiceDao;
@@ -53,10 +54,12 @@ public class ProblemServiceImpl implements ProblemService {
     private final TagDao tagDao;
     private final ProblemTagDao problemTagDao;
     private final AuditLogService auditLogService;
+    private final DepartmentDao departmentDao;
 
     public ProblemServiceImpl(ProblemDao problemDao, ProblemChoiceDao problemChoiceDao,
                                ProblemAnswerDao problemAnswerDao, ProblemBlankDao problemBlankDao,
-                               TagDao tagDao, ProblemTagDao problemTagDao, AuditLogService auditLogService) {
+                               TagDao tagDao, ProblemTagDao problemTagDao, AuditLogService auditLogService,
+                               DepartmentDao departmentDao) {
         this.problemDao = problemDao;
         this.problemChoiceDao = problemChoiceDao;
         this.problemAnswerDao = problemAnswerDao;
@@ -64,6 +67,7 @@ public class ProblemServiceImpl implements ProblemService {
         this.tagDao = tagDao;
         this.problemTagDao = problemTagDao;
         this.auditLogService = auditLogService;
+        this.departmentDao = departmentDao;
     }
 
     @Override
@@ -385,5 +389,36 @@ public class ProblemServiceImpl implements ProblemService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    /**
+     * 문제의 귀속 부서를 옮긴다. 엑셀 업로드에서 부서를 잘못 골랐을 때 화면으로 되돌릴 수 있는
+     * 유일한 경로다. 일반 수정(update)과 분리한 이유는 ProblemCreateRequest 에 departmentId 를
+     * 넣지 않기 위해서다 — 그 DTO 에 필드가 생기면 등록 경로에도 위조 표면이 다시 열린다.
+     * 컨트롤러에서 총괄 관리자로 제한하므로 여기서는 부서 유효성만 본다.
+     */
+    @Override
+    @Transactional
+    public void changeDepartment(Long id, Long departmentId, AuthUser actor) {
+        Problem existing = problemDao.findById(id);
+        if (existing == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 문제입니다.");
+        }
+        if (departmentId == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "옮길 부서를 선택하세요.");
+        }
+        Department department = departmentDao.findById(departmentId);
+        if (department == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 부서입니다.");
+        }
+        if (department.getStatus() != Status.ACTIVE) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "비활성 부서로는 옮길 수 없습니다: " + department.getName());
+        }
+
+        Long from = existing.getDepartmentId();
+        problemDao.updateDepartment(id, departmentId);
+        auditLogService.record(actor.getUserId(), "PROBLEM_DEPARTMENT_CHANGED", "PROBLEM", id,
+                "{\"from\":" + from + ",\"to\":" + departmentId + "}");
     }
 }

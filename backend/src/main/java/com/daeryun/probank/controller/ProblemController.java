@@ -5,6 +5,7 @@ import com.daeryun.probank.common.LoginUser;
 import com.daeryun.probank.common.RequireRole;
 import com.daeryun.probank.common.ResponseDto;
 import com.daeryun.probank.domain.UserRole;
+import com.daeryun.probank.dto.problem.DepartmentChangeRequest;
 import com.daeryun.probank.dto.problem.ImageUploadResponse;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
 import com.daeryun.probank.service.ExcelProblemUploadService;
@@ -79,6 +80,20 @@ public class ProblemController {
     public ResponseEntity<ResponseDto<?>> uploadImage(@RequestParam("file") MultipartFile file,
                                                         @LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(new ImageUploadResponse(problemImageService.store(file, actor))));
+    }
+
+    /**
+     * 클래스 애너테이션은 {SUPER_ADMIN, DEPT_ADMIN} 이지만 RoleCheckInterceptor 가 메서드 애너테이션을
+     * 먼저 보므로, 이 엔드포인트만 총괄 관리자로 좁혀진다. 부서 이동은 문제의 소유권을 옮기는 행위라
+     * 부서 관리자에게 열어 주면 자기 부서 문제를 남의 부서로 던져 버릴 수 있다.
+     */
+    @RequireRole(UserRole.SUPER_ADMIN)
+    @PatchMapping("/{id}/department")
+    public ResponseEntity<ResponseDto<?>> changeDepartment(@PathVariable Long id,
+                                                            @RequestBody DepartmentChangeRequest request,
+                                                            @LoginUser AuthUser actor) {
+        problemService.changeDepartment(id, request.getDepartmentId(), actor);
+        return ResponseEntity.ok(ResponseDto.ok());
     }
 
     @PostMapping("/excel-upload")

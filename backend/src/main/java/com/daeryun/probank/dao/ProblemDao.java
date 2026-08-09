@@ -19,4 +19,6 @@ public interface ProblemDao {
                                    @Param("createdTo") java.time.LocalDate createdTo,
                                    @Param("tag") String tag,
                                    @Param("keyword") String keyword);
+
+    void updateDepartment(@Param("id") Long id, @Param("departmentId") Long departmentId);
 }
