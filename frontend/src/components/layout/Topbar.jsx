@@ -5,7 +5,9 @@ import { sessionStatusMeta } from "@/utils/adminSession.js";
 export default function Topbar({ roleLabel, scopeLabel, sessionStatus, onLogout, loggingOut }) {
   const statusMeta = sessionStatusMeta(sessionStatus);
   return (
-    <header className="flex h-[76px] shrink-0 items-center justify-between border-b border-line-default bg-surface-default px-7">
+    // sticky top-0: 문서가 스크롤해도 상단에 남는다. bg-surface-default가 불투명하므로 아래
+    // 표 행이 비쳐 보이지 않는다. z-20은 표·카드보다 위, 모달(z-50)보다 아래다.
+    <header className="sticky top-0 z-20 flex h-[76px] shrink-0 items-center justify-between border-b border-line-default bg-surface-default px-7">
       <div>
         <p className="text-section-title font-bold text-ink-strong">관리자 콘솔</p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-body-small text-ink-muted">
