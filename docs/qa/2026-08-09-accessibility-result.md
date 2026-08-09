@@ -107,17 +107,19 @@ PRD 섹션 3.2와 7은 *"모바일 뷰포트에서는 관리자 화면 접근 �
     focus-visible:outline-offset-2 focus-visible:outline-brand
 ```
 
-### 함께 관찰된 것 — 사이드바 링크의 아웃라인 색상
+### 정정 — 사이드바 아웃라인 색상은 결함이 아니었다
 
-사이드바 링크는 `focus-visible:outline-brand-aqua` 클래스를 갖고 있고 해당 CSS 규칙(`outline-color: var(--color-brand-aqua)`)도 스타일시트에 존재하며 `--color-brand-aqua`(#00B4E3)도 정의돼 있다. 그런데 키보드 포커스 시 **실제 계산된 `outline-color`가 Aqua가 아니라 글자색(currentColor)** 이다.
+최초 측정에서 사이드바 링크의 계산된 `outline-color`가 Aqua가 아니라 글자색으로 나와 결함을 의심했으나, **재확인 결과 측정 오류였다.**
 
-| 요소 | `:focus-visible` 매치 | 계산된 outline-color |
-|---|---|---|
-| 사이드바 "부서 관리" | true | `rgb(117,132,154)` = 글자색 ❌ |
-| 검색 input | true | `rgb(0,180,227)` = Aqua ✅ |
-| 로그아웃 버튼 | true | `rgb(0,180,227)` = Aqua ✅ |
+포커스 후 300ms 대기하고 다시 읽으면 `rgb(0, 180, 227)`(Aqua)로 정상이다. 사이드바 링크에는 `transition-colors`가 걸려 있고 **Tailwind v4의 `transition-colors`는 `outline-color`를 포함**하므로, `Tab` 직후 즉시 읽으면 전이 시작값(currentColor)이 잡힌다.
 
-폭(3px 선언)과 offset(2px)은 정상 적용된다. **색상만 적용되지 않는 이유는 이번 회차에서 규명하지 못했다** — 캐스케이드 문제로 보이나 확인이 필요하다. 아웃라인 자체는 보이므로 D6 본체보다 경미하다.
+| 측정 방법 | 결과 |
+|---|---|
+| Tab 직후 즉시 읽기 | `rgb(117,132,154)` = 글자색 (전이 중간값) |
+| 포커스 후 300ms 대기 | **`rgb(0,180,227)` = Aqua ✅** |
+| 같은 클래스의 프로브 요소 | `rgb(0,180,227)` = Aqua ✅ |
+
+**사이드바는 명세를 지키고 있다.** D6은 아래의 "포커스 유틸리티 클래스 자체가 없는 요소"에만 해당한다.
 
 ---
 

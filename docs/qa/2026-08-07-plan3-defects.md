@@ -234,9 +234,19 @@ PRD 섹션 3.2·7이 *"모바일 뷰포트에서는 관리자 화면 접근 자�
     focus-visible:outline-offset-2 focus-visible:outline-brand
 ```
 
-### 함께 관찰된 것
+### 정정 (2026-08-09 재확인)
 
-사이드바 링크는 `focus-visible:outline-brand-aqua` 클래스와 해당 CSS 규칙, `--color-brand-aqua`(#00B4E3) 변수가 모두 존재하는데도 키보드 포커스 시 계산된 `outline-color`가 **글자색(currentColor)** 으로 나온다. 폭·offset은 정상이라 아웃라인 자체는 보인다. **원인은 규명하지 못했다** — 캐스케이드 확인이 필요하다.
+최초 보고에 "사이드바 링크의 아웃라인 색상이 Aqua가 아니다"를 함께 적었으나 **측정 오류였다.** `Tab` 직후 즉시 읽어 전이 중간값을 잡은 것으로, 300ms 대기 후 다시 읽으면 Aqua(`rgb(0,180,227)`)가 정상 적용된다. Tailwind v4의 `transition-colors`가 `outline-color`를 포함하기 때문이다. **사이드바는 명세를 지키고 있다.**
+
+### 실제 누락 지점 (소스 확인)
+
+| 위치 | 대상 |
+|---|---|
+| `ProblemListPage.jsx:226` | 표 행 "수정" 링크 |
+| `ProblemFormPage.jsx:422` | 정답 선택 radio/checkbox (보기 수만큼) |
+| `ProblemFormPage.jsx:313` | "목록으로" 링크 (권한 없는 문제 접근 화면) |
+
+세 번째는 403 분기에서만 렌더링되어 **브라우저 전수 조사에서는 잡히지 않았고 소스 검토로 찾았다.**
 
 상세는 [`2026-08-09-accessibility-result.md`](2026-08-09-accessibility-result.md) 참고.
 
