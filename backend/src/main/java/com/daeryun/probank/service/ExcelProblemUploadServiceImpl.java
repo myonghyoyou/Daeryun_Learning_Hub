@@ -2,12 +2,15 @@ package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.ExcelUploadLogDao;
+import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Problem;
 import com.daeryun.probank.domain.ProblemAnswer;
 import com.daeryun.probank.domain.ProblemChoice;
 import com.daeryun.probank.domain.ProblemStatus;
 import com.daeryun.probank.domain.ProblemType;
+import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.ExcelUploadLog;
 import com.daeryun.probank.domain.UploadTargetType;
 import com.daeryun.probank.domain.UserRole;
@@ -77,13 +80,16 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     private final ExcelUploadLogDao excelUploadLogDao;
     private final ProblemProvisioningService problemProvisioningService;
     private final AuditLogService auditLogService;
+    private final DepartmentDao departmentDao;
 
     public ExcelProblemUploadServiceImpl(ExcelUploadLogDao excelUploadLogDao,
                                           ProblemProvisioningService problemProvisioningService,
-                                          AuditLogService auditLogService) {
+                                          AuditLogService auditLogService,
+                                          DepartmentDao departmentDao) {
         this.excelUploadLogDao = excelUploadLogDao;
         this.problemProvisioningService = problemProvisioningService;
         this.auditLogService = auditLogService;
+        this.departmentDao = departmentDao;
     }
 
     @Override
@@ -182,6 +188,19 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     private Long resolveDepartmentId(Long requested, AuthUser actor) {
         if (actor.getRole() != UserRole.SUPER_ADMIN) {
             return actor.getDepartmentId();
+        }
+        // 아래 검증은 행 루프에 들어가기 전에 끝나야 한다. 행마다 REQUIRES_NEW 로 커밋되므로 처리
+        // 도중에 던지면 이미 저장된 문제가 남는다 — 500행 상한을 루프 전에 보는 것과 같은 이유다.
+        if (requested == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "업로드할 문제가 귀속될 부서를 선택하세요.");
+        }
+        Department department = departmentDao.findById(requested);
+        if (department == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 부서입니다.");
+        }
+        if (department.getStatus() != Status.ACTIVE) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "비활성 부서에는 문제를 등록할 수 없습니다: " + department.getName());
         }
         return requested;
     }

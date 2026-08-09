@@ -1,10 +1,14 @@
 package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.AuthUser;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.ExcelUploadLogDao;
 import com.daeryun.probank.domain.UserRole;
+import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Problem;
+import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.dto.upload.ExcelUploadResult;
+import com.daeryun.probank.exception.BizException;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -17,6 +21,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.io.ByteArrayOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -31,6 +36,7 @@ class ExcelProblemUploadServiceImplTest {
     private ExcelUploadLogDao excelUploadLogDao;
     private ProblemProvisioningService problemProvisioningService;
     private AuditLogService auditLogService;
+    private DepartmentDao departmentDao;
     private ExcelProblemUploadServiceImpl service;
     private final AuthUser actor = new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false);
     private final AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
@@ -40,7 +46,20 @@ class ExcelProblemUploadServiceImplTest {
         excelUploadLogDao = Mockito.mock(ExcelUploadLogDao.class);
         problemProvisioningService = Mockito.mock(ProblemProvisioningService.class);
         auditLogService = Mockito.mock(AuditLogService.class);
-        service = new ExcelProblemUploadServiceImpl(excelUploadLogDao, problemProvisioningService, auditLogService);
+        departmentDao = Mockito.mock(DepartmentDao.class);
+        service = new ExcelProblemUploadServiceImpl(excelUploadLogDao, problemProvisioningService,
+                auditLogService, departmentDao);
+        // 기본값: 어떤 부서 id 를 물어도 활성 부서가 있다고 답한다. 부서 검증 자체를 보는 테스트는
+        // 각자 findById 를 다시 스텁한다.
+        Mockito.when(departmentDao.findById(Mockito.anyLong())).thenReturn(activeDepartment(77L));
+    }
+
+    private Department activeDepartment(Long id) {
+        Department department = new Department();
+        department.setId(id);
+        department.setName("대상팀");
+        department.setStatus(Status.ACTIVE);
+        return department;
     }
 
     private MockMultipartFile buildExcel(String[][] rows) throws Exception {
@@ -94,6 +113,54 @@ class ExcelProblemUploadServiceImplTest {
         Mockito.verify(problemProvisioningService)
                 .provisionWithChoices(captor.capture(), Mockito.anyList(), Mockito.anyList());
         assertEquals(10L, captor.getValue().getDepartmentId().longValue(), "부서 관리자는 본인 부서로 강제된다");
+    }
+
+    /**
+     * 부서를 고르지 않은 채 올리면 653문항이 조용히 업로더 부서로 들어간다. 화면도 서버도 막는다.
+     */
+    @Test
+    void superAdminMustPickADepartment() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+        });
+
+        BizException thrown = assertThrows(BizException.class, () -> service.upload(file, null, superAdmin));
+
+        assertTrue(thrown.getMessage().contains("부서를 선택"), thrown.getMessage());
+        Mockito.verifyNoInteractions(problemProvisioningService);
+    }
+
+    @Test
+    void unknownDepartmentIsRejected() throws Exception {
+        Mockito.when(departmentDao.findById(404L)).thenReturn(null);
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+        });
+
+        assertThrows(BizException.class, () -> service.upload(file, 404L, superAdmin));
+        Mockito.verifyNoInteractions(problemProvisioningService);
+    }
+
+    /**
+     * 계정 생성 폼은 비활성 부서를 배정 대상에서 제외하지만 그 규칙이 클라이언트에만 있었다
+     * (departmentOptions.js 주석 참고). 여기서 처음으로 서버가 강제한다.
+     */
+    @Test
+    void inactiveDepartmentIsRejected() throws Exception {
+        Department inactive = activeDepartment(88L);
+        inactive.setStatus(Status.INACTIVE);
+        Mockito.when(departmentDao.findById(88L)).thenReturn(inactive);
+        MockMultipartFile file = buildExcel(new String[][]{
+                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+        });
+
+        BizException thrown = assertThrows(BizException.class, () -> service.upload(file, 88L, superAdmin));
+
+        assertTrue(thrown.getMessage().contains("비활성"), thrown.getMessage());
+        Mockito.verifyNoInteractions(problemProvisioningService);
     }
 
     @Test
