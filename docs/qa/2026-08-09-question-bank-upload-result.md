@@ -93,3 +93,86 @@ DB에서도 본사 문제 전부 `보기 4개 / 정답 1개`로 일관된다. �
 | 나머지 11개 파일 (610행) | 미투입. 팀별 관리자 계정으로 각각 올려야 부서 격리가 맞는다 |
 | 수동 입력 69문항 | 미투입. 다중빈칸 50건은 엑셀 미지원이라 개별 등록 화면 필요 |
 | F1 페이지네이션 판단 | 전량 투입 전 결정 필요 |
+
+---
+
+## 부서 지정 기능 검증 (2026-08-09)
+
+- **대상:** [`2026-08-09-excel-upload-department-selection.md`](../superpowers/plans/2026-08-09-excel-upload-department-selection.md) Task 8
+- **방식:** Vibescraper(실제 Chrome) + psql, 뷰포트 1440×1024
+- **계정:** `admin`(SUPER_ADMIN·본사) / `dev_admin`(DEPT_ADMIN·정보시스템팀)
+
+### 총괄 관리자 — 타부서 명의 업로드 ✅
+
+| 확인 | 결과 |
+|---|---|
+| Select 옵션 | 활성 부서 6개만. 비활성 2개(`OLD`, 길이 테스트 부서) 제외 |
+| 초기값 | `""` — "부서 선택". 본인 부서 자동 선택 없음 |
+| 부서 미선택 후 업로드 | "업로드할 문제가 귀속될 부서를 선택하세요."로 차단, 업로드되지 않음 |
+| `문제_02_기획팀.xlsx` → 정보시스템팀 | **61/61 성공** (2초) |
+
+`admin`은 **본사** 소속인데 문제 61건이 전부 **정보시스템팀**에 들어갔다.
+
+```
+정보시스템팀  10 → 71  (+61)
+본사          46 → 46  (변화 없음)
+
+excel_upload_logs.department_id = 2 (정보시스템팀)   ← 업로더 부서(1)가 아님
+audit detail  {..., "departmentId": 2}              ← detail::jsonb 파싱 성공
+```
+
+문제 행과 업로드 이력이 **같은 값**을 쓰는 것이 실물로 확인됐다.
+
+### 부서 관리자 — 고정 ✅
+
+| 확인 | 결과 |
+|---|---|
+| Select | `disabled: true`, 옵션 1개("정보시스템팀"), 값 `"2"` |
+| 안내 문구 | "소속 부서로만 등록할 수 있습니다." |
+| 콘솔 403 | **없음** — 부서 목록 API를 호출하지 않는다 |
+| 수정 화면의 부서 이동 카드 | **비노출** |
+
+### 파라미터 위조 차단 ✅ (보안)
+
+`dev_admin` 세션으로 `?departmentId=1`(본사)을 붙여 직접 호출했다. 요청은 200으로 성공했지만 **저장은 본인 부서로** 됐다.
+
+```
+DEV  71 → 73  (+2)   ← 위조한 값이 아니라 본인 부서
+HQ   46 → 46  (변화 없음)
+excel_upload_logs.department_id = 2
+```
+
+부서 이동 API도 `dev_admin`으로 직접 호출해 **403 `{"resultCode":990,"resultMsg":"접근 권한이 없습니다."}`** 를 확인했다. 문제의 `department_id`는 바뀌지 않았고 감사 로그도 남지 않았다.
+
+### 부서 이동 ✅
+
+`admin`으로 문제 172번을 정보시스템팀 → 영업팀으로 옮겼다.
+
+```
+problem 172  department_id 2 → 4 (SALES)
+problem 173  department_id 2    (영향 없음)
+audit detail {"to": 4, "from": 2}   ← detail::jsonb 파싱 성공
+```
+
+## 이 회차에서 잡은 결함 2건 (둘 다 구현 중 만든 것)
+
+### E1. PATCH 요청이 CORS 에서 거부됐다
+
+부서 이동 API를 `@PatchMapping`으로 만들었는데 `CorsConfig:28`의 `allowedMethods`가 `GET/POST/PUT/DELETE/OPTIONS` 뿐이라, 컨트롤러에 닿기도 전에 **403 `Invalid CORS request`** 로 막혔다. 부서 관리자만이 아니라 **총괄 관리자의 부서 이동도 동작하지 않는 상태**였다.
+
+`PUT /{id}/department`로 바꿔 해결했다. CORS 허용 목록을 넓히는 대신 이 저장소가 일관되게 쓰는 동사에 맞췄다 — PATCH를 쓴 전례가 없고, 부서 배정이라는 하위 리소스를 통째로 교체하는 의미라 PUT이 맞다.
+
+> 서비스를 직접 호출하는 단위 테스트로는 잡을 수 없는 종류다. 처음 받은 403을 "권한 차단 성공"으로 오독할 뻔했는데, 응답 본문이 `Invalid CORS request`라 드러났다.
+
+### E2. React Hooks 순서 위반으로 수정 화면이 통째로 깨졌다
+
+부서 목록을 받는 `useEffect`를 조기 return(`loading`/`permissionDenied`/`loadError`) **아래**에 두어, 첫 렌더에서는 실행되지 않고 로딩이 끝난 뒤에야 실행됐다. 훅 개수가 렌더마다 달라져 `Rendered more hooks than during the previous render`로 ErrorBoundary에 떨어졌다.
+
+```
+console: React has detected a change in the order of Hooks called by ProblemFormPage
+console: Error: Rendered more hooks than during the previous render.
+```
+
+훅을 조기 return 위로 옮기고 그 이유를 주석으로 고정했다.
+
+> 프로덕션 빌드와 184개 테스트는 모두 통과한 상태였다. jsdom이 없어 컴포넌트 렌더링 테스트를 못 하는 이 프로젝트에서는 **브라우저로 열어 보는 것 말고 이 결함을 잡을 방법이 없다.**

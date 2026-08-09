@@ -1,17 +1,20 @@
 package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.AuthUser;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.dao.ProblemAnswerDao;
 import com.daeryun.probank.dao.ProblemBlankDao;
 import com.daeryun.probank.dao.ProblemChoiceDao;
 import com.daeryun.probank.dao.ProblemDao;
 import com.daeryun.probank.dao.ProblemTagDao;
 import com.daeryun.probank.dao.TagDao;
+import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.Problem;
 import com.daeryun.probank.domain.ProblemAnswer;
 import com.daeryun.probank.domain.ProblemBlank;
 import com.daeryun.probank.domain.ProblemChoice;
 import com.daeryun.probank.domain.ProblemType;
+import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.problem.BlankInput;
 import com.daeryun.probank.dto.problem.ChoiceInput;
@@ -31,6 +34,7 @@ import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProblemServiceImplTest {
 
@@ -40,6 +44,8 @@ class ProblemServiceImplTest {
     private ProblemBlankDao problemBlankDao;
     private TagDao tagDao;
     private ProblemTagDao problemTagDao;
+    private AuditLogService auditLogService;
+    private DepartmentDao departmentDao;
     private ProblemServiceImpl service;
     private final AuthUser actor = new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false);
 
@@ -51,9 +57,10 @@ class ProblemServiceImplTest {
         problemBlankDao = Mockito.mock(ProblemBlankDao.class);
         tagDao = Mockito.mock(TagDao.class);
         problemTagDao = Mockito.mock(ProblemTagDao.class);
-        AuditLogService auditLogService = Mockito.mock(AuditLogService.class);
+        auditLogService = Mockito.mock(AuditLogService.class);
+        departmentDao = Mockito.mock(DepartmentDao.class);
         service = new ProblemServiceImpl(problemDao, problemChoiceDao, problemAnswerDao, problemBlankDao,
-                tagDao, problemTagDao, auditLogService);
+                tagDao, problemTagDao, auditLogService, departmentDao);
     }
 
     // insertAll(List<T>)에 실제로 넘어간 엔티티를 들여다보기 위한 캡터. 제네릭 List에 대한
@@ -620,5 +627,51 @@ class ProblemServiceImplTest {
 
         assertThrows(BizException.class, () -> service.archive(5L, actor));
         Mockito.verify(problemDao, Mockito.never()).updateStatus(Mockito.anyLong(), Mockito.any());
+    }
+
+    /**
+     * 총괄 관리자가 엑셀 업로드에서 부서를 잘못 고르면 되돌릴 방법이 지금은 없다. 이 경로가
+     * 화면으로 복구할 수 있는 유일한 수단이다. from/to 를 함께 남겨야 어디서 어디로 옮겼는지
+     * 추적된다.
+     */
+    @Test
+    void changeDepartment_movesTheProblemAndRecordsBothSides() {
+        Problem existing = new Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(1L);
+        existing.setType(ProblemType.MCQ_SINGLE);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Department target = new Department();
+        target.setId(9L);
+        target.setName("영업팀");
+        target.setStatus(Status.ACTIVE);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+
+        service.changeDepartment(5L, 9L, superAdmin);
+
+        Mockito.verify(problemDao).updateDepartment(5L, 9L);
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(auditLogService).record(Mockito.eq(2L), Mockito.eq("PROBLEM_DEPARTMENT_CHANGED"),
+                Mockito.eq("PROBLEM"), Mockito.eq(5L), detail.capture());
+        assertTrue(detail.getValue().contains("\"from\":1"), detail.getValue());
+        assertTrue(detail.getValue().contains("\"to\":9"), detail.getValue());
+    }
+
+    @Test
+    void changeDepartment_rejectsInactiveTarget() {
+        Problem existing = new Problem();
+        existing.setId(5L);
+        existing.setDepartmentId(1L);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Department target = new Department();
+        target.setId(9L);
+        target.setName("폐지팀");
+        target.setStatus(Status.INACTIVE);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+
+        assertThrows(BizException.class, () -> service.changeDepartment(5L, 9L, superAdmin));
+        Mockito.verify(problemDao, Mockito.never()).updateDepartment(Mockito.anyLong(), Mockito.anyLong());
     }
 }

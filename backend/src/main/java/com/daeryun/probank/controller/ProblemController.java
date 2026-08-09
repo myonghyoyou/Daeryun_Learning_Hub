@@ -5,6 +5,7 @@ import com.daeryun.probank.common.LoginUser;
 import com.daeryun.probank.common.RequireRole;
 import com.daeryun.probank.common.ResponseDto;
 import com.daeryun.probank.domain.UserRole;
+import com.daeryun.probank.dto.problem.DepartmentChangeRequest;
 import com.daeryun.probank.dto.problem.ImageUploadResponse;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
 import com.daeryun.probank.service.ExcelProblemUploadService;
@@ -81,9 +82,28 @@ public class ProblemController {
         return ResponseEntity.ok(ResponseDto.ok(new ImageUploadResponse(problemImageService.store(file, actor))));
     }
 
+    /**
+     * 클래스 애너테이션은 {SUPER_ADMIN, DEPT_ADMIN} 이지만 RoleCheckInterceptor 가 메서드 애너테이션을
+     * 먼저 보므로, 이 엔드포인트만 총괄 관리자로 좁혀진다. 부서 이동은 문제의 소유권을 옮기는 행위라
+     * 부서 관리자에게 열어 주면 자기 부서 문제를 남의 부서로 던져 버릴 수 있다.
+     * <p>
+     * PATCH 가 아니라 PUT 인 이유: CorsConfig 의 allowedMethods 는 GET/POST/PUT/DELETE/OPTIONS 뿐이라
+     * PATCH 요청은 컨트롤러에 닿기도 전에 "Invalid CORS request" 로 거부된다. 이 저장소가 PATCH 를
+     * 쓴 전례도 없다. 부서 배정이라는 하위 리소스를 통째로 교체하는 의미이므로 PUT 이 맞다.
+     */
+    @RequireRole(UserRole.SUPER_ADMIN)
+    @PutMapping("/{id}/department")
+    public ResponseEntity<ResponseDto<?>> changeDepartment(@PathVariable Long id,
+                                                            @RequestBody DepartmentChangeRequest request,
+                                                            @LoginUser AuthUser actor) {
+        problemService.changeDepartment(id, request.getDepartmentId(), actor);
+        return ResponseEntity.ok(ResponseDto.ok());
+    }
+
     @PostMapping("/excel-upload")
     public ResponseEntity<ResponseDto<?>> uploadExcel(@RequestParam("file") MultipartFile file,
+                                                        @RequestParam(required = false) Long departmentId,
                                                         @LoginUser AuthUser actor) {
-        return ResponseEntity.ok(ResponseDto.ok(excelProblemUploadService.upload(file, actor)));
+        return ResponseEntity.ok(ResponseDto.ok(excelProblemUploadService.upload(file, departmentId, actor)));
     }
 }

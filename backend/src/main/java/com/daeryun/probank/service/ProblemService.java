@@ -12,4 +12,6 @@ public interface ProblemService {
                                           java.time.LocalDate createdFrom, java.time.LocalDate createdTo,
                                           String tag, String keyword);
     com.daeryun.probank.dto.problem.ProblemDetailResponse getDetail(Long id, AuthUser actor);
+
+    void changeDepartment(Long id, Long departmentId, AuthUser actor);
 }

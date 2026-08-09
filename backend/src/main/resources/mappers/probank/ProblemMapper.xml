@@ -30,6 +30,10 @@
         UPDATE problems SET status = #{status}, updated_at = now() WHERE id = #{id}
     </update>
 
+    <update id="updateDepartment">
+        UPDATE problems SET department_id = #{departmentId}, updated_at = now() WHERE id = #{id}
+    </update>
+
     <select id="findAll" resultMap="problemListItemMap">
         SELECT p.id, p.type, p.content, p.status, p.department_id, d.name AS department_name, p.created_at,
                COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
