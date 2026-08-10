@@ -198,12 +198,15 @@ git commit -m "feat: add particle-splitting and blank-key helpers for blank desi
 - Consumes: 없음
 - Produces: `segmentContent(content, blanks)` → 세그먼트 배열. 각 원소는
   - `{ type: "blank", key, answer }` — `content`의 `{{key}}` 위치. `answer`는 `blanks`에서 찾은 정답(없으면 `""`).
-  - `{ type: "word", text, start, end }` — 일반 텍스트 안의 어절. `start`/`end`는 **원본 `content` 문자열 기준 인덱스**(Task 4가 치환 위치를 잡는 데 쓴다).
+  - `{ type: "word", text, start, end }` — 일반 텍스트 안의 어절(**쉼표·구두점 제외**). `start`/`end`는 **원본 `content` 문자열 기준 인덱스**(Task 3의 `designateBlank`가 치환 위치를 잡는 데 쓴다).
+  - `{ type: "punct", text }` — 어절에 붙은 구두점(`,.·:;`). 클릭 대상이 아니고, 어절과 분리해 렌더한다.
   - `{ type: "space", text }` — 어절 사이 공백·개행(렌더용, 클릭 대상 아님).
 
   Task 3(렌더)과 Task 4(클릭 처리)가 이 배열을 쓴다.
 
 **배경:** 지정 모드는 `content` 문자열 하나를 파싱해 그린다. `{{b1}}` 마커는 빈칸 칩으로, 나머지 텍스트는 어절로 쪼개 클릭 가능하게. 어절의 원본 인덱스(`start`/`end`)를 함께 내보내야, 클릭 시 "content의 이 구간을 `{{bN}}`으로 바꾼다"를 정확히 할 수 있다.
+
+**쉼표를 어절에서 분리하는 것이 결정 5다** — 클릭 단위는 "쉼표 제외 공백 어절"이므로, `편성,`은 어절 `편성` + 구두점 `,` 두 세그먼트가 된다. 칩에는 `편성`만 보이고, `,`는 그 옆 평범한 텍스트로 남는다. `designateBlank`가 어절 `편성`만 치환하므로 결과 `{{b1}},`에서 쉼표는 자연히 보존된다. (조사 분리는 여전히 클릭 시점의 `splitTrailing`이 한다 — 구두점만 여기서 미리 가른다.)
 
 - [ ] **Step 1: 실패하는 테스트를 작성한다**
 
@@ -250,6 +253,17 @@ test("a marker glued to a particle yields blank then word", () => {
     { type: "word", text: "통하여", start: 8, end: 11 },
   ]);
 });
+
+// 결정 5: 쉼표는 어절과 분리해 별도 punct 세그먼트로. 어절 인덱스는 쉼표를 포함하지 않는다.
+test("separates a trailing comma from the word", () => {
+  const segs = segmentContent("편성, 집행", []);
+  assert.deepEqual(segs, [
+    { type: "word", text: "편성", start: 0, end: 2 },
+    { type: "punct", text: "," },
+    { type: "space", text: " " },
+    { type: "word", text: "집행", start: 4, end: 6 },
+  ]);
+});
 ```
 
 - [ ] **Step 2: 실패를 확인한다 (RED)**
@@ -265,25 +279,28 @@ Expected: `ERR_MODULE_NOT_FOUND`.
 /**
  * content 문자열을 지정 모드가 렌더할 세그먼트 배열로 파싱한다.
  *
- * {{key}} 마커는 blank 세그먼트(정답 포함)로, 그 사이 텍스트는 공백 기준 어절(word)과
- * 공백(space)으로 나눈다. word 의 start/end 는 원본 content 인덱스라, 클릭 시 그 구간을
+ * {{key}} 마커는 blank 세그먼트(정답 포함)로, 그 사이 텍스트는 공백(space)·구두점(punct)·
+ * 어절(word) 세 갈래로 나눈다. word 의 start/end 는 원본 content 인덱스라, 클릭 시 그 구간을
  * {{bN}} 으로 치환할 수 있다(designateBlank, Task 3).
  *
- * 쉼표는 어절에 붙여 둔다("편성,"이 한 word). 조사·쉼표를 실제로 떼는 것은 클릭 시점의
- * splitTrailing(Task 1)이다 — 여기서 미리 자르지 않는다.
+ * 쉼표 등 구두점은 어절에서 떼어 punct 세그먼트로 둔다("편성,"→word "편성" + punct ",";
+ * 결정 5, 쉼표 제외 공백 어절). 조사는 여기서 떼지 않고 클릭 시점의 splitTrailing(Task 1)이 뗀다.
  */
 const MARKER = /\{\{(b\d+)\}\}/g;
 
 function segmentText(text, offset, out) {
-  // 공백(스페이스·개행)과 비공백을 번갈아 뽑는다.
-  const re = /(\s+)|(\S+)/g;
+  // 공백 / 구두점(,.·:;) / 어절 세 갈래로 나눈다. 구두점을 별도 세그먼트로 떼어 어절을
+  // 클릭 단위에서 제외한다(결정 5: 쉼표 제외 공백 어절). 어절은 공백·구두점이 아닌 연속.
+  const re = /(\s+)|([,.·:;]+)|([^\s,.·:;]+)/g;
   let m;
   while ((m = re.exec(text)) !== null) {
     if (m[1] !== undefined) {
       out.push({ type: "space", text: m[1] });
+    } else if (m[2] !== undefined) {
+      out.push({ type: "punct", text: m[2] });
     } else {
       const start = offset + m.index;
-      out.push({ type: "word", text: m[2], start, end: start + m[2].length });
+      out.push({ type: "word", text: m[3], start, end: start + m[3].length });
     }
   }
 }
@@ -311,7 +328,7 @@ export function segmentContent(content, blanks) {
 - [ ] **Step 4: 통과를 확인한다 (GREEN)**
 
 Run: `cd frontend && node --test src/utils/blankSegments.test.js`
-Expected: 4건 전부 통과.
+Expected: 5건 전부 통과.
 
 - [ ] **Step 5: Commit**
 
@@ -353,7 +370,7 @@ function wordSeg(content, text) {
 
 test("designateBlank replaces a word with a marker and captures the answer", () => {
   const content = "예산의 3요소는 편성, 집행, 결산 이다.";
-  const seg = wordSeg(content, "편성,");
+  const seg = wordSeg(content, "편성"); // 쉼표는 segmentContent가 이미 분리해 어절은 "편성"
   const next = designateBlank(content, [], seg);
 
   assert.equal(next.content, "예산의 3요소는 {{b1}}, 집행, 결산 이다.", "쉼표는 본문에 남는다");
@@ -486,7 +503,7 @@ Expected: 12건 전부 통과.
 - [ ] **Step 5: 전체 프론트 테스트로 회귀 확인**
 
 Run: `cd frontend && npm test`
-Expected: 189 → 199 통과(Task 1·2·3 합쳐 10건 추가).
+Expected: 189 → 206 통과(Task 1 6건 + Task 2 5건 + Task 3 6건 = 17건 추가).
 
 - [ ] **Step 6: Commit**
 
@@ -533,7 +550,8 @@ export default function BlankDesignator({ content, blanks, onDesignate, onReleas
       aria-label="빈칸 지정 영역"
     >
       {segments.map((seg, i) => {
-        if (seg.type === "space") {
+        if (seg.type === "space" || seg.type === "punct") {
+          // 공백·구두점은 클릭 대상이 아니고 평범한 텍스트로 그린다.
           return <span key={i}>{seg.text}</span>;
         }
         if (seg.type === "word") {
@@ -662,7 +680,7 @@ import { designateBlank, releaseBlank, adjustBlankBoundary } from "@/utils/blank
 - [ ] **Step 4: 프론트 테스트와 빌드를 확인한다**
 
 Run: `cd frontend && npm test`
-Expected: 199 통과(이 Task는 컴포넌트 배선이라 신규 단위 테스트 없음 — 로직은 Task 1~3에서 고정).
+Expected: 206 통과(이 Task는 컴포넌트 배선이라 신규 단위 테스트 없음 — 로직은 Task 1~3에서 고정).
 
 Run: `cd frontend && rtk proxy npm run build`
 Expected: 빌드 성공.
@@ -746,5 +764,5 @@ git commit -m "docs: verify click-to-designate blank mode in the browser"
 - [ ] 쓰기 모드에서 본문을 고쳐도 지정 모드가 다시 파싱해 어긋나지 않는다
 - [ ] 수정 화면에서 기존 `{{b1}}`이 빈칸 칩으로 보인다 (추가 코드 없이)
 - [ ] 백엔드 무변경 — 저장 payload가 기존과 동일
-- [ ] 프론트엔드 189 → **199** 전부 통과, 빌드 성공
+- [ ] 프론트엔드 189 → **206** 전부 통과, 빌드 성공
 - [ ] 브라우저 콘솔에 React 훅 오류 없음
