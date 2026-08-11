@@ -48,3 +48,71 @@ export function nextBlankKey(existingKeys) {
   }
   return `b${n}`;
 }
+
+/**
+ * word 세그먼트(Task 2)를 빈칸으로 만든다. 어절에서 조사·쉼표를 떼어 정답으로, 꼬리는
+ * 본문에 남긴다. content 의 [start, end) 구간을 "{{key}}" + 꼬리로 치환한다.
+ */
+export function designateBlank(content, blanks, wordSeg) {
+  const { core, trailing } = splitTrailing(wordSeg.text);
+  const key = nextBlankKey(blanks.map((b) => b.blankKey));
+  const replacement = `{{${key}}}${trailing}`;
+  const nextContent = content.slice(0, wordSeg.start) + replacement + content.slice(wordSeg.end);
+  return {
+    content: nextContent,
+    blanks: [...blanks, { blankKey: key, answerText: core }],
+  };
+}
+
+export function releaseBlank(content, blanks, key) {
+  const answer = blanks.find((b) => b.blankKey === key)?.answerText ?? "";
+  const nextContent = content.replace(`{{${key}}}`, answer);
+  return { content: nextContent, blanks: blanks.filter((b) => b.blankKey !== key) };
+}
+
+/**
+ * 빈칸 정답 경계를 delta(±1)만큼 옮긴다.
+ *  +1: 마커 바로 뒤 본문 글자 1개를 정답 끝에 붙이고 본문에서 제거.
+ *  -1: 정답 마지막 글자 1개를 마커 바로 뒤 본문으로 내보냄.
+ * 조사 자동분리가 과했거나 모자랄 때 손으로 보정하는 용도.
+ */
+export function adjustBlankBoundary(content, blanks, key, delta) {
+  const marker = `{{${key}}}`;
+  const at = content.indexOf(marker);
+  if (at < 0) {
+    return { content, blanks };
+  }
+  const after = at + marker.length;
+  const blank = blanks.find((b) => b.blankKey === key);
+  if (!blank) {
+    return { content, blanks };
+  }
+
+  if (delta > 0) {
+    const ch = content[after];
+    if (!ch || /\s/.test(ch)) {
+      return { content, blanks }; // 뒤가 공백/끝이면 흡수할 것이 없다
+    }
+    const nextContent = content.slice(0, after) + content.slice(after + 1);
+    return {
+      content: nextContent,
+      blanks: blanks.map((b) => (b.blankKey === key ? { ...b, answerText: b.answerText + ch } : b)),
+    };
+  }
+
+  if (delta < 0) {
+    if (blank.answerText.length <= 1) {
+      return { content, blanks }; // 정답이 비면 안 된다
+    }
+    const moved = blank.answerText.slice(-1);
+    const nextContent = content.slice(0, after) + moved + content.slice(after);
+    return {
+      content: nextContent,
+      blanks: blanks.map((b) =>
+        b.blankKey === key ? { ...b, answerText: b.answerText.slice(0, -1) } : b,
+      ),
+    };
+  }
+
+  return { content, blanks };
+}

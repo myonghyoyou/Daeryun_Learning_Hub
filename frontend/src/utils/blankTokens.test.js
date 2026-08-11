@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitTrailing, nextBlankKey } from "./blankTokens.js";
+import { splitTrailing, nextBlankKey, designateBlank, releaseBlank, adjustBlankBoundary } from "./blankTokens.js";
+import { segmentContent } from "./blankSegments.js";
+
+function wordSeg(content, text) {
+  return segmentContent(content, []).find((s) => s.type === "word" && s.text === text);
+}
 
 test("splits a common object particle off the core", () => {
   assert.deepEqual(splitTrailing("배관을"), { core: "배관", trailing: "을" });
@@ -31,4 +36,51 @@ test("nextBlankKey returns the smallest unused b-number", () => {
   assert.equal(nextBlankKey([]), "b1");
   assert.equal(nextBlankKey(["b1", "b2"]), "b3");
   assert.equal(nextBlankKey(["b2"]), "b1", "빈 번호를 채운다");
+});
+
+test("designateBlank replaces a word with a marker and captures the answer", () => {
+  const content = "예산의 3요소는 편성, 집행, 결산 이다.";
+  const seg = wordSeg(content, "편성"); // 쉼표는 segmentContent가 이미 분리해 어절은 "편성"
+  const next = designateBlank(content, [], seg);
+
+  assert.equal(next.content, "예산의 3요소는 {{b1}}, 집행, 결산 이다.", "쉼표는 본문에 남는다");
+  assert.deepEqual(next.blanks, [{ blankKey: "b1", answerText: "편성" }]);
+});
+
+test("designateBlank keeps a trailing particle in the content", () => {
+  const content = "배관을 통하여";
+  const seg = wordSeg(content, "배관을");
+  const next = designateBlank(content, [], seg);
+
+  assert.equal(next.content, "{{b1}}을 통하여");
+  assert.deepEqual(next.blanks, [{ blankKey: "b1", answerText: "배관" }]);
+});
+
+test("designateBlank assigns the next free key", () => {
+  const content = "{{b1}} 집행";
+  const seg = wordSeg(content, "집행");
+  const next = designateBlank(content, [{ blankKey: "b1", answerText: "편성" }], seg);
+
+  assert.equal(next.content, "{{b1}} {{b2}}");
+  assert.equal(next.blanks[1].blankKey, "b2");
+});
+
+test("releaseBlank puts the answer text back and drops the blank", () => {
+  const next = releaseBlank("{{b1}}을 통하여", [{ blankKey: "b1", answerText: "배관" }], "b1");
+  assert.equal(next.content, "배관을 통하여");
+  assert.deepEqual(next.blanks, []);
+});
+
+// +1: 뒤 본문 글자를 정답으로 흡수 (조사를 정답에 다시 붙이고 싶을 때)
+test("adjustBlankBoundary +1 absorbs the next content char into the answer", () => {
+  const next = adjustBlankBoundary("{{b1}}을 통하여", [{ blankKey: "b1", answerText: "배관" }], "b1", 1);
+  assert.equal(next.content, "{{b1}} 통하여");
+  assert.equal(next.blanks[0].answerText, "배관을");
+});
+
+// -1: 정답 마지막 글자를 본문으로 내보냄 (과분리 보정)
+test("adjustBlankBoundary -1 pushes the last answer char back to content", () => {
+  const next = adjustBlankBoundary("{{b1}} 통하여", [{ blankKey: "b1", answerText: "배관을" }], "b1", -1);
+  assert.equal(next.content, "{{b1}}을 통하여");
+  assert.equal(next.blanks[0].answerText, "배관");
 });
