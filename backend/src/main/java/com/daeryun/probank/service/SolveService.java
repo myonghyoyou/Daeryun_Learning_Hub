@@ -12,4 +12,5 @@ public interface SolveService {
     List<String> selectRandomBlankKeys(List<ProblemBlank> blanks, int count);
     com.daeryun.probank.dto.solve.AttemptResult submit(Long problemId, com.daeryun.probank.dto.solve.AttemptSubmitRequest request,
                                                         com.daeryun.probank.common.AuthUser actor);
+    java.util.List<com.daeryun.probank.dto.solve.AttemptHistoryItem> myHistory(com.daeryun.probank.common.AuthUser actor);
 }

@@ -165,6 +165,11 @@ public class SolveServiceImpl implements SolveService {
         return new AttemptResult(correct, problem.getExplanation(), blankResults);
     }
 
+    @Override
+    public List<com.daeryun.probank.dto.solve.AttemptHistoryItem> myHistory(com.daeryun.probank.common.AuthUser actor) {
+        return attemptDao.findByUserId(actor.getUserId());
+    }
+
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase().replaceAll("\\s+", " ");
     }

@@ -233,4 +233,16 @@ class SolveServiceImplTest {
 
         assertThrows(BizException.class, () -> service.submit(1L, request, actor));
     }
+
+    @Test
+    void myHistory_returnsUserAttemptsOrderedByDaoResult() {
+        com.daeryun.probank.dto.solve.AttemptHistoryItem item = new com.daeryun.probank.dto.solve.AttemptHistoryItem();
+        item.setProblemId(1L);
+        Mockito.when(attemptDao.findByUserId(1L)).thenReturn(Collections.singletonList(item));
+
+        List<com.daeryun.probank.dto.solve.AttemptHistoryItem> history = service.myHistory(actor);
+
+        assertEquals(1, history.size());
+        Mockito.verify(attemptDao).findByUserId(1L);
+    }
 }
