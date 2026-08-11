@@ -17,6 +17,7 @@
 - 채점 규칙은 PRD 섹션 6.3을 그대로 따른다: 단일선택/OX는 단일 정답 일치, 다중선택은 정답 집합 완전 일치, 주관식은 정규화(trim/대소문자무시/공백정리) 후 일치, 빈칸 채우기는 노출된 빈칸을 모두 맞혀야 정답이다.
 - 빈칸 채우기는 매 시도(문제 상세 조회)마다 정의된 빈칸 후보 중 `blank_reveal_count`개를 무작위로 선택해 노출한다. 선택되지 않은 빈칸은 정답 텍스트를 그대로 보여준다 (섹션 4.1.1). 연습 모드이므로 제출 시 서버는 제출된 빈칸 키 집합이 문제에 정의된 빈칸의 부분집합이고 개수가 `blank_reveal_count`와 일치하는지만 검증한다 — 조회 시 선택된 정확한 조합을 서버가 별도로 기억하지는 않는다(부정행위 방지가 필요 없는 연습 모드이므로 충분하다).
 - 직원은 본인의 풀이 이력(시도 일시, 정답 여부, 제출 답안)을 조회할 수 있다 (섹션 6.4).
+- `attempts`·`attempt_blank_answers` 테이블은 **이미 `backend/src/main/resources/schema.sql`에 정의되어 있다** — 새 마이그레이션을 만들지 않는다. 컬럼은 `attempts(id, user_id, problem_id, submitted_answer VARCHAR(500), is_correct, submitted_at)`, `attempt_blank_answers(id, attempt_id, blank_key, submitted_answer, is_correct)`이다. 정답 여부 컬럼명은 도메인의 `correct`가 아니라 DB에서 **`is_correct`**이므로 mapper의 컬럼 매핑을 이에 맞춘다. `submitted_answer`는 `VARCHAR(500)`이라, 매우 긴 주관식 답안은 저장 전에 500자로 잘라 넣는다.
 
 ## Design System Implementation Contract
 
@@ -27,6 +28,11 @@
 - 객관식, OX, 주관식, 빈칸 채우기의 선택·입력·제출·채점 결과 상태를 공통 컴포넌트와 상태 토큰으로 표현한다. 제출 전에는 정답을 노출하지 않으며 제출 후에만 정답·해설·정답 여부를 표시한다.
 - 문제 목록은 태그 필터와 결과 없음·로딩·오류 상태를 포함한다. 풀이 이력은 PC 테이블, 모바일 카드로 변환하며 정답·오답을 색상과 텍스트로 함께 표시한다.
 - 완료 기준에는 1440×1024 PC와 390×844 모바일에서 학습 홈·목록·상세·이력의 시각적 일관성, 키보드 포커스, 터치 영역, 제출 중 중복 클릭 방지, 채점 결과 확인을 Design QA로 포함한다.
+
+> **⚠️ Part 2(Task 4·5) JSX 블록은 "동작하는 참조 골격"이지 최종 UI가 아니다.** 이 계획을 처음 작성한 시점 이후 Plan 1~3과 후속 작업으로 **디자인 토큰 기반 시스템이 이미 출고**되었다(예: `bg-surface-page`, `text-ink-strong`/`text-ink-default`, `border-line-default`, `text-card-title`, `tracking-title`; 공통 컴포넌트 `LogoutButton`, 훅 `useLogout`). Part 2의 코드 블록은 `p-6`, `rounded border`, `bg-blue-600`, `text-blue-600` 같은 **날 Tailwind 유틸**을 쓰는데, 이는 출고된 디자인 시스템과도, 위 Design System Implementation Contract와도 어긋난다. 실행 시 각 화면의 **로직(상태·API·채점 결과 처리)은 그대로 쓰되, 마크업·클래스는 디자인 토큰과 공통 컴포넌트로 다시 표현**한다. 특히:
+> - **SolveHomePage(Task 4 Step 6)는 현재의 Topbar와 로그아웃(`useLogout` + `LogoutButton`)을 반드시 보존한다.** 아래 스켈레톤으로 통째 교체하면 직원 착지 화면에서 로그아웃 수단이 사라진다.
+> - 나머지 화면(목록·상세·이력)도 색/여백/타이포는 토큰으로 맞추고, 모바일 1열·하단 고정 제출 영역·터치 타깃 규칙을 지킨다.
+> - 색 대비·포커스 링·터치 영역은 앞선 §11 접근성 회차의 기준(포커스 링 유지, 200% 확대 무붕괴)을 그대로 따른다.
 
 ## Approved Amendments (2026-07-29)
 
@@ -131,7 +137,6 @@ class SolveServiceImplTest {
         ProblemSolveDetailResponse response = service.getDetail(1L);
 
         assertEquals(2, response.getChoices().size());
-        assertNull(response.getChoices().get(0).getClass().getDeclaredFields().length == 0 ? null : null);
         // ChoiceOption에는 isCorrect 필드 자체가 없어야 하므로 필드 목록을 검증한다.
         boolean hasCorrectField = Arrays.stream(response.getChoices().get(0).getClass().getDeclaredFields())
                 .anyMatch(f -> f.getName().toLowerCase().contains("correct"));
@@ -863,7 +868,9 @@ public class AttemptResult {
         Attempt attempt = new Attempt();
         attempt.setUserId(actor.getUserId());
         attempt.setProblemId(problemId);
-        attempt.setSubmittedAnswer(submittedAnswerSummary);
+        // submitted_answer 는 VARCHAR(500). 매우 긴 주관식/요약은 잘라 넣어 insert 실패를 막는다.
+        attempt.setSubmittedAnswer(submittedAnswerSummary != null && submittedAnswerSummary.length() > 500
+                ? submittedAnswerSummary.substring(0, 500) : submittedAnswerSummary);
         attempt.setCorrect(correct);
         attemptDao.insert(attempt);
 
@@ -888,12 +895,14 @@ public class AttemptResult {
 ```
 (상단 import에 `com.daeryun.probank.dto.solve.*`, `com.daeryun.probank.domain.AttemptBlankAnswer`, `com.daeryun.probank.dto.solve.BlankAnswerInput`, `com.daeryun.probank.dto.solve.BlankAnswerResult`, `com.daeryun.probank.dto.solve.AttemptResult`, `com.daeryun.probank.dto.solve.AttemptSubmitRequest`가 이미 와일드카드로 포함됨을 확인한다.)
 
-`SolveController`에 엔드포인트 추가 (상단 import에 `com.daeryun.probank.common.AuthUser`, `com.daeryun.probank.common.SessionKeys`, `com.daeryun.probank.dto.solve.AttemptSubmitRequest`, `javax.servlet.http.HttpServletRequest` 추가):
+`SolveController`에 엔드포인트 추가 (상단 import에 `com.daeryun.probank.common.AuthUser`, `com.daeryun.probank.common.LoginUser`, `com.daeryun.probank.dto.solve.AttemptSubmitRequest` 추가):
+
+> **이 프로젝트의 관용:** 현재 사용자는 세션에서 직접 꺼내지 않고 `@LoginUser AuthUser actor` 아규먼트 리졸버(`LoginUserArgumentResolver`, `WebConfig`에 등록됨)로 주입받는다. `DepartmentController`·`ProblemController`·`UserAdminController`가 모두 이 방식을 쓴다. `HttpServletRequest`/`SessionKeys`를 직접 만지지 않는다.
+
 ```java
     @PostMapping("/{id}/attempts")
     public ResponseEntity<ResponseDto<?>> submit(@PathVariable Long id, @RequestBody AttemptSubmitRequest request,
-                                                  HttpServletRequest httpRequest) {
-        AuthUser actor = (AuthUser) httpRequest.getSession().getAttribute(SessionKeys.LOGIN_USER);
+                                                  @LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(solveService.submit(id, request, actor)));
     }
 ```
@@ -961,31 +970,20 @@ Expected: FAIL — `myHistory` 메서드가 없어 컴파일 오류
     }
 ```
 
-`SolveController`에 엔드포인트 추가:
-```java
-    @GetMapping("/me")
-    @RequestMapping
-    public ResponseEntity<ResponseDto<?>> myHistory(HttpServletRequest httpRequest) {
-        AuthUser actor = (AuthUser) httpRequest.getSession().getAttribute(SessionKeys.LOGIN_USER);
-        return ResponseEntity.ok(ResponseDto.ok(solveService.myHistory(actor)));
-    }
-```
-**주의:** 위 엔드포인트는 클래스 레벨 매핑이 `/api/problems`이므로 그대로 두면 `/api/problems/me`가 되어 버린다. 본인 이력은 문제 하위 리소스가 아니므로 별도 컨트롤러로 분리한다 — 위에서 추가한 `myHistory` 메서드와 `@RequestMapping`은 `SolveController`에 추가하지 말고, 대신 아래처럼 새 컨트롤러를 만든다.
+본인 이력은 문제 하위 리소스가 아니므로 `SolveController`(`/api/problems`)에 넣지 않고 **별도 컨트롤러**로 분리한다. 사용자는 다른 컨트롤러와 동일하게 `@LoginUser`로 주입받는다. `SolveController`에는 `myHistory` 엔드포인트를 추가하지 않는다.
 
 `backend/src/main/java/com/daeryun/probank/controller/AttemptController.java`:
 ```java
 package com.daeryun.probank.controller;
 
 import com.daeryun.probank.common.AuthUser;
+import com.daeryun.probank.common.LoginUser;
 import com.daeryun.probank.common.ResponseDto;
-import com.daeryun.probank.common.SessionKeys;
 import com.daeryun.probank.service.SolveService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import javax.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/attempts")
@@ -998,13 +996,11 @@ public class AttemptController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ResponseDto<?>> myHistory(HttpServletRequest httpRequest) {
-        AuthUser actor = (AuthUser) httpRequest.getSession().getAttribute(SessionKeys.LOGIN_USER);
+    public ResponseEntity<ResponseDto<?>> myHistory(@LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(solveService.myHistory(actor)));
     }
 }
 ```
-(`SolveController`에는 `myHistory` 엔드포인트를 추가하지 않는다.)
 
 - [ ] **Step 4: 테스트 실행하여 통과 확인**
 
@@ -1028,8 +1024,8 @@ git commit -m "feat: add personal attempt history API"
 - Create: `frontend/src/utils/blankContent.js`
 - Create: `frontend/src/utils/blankContent.test.js`
 - Create: `frontend/src/api/solve.js`
-- Modify: `frontend/src/pages/solve/SolveHomePage.jsx` (Blue Bento 학습 홈으로 교체)
-- Create: `frontend/src/pages/solve/ProblemListPage.jsx`
+- Modify: `frontend/src/pages/solve/SolveHomePage.jsx` (Blue Bento 학습 홈으로 교체 — 기존 Topbar·로그아웃 유지)
+- Create: `frontend/src/pages/solve/SolveProblemListPage.jsx` (파일·컴포넌트명 모두 `SolveProblemListPage` — routes.jsx가 이미 admin `ProblemListPage`를 import하므로 이름이 겹치면 안 된다)
 - Create: `frontend/src/pages/solve/ProblemSolvePage.jsx`
 - Modify: `frontend/src/routers/routes.jsx`
 
@@ -1071,7 +1067,9 @@ Expected: FAIL — `blankContent.js` 파일이 없음
 
 `frontend/src/utils/blankContent.js`:
 ```javascript
-const BLANK_MARKER_PATTERN = /\{\{(\w+)\}\}/g;
+// 서버 ProblemServiceImpl.BLANK_MARKER_PATTERN, 지정 모드 blankSegments.js 의 MARKER 와
+// 같은 문자 집합([A-Za-z0-9_-])을 써야 세 곳(서버 검증·지정 모드·풀이 렌더)의 판정이 갈라지지 않는다.
+const BLANK_MARKER_PATTERN = /\{\{([A-Za-z0-9_-]+)\}\}/g;
 
 /**
  * @param {string} content
@@ -1140,6 +1138,8 @@ export function myAttemptHistory() {
 
 `frontend/src/pages/solve/SolveHomePage.jsx`는 디자인 시스템의 Blue Bento Learning 구조를 사용한다.
 
+> **주의:** 현재 `SolveHomePage`에는 이미 토큰 기반 Topbar와 로그아웃(`useLogout` + `LogoutButton`)이 들어 있다. 아래 골격은 본문 영역 구성 예시일 뿐이며, **기존 Topbar/로그아웃을 제거하지 말고 그 아래 본문만 학습 홈으로 채운다.** 클래스는 날 Tailwind 대신 디자인 토큰을 쓴다(위 Design System 제약 참조).
+
 - 상단: 인사말·학습 요약·내 풀이 이력 링크
 - 1행: `ContinueLearning` 8열 + `ProgressPanel` 4열
 - 2행: `RecommendedProblemSet` 8열 + `RecentActivity` 4열
@@ -1165,9 +1165,9 @@ export default function SolveHomePage() {
 }
 ```
 
-- [ ] **Step 7: 문제 목록 화면 작성 (`ProblemListPage`)**
+- [ ] **Step 7: 문제 목록 화면 작성 (`SolveProblemListPage`)**
 
-`frontend/src/pages/solve/ProblemListPage.jsx`:
+`frontend/src/pages/solve/SolveProblemListPage.jsx`:
 ```javascript
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -1184,7 +1184,7 @@ const TYPE_LABELS = {
   FILL_BLANK: "빈칸 채우기",
 };
 
-export default function ProblemListPage() {
+export default function SolveProblemListPage() {
   const [problems, setProblems] = useState([]);
   const [keyword, setKeyword] = useState("");
   const [tag, setTag] = useState("");
@@ -1393,27 +1393,27 @@ export default function ProblemSolvePage() {
 
 - [ ] **Step 9: 라우터에 연결**
 
-`routes.jsx`의 `/solve` 라우트를 아래 구조로 교체:
+`routes.jsx`의 기존 `{ path: "/solve", element: <SolveHomePage /> }`(PrivateRoute children 안)를 아래 구조로 교체:
 ```javascript
       {
         path: "/solve",
         children: [
           { index: true, element: <SolveHomePage /> },
-          { path: "problems", element: <ProblemListPage /> },
+          { path: "problems", element: <SolveProblemListPage /> },
           { path: ":id", element: <ProblemSolvePage /> },
         ],
       },
 ```
-상단 import 추가:
+상단 import 추가 (기존 `import ProblemListPage from "@/pages/admin/problems/ProblemListPage.jsx"`와 이름이 겹치지 않도록 solve 목록은 `SolveProblemListPage`로 import한다):
 ```javascript
-import ProblemListPage from "@/pages/solve/ProblemListPage.jsx";
+import SolveProblemListPage from "@/pages/solve/SolveProblemListPage.jsx";
 import ProblemSolvePage from "@/pages/solve/ProblemSolvePage.jsx";
 ```
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add frontend/src/utils/blankContent.js frontend/src/utils/blankContent.test.js frontend/src/api/solve.js frontend/src/pages/solve/SolveHomePage.jsx frontend/src/pages/solve/ProblemListPage.jsx frontend/src/pages/solve/ProblemSolvePage.jsx frontend/src/routers/routes.jsx
+git add frontend/src/utils/blankContent.js frontend/src/utils/blankContent.test.js frontend/src/api/solve.js frontend/src/pages/solve/SolveHomePage.jsx frontend/src/pages/solve/SolveProblemListPage.jsx frontend/src/pages/solve/ProblemSolvePage.jsx frontend/src/routers/routes.jsx
 git commit -m "feat: add problem solving list/detail/submit screens"
 ```
 
@@ -1505,6 +1505,18 @@ git commit -m "feat: add personal attempt history screen"
 - **플레이스홀더 스캔:** 없음. Task 3의 "주의" 문구는 라우팅 충돌을 피하기 위해 별도 컨트롤러로 분리하라는 구체적 지시이며 실제 코드로 반영되어 있다.
 - **타입 일관성:** `AttemptSubmitRequest`/`AttemptResult`/`BlankAnswerInput`/`BlankAnswerResult`(Task 2)가 프론트 `ProblemSolvePage.jsx`(Task 4)의 payload/응답 처리와 필드명 일치. `parseBlankContent`의 시그니처(`content, blanksToAnswer, revealedAnswers`)가 Task 4 테스트와 실제 사용처(`ProblemSolvePage.jsx`)에서 동일하게 사용됨.
 - **추가 결정 반영:** 풀이 목록의 `tag` 필터와 태그 선택 UI가 Plan 3의 태그 API를 재사용하고, 빈칸 제출은 중복·미정의 키를 저장 전에 차단하며 무작위 노출 조합을 세션에 저장하지 않는다.
+
+## 정합성 보강 (2026-08-12 — Plan 1~3 및 후속 작업 반영)
+
+착수 전, 실제 출고된 코드와 대조해 다음을 바로잡았다. (도메인·API·DB·보안 전제는 대부분 그대로 유효함을 확인: `ProblemStatus.ACTIVE/ARCHIVED`, `ProblemType` 5종, `AuthUser` 6인자 생성자, `attempts`/`attempt_blank_answers` 스키마 존재, DAO `findById/findByProblemId`, `TagArrayTypeHandler`, SessionCheckFilter가 `/api/**`에 로그인 요구·RoleCheckInterceptor는 `@RequireRole`만 제한이라 solve는 직원 접근 정상, react-toastify·apiGet/apiPost·listTags·`/solve`가 PrivateRoute 하위.)
+
+1. **컨트롤러 사용자 주입:** 세션 직접 접근(`getSession().getAttribute`) → `@LoginUser AuthUser actor`. 코드베이스 전 컨트롤러가 `LoginUserArgumentResolver`를 쓰는 관용에 맞췄다(Task 2·3).
+2. **Task 3 정리:** `/api/problems/me` 오매핑을 유발하던 잘못된 초안 스니펫과 혼란스러운 주의문을 삭제하고, `AttemptController`(`/api/attempts`) 하나만 `@LoginUser`로 남겼다.
+3. **라우터 식별자 충돌:** solve 목록 화면을 `SolveProblemListPage`로 rename. routes.jsx가 이미 admin `ProblemListPage`를 import하므로 동명이면 빌드가 깨진다(Task 4).
+4. **마커 정규식 통일:** `parseBlankContent`를 `\w+` → `[A-Za-z0-9_-]+`로. 서버 검증·지정 모드(`blankSegments.js`)와 문자 집합을 일치시켜 하이픈 키 누락을 막는다(Task 4).
+5. **디자인 시스템 정합:** Part 2의 날 Tailwind 골격이 출고된 디자인 토큰·계획서 자체 Design Contract와 어긋남을 명시. 로직은 유지하되 마크업은 토큰·공통 컴포넌트로 재표현하고, **SolveHomePage의 기존 로그아웃/Topbar 보존**을 강제(Task 4·5).
+6. **DB 컬럼·길이:** `is_correct` 컬럼명과 `submitted_answer VARCHAR(500)` 절단을 명시(마이그레이션 불필요).
+7. **죽은 단언 제거:** Task 1 테스트의 항상 `null`인 무의미 단언 삭제.
 
 ## 다음 Plan
 
