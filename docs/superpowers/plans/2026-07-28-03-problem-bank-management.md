@@ -37,7 +37,8 @@
 - **프론트엔드 컴포넌트는 렌더링 검증이 없다.** jsdom이 없어 순수 로직만 테스트했고, 마운트 정상 동작·모달 포커스·1440×1024 레이아웃은 **브라우저 수동 확인이 필요하다**(플랜의 완료 기준에도 Design QA 항목으로 들어 있다). jsdom + React Testing Library 도입은 Plan 4의 인프라 과제로 넘긴다.
 - **보관(ARCHIVED) 복원 경로가 없다.** 상태를 되돌리는 API·서비스·UI가 전혀 없어 실수로 보관하면 SQL 없이는 되돌릴 수 없다. 데이터는 보존되므로 유실은 아니다. Plan 4에서 `restore`를 추가하려면 기존 `assertOwnership`을 재사용할 것.
 - **404가 `INPUT_VALUE_INVALID`(1000)를 쓴다.** 전용 not-found 코드가 없어, 삭제된 문제의 수정 화면을 열면 프론트가 "다시 시도" 버튼을 보여주지만 눌러도 성공할 수 없다. Plan 4에서 `RESOURCE_NOT_FOUND`를 추가할 때 함께 정리할 것.
-- **페이지네이션과 인덱스가 없다.** `ProblemDao.findAll`에 `LIMIT`/`OFFSET`이 없고 `schema.sql`에 인덱스가 하나도 없다(Plan 1·2도 동일). `problems`는 수천 건에 도달할 첫 테이블이고 목록 쿼리는 이미 태그 `EXISTS` 서브쿼리 + 선행 와일드카드 `ILIKE` + `array_agg GROUP BY`를 쓴다. Plan 5의 통계 집계가 먼저 체감할 것이므로 미리 계획할 것.
+- ~~**페이지네이션이 없다.**~~ → **해소됨 (2026-08-09).** [`2026-08-09-admin-list-scroll-and-pagination.md`](2026-08-09-admin-list-scroll-and-pagination.md)로 처리했다. 문제 목록은 서버측 페이징(`ProblemMapper.xml`의 `LIMIT/OFFSET` + `ProblemDao.countAll`), 부서·계정 목록은 클라이언트측 페이징이다.
+- **DB 인덱스는 여전히 하나도 없다.** `schema.sql`에 `CREATE INDEX`가 0개다(Plan 1·2도 동일). 목록 쿼리는 태그 `EXISTS` 서브쿼리 + 선행 와일드카드 `ILIKE` + `array_agg GROUP BY`를 쓰고, 페이징이 붙으면서 `countAll`이 매 조회마다 같은 조건으로 한 번 더 돈다. `problems`가 수천 건에 도달할 첫 테이블이므로 Plan 5의 통계 집계가 먼저 체감할 것이다. 최소한 `problems(department_id)`·`problems(created_at)`·`problem_tags(problem_id)`는 검토할 것.
 
 ## Global Constraints
 

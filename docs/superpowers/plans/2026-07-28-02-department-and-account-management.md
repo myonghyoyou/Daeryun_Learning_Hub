@@ -10,6 +10,13 @@
 
 **전제 조건:** Plan 1이 완료되어 로그인/세션/역할 라우팅이 동작해야 한다.
 
+## 구현 진행 상황 — **Plan 2 전체 완료** (체크박스 갱신 2026-08-11)
+
+- **완료:** Task 1~6 전부. `master`에 병합됨(`8fd4780 merge: Plan 2 (부서/계정 관리) 완료분 통합`).
+- 이 문서의 체크박스는 **구현 당시 갱신되지 않았고 2026-08-11에 소급 표시**했다. 표시 근거는 6개 Task의 산출물이 모두 존재함을 확인한 것이다 — `DepartmentController` · `UserAdminController` · `schema.sql`의 `excel_upload_logs.target_type` · `ExcelAccountUploadServiceImpl` · `AdminLayout.jsx` + `DepartmentListPage.jsx` · `UserListPage.jsx` + `UserExcelUploadPage.jsx`.
+- **QA 결과:** [`docs/qa/2026-08-04-plan1-2-qa-checklist.md`](../../qa/2026-08-04-plan1-2-qa-checklist.md) 및 그 P1 실행 결과 [`2026-08-07-p1-result.md`](../../qa/2026-08-07-p1-result.md) 참고(62항목 중 통과 58 · 부분 3 · 미수행 1 · 실패 0).
+- **Plan 2 산출물 중 이후 Plan이 재사용하는 것:** `excel_upload_logs`(`target_type`으로 계정/문제 공용), `AccountProvisioningService`의 `@Transactional(REQUIRES_NEW)` 행 단위 커밋 패턴, `AdminLayout`/`Topbar`/`ConfirmToggleModal`/`ListStateSurface` 공통 컴포넌트, `@LoginUser` 인자 리졸버.
+
 ## Global Constraints
 
 - 부서/계정 관리는 **총괄 관리자(SUPER_ADMIN) 전용**이다 (PRD 섹션 2.2, 4.4).
@@ -84,7 +91,7 @@ public interface AccountProvisioningService {
 - Consumes: `DepartmentDao`(Plan 1 Task 5), `BizException`/`ErrorCode`(Plan 1 Task 3), `@RequireRole`(Plan 1 Task 10)
 - Produces: `GET /api/admin/departments`, `POST /api/admin/departments`, `PUT /api/admin/departments/{id}`. `DepartmentService.list/create/update`. Task 2(계정 관리), Task 5(프론트 부서 화면), Plan 3(문제 등록 시 부서 검증)이 사용한다.
 
-- [ ] **Step 1: 실패하는 서비스 테스트 작성**
+- [x] **Step 1: 실패하는 서비스 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/service/DepartmentServiceImplTest.java`:
 ```java
@@ -188,12 +195,12 @@ class DepartmentServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests DepartmentServiceImplTest`
 Expected: FAIL — `DepartmentDao.findById/findAll/update`, DTO 클래스, `DepartmentServiceImpl`이 없어 컴파일 오류
 
-- [ ] **Step 3: Dao 확장**
+- [x] **Step 3: Dao 확장**
 
 `DepartmentDao`에 메서드 추가:
 ```java
@@ -217,7 +224,7 @@ Expected: FAIL — `DepartmentDao.findById/findAll/update`, DTO 클래스, `Depa
     </update>
 ```
 
-- [ ] **Step 4: DTO/Service/Controller 구현**
+- [x] **Step 4: DTO/Service/Controller 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/department/DepartmentCreateRequest.java`:
 ```java
@@ -401,12 +408,12 @@ public class DepartmentController {
 }
 ```
 
-- [ ] **Step 5: 테스트 실행하여 통과 확인**
+- [x] **Step 5: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests DepartmentServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 4 tests 통과
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dao/DepartmentDao.java backend/src/main/resources/mappers/probank/DepartmentMapper.xml backend/src/main/java/com/daeryun/probank/dto/department backend/src/main/java/com/daeryun/probank/service/DepartmentService.java backend/src/main/java/com/daeryun/probank/service/DepartmentServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/DepartmentController.java backend/src/test/java/com/daeryun/probank/service/DepartmentServiceImplTest.java
@@ -437,7 +444,7 @@ git commit -m "feat: add department CRUD API"
 - Consumes: `UserDao`, `DepartmentDao`(Plan 1 Task 5, Task 1), `PasswordEncoder`(Plan 1 Task 5), `MailService`, `AuditLogService`
 - Produces: `GET /api/admin/users?departmentId=`, `POST /api/admin/users`, `PUT /api/admin/users/{id}`. `UserAdminService.generateTempPassword() : String` — Task 4(엑셀 업로드)가 재사용한다. 생성/수정 API는 세션의 `AuthUser`를 서비스까지 전달한다.
 
-- [ ] **Step 1: 실패하는 서비스 테스트 작성**
+- [x] **Step 1: 실패하는 서비스 테스트 작성**
 
 `backend/src/test/java/com/daeryun/probank/service/UserAdminServiceImplTest.java`:
 ```java
@@ -563,12 +570,12 @@ class UserAdminServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests UserAdminServiceImplTest`
 Expected: FAIL — 관련 클래스가 없어 컴파일 오류
 
-- [ ] **Step 3: Dao 확장**
+- [x] **Step 3: Dao 확장**
 
 `UserDao`에 메서드 추가:
 ```java
@@ -613,7 +620,7 @@ Expected: FAIL — 관련 클래스가 없어 컴파일 오류
     </update>
 ```
 
-- [ ] **Step 4: DTO/Service/Controller 구현**
+- [x] **Step 4: DTO/Service/Controller 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/user/UserListItem.java`:
 ```java
@@ -877,12 +884,12 @@ public class UserAdminController {
 }
 ```
 
-- [ ] **Step 5: 테스트 실행하여 통과 확인**
+- [x] **Step 5: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests UserAdminServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 4 tests 통과
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dao/UserDao.java backend/src/main/resources/mappers/probank/UserMapper.xml backend/src/main/java/com/daeryun/probank/dto/user backend/src/main/java/com/daeryun/probank/service/UserAdminService.java backend/src/main/java/com/daeryun/probank/service/UserAdminServiceImpl.java backend/src/main/java/com/daeryun/probank/service/MailService.java backend/src/main/java/com/daeryun/probank/service/MailServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/UserAdminController.java backend/src/test/java/com/daeryun/probank/service/UserAdminServiceImplTest.java
@@ -904,7 +911,7 @@ git commit -m "feat: add user account CRUD API with company email delivery"
 - Consumes: Plan 1 Task 2의 `excel_upload_logs` 테이블
 - Produces: `ExcelUploadLogDao.insert(ExcelUploadLog)`, `ExcelUploadLogDao.findAll(UploadTargetType, Long departmentId)`. Task 4(계정 업로드), Plan 3(문제 업로드)이 공유해서 사용한다.
 
-- [ ] **Step 1: schema.sql에 target_type 컬럼 추가**
+- [x] **Step 1: schema.sql에 target_type 컬럼 추가**
 
 `backend/src/main/resources/schema.sql` 파일 맨 끝에 추가:
 ```sql
@@ -913,7 +920,7 @@ ALTER TABLE excel_upload_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) N
 ```
 (`department_id`는 Plan 1 Task 2의 `schema.sql`에서 이미 nullable로 정의되어 있으므로 별도 `ALTER COLUMN`이 필요 없다 — 계정 업로드는 총괄관리자가 여러 부서를 한 파일에 섞어 등록할 수 있어 단일 부서로 강제하지 않기 때문이다. 여기서는 `target_type` 컬럼만 추가한다.)
 
-- [ ] **Step 2: 도메인/Dao/Mapper 작성**
+- [x] **Step 2: 도메인/Dao/Mapper 작성**
 
 `backend/src/main/java/com/daeryun/probank/domain/UploadTargetType.java`:
 ```java
@@ -990,7 +997,7 @@ public interface ExcelUploadLogDao {
 </mapper>
 ```
 
-- [ ] **Step 3: 스키마 반영 확인**
+- [x] **Step 3: 스키마 반영 확인**
 
 Run: `cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'` 실행 후 Ctrl+C, 이어서:
 ```bash
@@ -998,7 +1005,7 @@ psql -U probank -d probank_dev -c "\d excel_upload_logs"
 ```
 Expected: `target_type` 컬럼 존재, `department_id`가 nullable로 표시됨
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/src/main/resources/schema.sql backend/src/main/java/com/daeryun/probank/domain/UploadTargetType.java backend/src/main/java/com/daeryun/probank/domain/ExcelUploadLog.java backend/src/main/java/com/daeryun/probank/dao/ExcelUploadLogDao.java backend/src/main/resources/mappers/probank/ExcelUploadLogMapper.xml
@@ -1023,7 +1030,7 @@ git commit -m "feat: extend excel upload log for account/problem target types"
 - Consumes: `UserDao`, `DepartmentDao`, `ExcelUploadLogDao`, `PasswordEncoder`, `MailService`, `AuditLogService`, `UserAdminService.generateTempPassword()`(Task 1~3)
 - Produces: `POST /api/admin/users/excel-upload` (multipart). 엑셀 템플릿 컬럼: `사번 | 이름 | 회사이메일 | 부서코드 | 역할`(1행은 헤더). Task 6(프론트 계정 업로드 화면)이 사용한다. 업로드 이력 저장까지만 구현한다.
 
-- [ ] **Step 1: 실패하는 테스트 작성 (엑셀 파일을 코드로 직접 생성해 검증)**
+- [x] **Step 1: 실패하는 테스트 작성 (엑셀 파일을 코드로 직접 생성해 검증)**
 
 `backend/src/test/java/com/daeryun/probank/service/ExcelAccountUploadServiceImplTest.java`:
 ```java
@@ -1128,12 +1135,12 @@ class ExcelAccountUploadServiceImplTest {
 }
 ```
 
-- [ ] **Step 2: 테스트 실행하여 실패 확인**
+- [x] **Step 2: 테스트 실행하여 실패 확인**
 
 Run: `cd backend && ./gradlew test --tests ExcelAccountUploadServiceImplTest`
 Expected: FAIL — 관련 클래스가 없어 컴파일 오류
 
-- [ ] **Step 3: DTO/Service 구현**
+- [x] **Step 3: DTO/Service 구현**
 
 `backend/src/main/java/com/daeryun/probank/dto/upload/RowResult.java`:
 ```java
@@ -1356,7 +1363,7 @@ public class ExcelAccountUploadServiceImpl implements ExcelAccountUploadService 
 }
 ```
 
-- [ ] **Step 4: 컨트롤러에 업로드 엔드포인트 추가**
+- [x] **Step 4: 컨트롤러에 업로드 엔드포인트 추가**
 
 `UserAdminController`에 추가 (상단 import에 `org.springframework.web.multipart.MultipartFile`, `com.daeryun.probank.service.ExcelAccountUploadService`, `com.daeryun.probank.common.AuthUser`, `com.daeryun.probank.common.SessionKeys`, `javax.servlet.http.HttpServletRequest` 추가):
 ```java
@@ -1376,12 +1383,12 @@ public class ExcelAccountUploadServiceImpl implements ExcelAccountUploadService 
 ```
 (기존 생성자를 대체하며, 기존 필드 `userAdminService` 선언은 유지한다.)
 
-- [ ] **Step 5: 테스트 실행하여 통과 확인**
+- [x] **Step 5: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test --tests ExcelAccountUploadServiceImplTest`
 Expected: `BUILD SUCCESSFUL`, 2 tests 통과
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dto/upload backend/src/main/java/com/daeryun/probank/service/ExcelAccountUploadService.java backend/src/main/java/com/daeryun/probank/service/ExcelAccountUploadServiceImpl.java backend/src/main/java/com/daeryun/probank/service/AccountProvisioningService.java backend/src/main/java/com/daeryun/probank/service/AccountProvisioningServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/UserAdminController.java backend/src/test/java/com/daeryun/probank/service/ExcelAccountUploadServiceImplTest.java
@@ -1405,7 +1412,7 @@ git commit -m "feat: add excel bulk account upload with partial success"
 - Consumes: `apiGet/apiPost/apiPut`(Task 12 client.js — `apiPut` 추가 필요), `AdminRoute`(Plan 1 Task 15)
 - Produces: `/admin/departments` 화면. Task 6이 같은 `AdminLayout` 아래에 `/admin/users`를 추가한다.
 
-- [ ] **Step 1: client.js에 apiPut 추가**
+- [x] **Step 1: client.js에 apiPut 추가**
 
 `frontend/src/api/client.js`의 `apiPostForm` 함수 아래에 추가:
 ```javascript
@@ -1414,7 +1421,7 @@ export function apiPut(path, body) {
 }
 ```
 
-- [ ] **Step 2: departments API 래퍼 작성**
+- [x] **Step 2: departments API 래퍼 작성**
 
 `frontend/src/api/departments.js`:
 ```javascript
@@ -1433,7 +1440,7 @@ export function updateDepartment(id, { name, status }) {
 }
 ```
 
-- [ ] **Step 3: AdminLayout 작성 (네비게이션)**
+- [x] **Step 3: AdminLayout 작성 (네비게이션)**
 
 `frontend/src/pages/admin/AdminLayout.jsx`:
 ```javascript
@@ -1471,7 +1478,7 @@ export default function AdminLayout() {
 }
 ```
 
-- [ ] **Step 4: 부서 목록/생성/수정 화면 작성**
+- [x] **Step 4: 부서 목록/생성/수정 화면 작성**
 
 `frontend/src/pages/admin/departments/DepartmentListPage.jsx`:
 ```javascript
@@ -1572,7 +1579,7 @@ export default function DepartmentListPage() {
 }
 ```
 
-- [ ] **Step 5: 라우터에 연결 (`AdminHomePage`를 `AdminLayout` + 부서 라우트로 교체)**
+- [x] **Step 5: 라우터에 연결 (`AdminHomePage`를 `AdminLayout` + 부서 라우트로 교체)**
 
 `frontend/src/routers/routes.jsx`의 `/admin` 부분을 아래로 교체:
 ```javascript
@@ -1598,11 +1605,11 @@ import DepartmentListPage from "@/pages/admin/departments/DepartmentListPage.jsx
 ```
 (기존 `import AdminHomePage from "@/pages/admin/AdminHomePage.jsx";`는 제거하고, `frontend/src/pages/admin/AdminHomePage.jsx` 파일도 삭제한다.)
 
-- [ ] **Step 6: 수동 확인**
+- [x] **Step 6: 수동 확인**
 
 Run: 백엔드/프론트 동시 실행 후 총괄관리자로 로그인 → `/admin/departments`에서 부서 생성/비활성화 동작 확인
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/api/departments.js frontend/src/api/client.js frontend/src/pages/admin frontend/src/routers/routes.jsx
@@ -1625,7 +1632,7 @@ git commit -m "feat: add department management screen"
 - Consumes: `apiGet/apiPost/apiPut/apiPostForm`(Task 12, 5), `listDepartments`(Task 5)
 - Produces: `/admin/users`, `/admin/users/excel-upload` 화면.
 
-- [ ] **Step 1: users API 래퍼 작성**
+- [x] **Step 1: users API 래퍼 작성**
 
 `frontend/src/api/users.js`:
 ```javascript
@@ -1651,7 +1658,7 @@ export function uploadUsersExcel(file) {
 }
 ```
 
-- [ ] **Step 2: 계정 목록/생성 화면 작성**
+- [x] **Step 2: 계정 목록/생성 화면 작성**
 
 `frontend/src/pages/admin/users/UserListPage.jsx`:
 ```javascript
@@ -1775,7 +1782,7 @@ export default function UserListPage() {
 }
 ```
 
-- [ ] **Step 3: 엑셀 업로드 화면 작성**
+- [x] **Step 3: 엑셀 업로드 화면 작성**
 
 `frontend/src/pages/admin/users/UserExcelUploadPage.jsx`:
 ```javascript
@@ -1829,7 +1836,7 @@ export default function UserExcelUploadPage() {
 }
 ```
 
-- [ ] **Step 4: 네비게이션/라우터에 연결**
+- [x] **Step 4: 네비게이션/라우터에 연결**
 
 `AdminLayout.jsx`의 `NAV_ITEMS`를 교체:
 ```javascript
@@ -1851,11 +1858,11 @@ import UserListPage from "@/pages/admin/users/UserListPage.jsx";
 import UserExcelUploadPage from "@/pages/admin/users/UserExcelUploadPage.jsx";
 ```
 
-- [ ] **Step 5: 수동 확인**
+- [x] **Step 5: 수동 확인**
 
 Run: 총괄관리자로 로그인 → `/admin/users`에서 회사 이메일을 포함해 계정 생성(메일 발송 안내 확인) → `/admin/users/excel-upload`에서 샘플 엑셀 업로드 후 성공/실패 건수 확인
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/api/users.js frontend/src/pages/admin/users frontend/src/pages/admin/AdminLayout.jsx frontend/src/routers/routes.jsx
