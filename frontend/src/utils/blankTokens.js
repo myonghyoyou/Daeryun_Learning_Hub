@@ -15,7 +15,10 @@ export const TRAILING_PARTICLES = [
   "은", "는", "이", "가", "을", "를", "에", "의", "와", "과", "도", "만", "란", "로", "나",
 ];
 
-const TRAILING_PUNCT = /[,.·:;]+$/;
+// 단일 구두점 문자 판정. TRAILING_PUNCT(꼬리 전체 매칭)와 adjustBlankBoundary(경계 한 글자
+// 판정)가 같은 문자 집합을 공유하도록 여기서 한 번만 정의한다.
+const TRAILING_PUNCT_CHAR = /[,.·:;]/;
+const TRAILING_PUNCT = new RegExp(`(?:${TRAILING_PUNCT_CHAR.source})+$`);
 
 export function splitTrailing(word) {
   let core = word;
@@ -54,6 +57,9 @@ export function nextBlankKey(existingKeys) {
  * 본문에 남긴다. content 의 [start, end) 구간을 "{{key}}" + 꼬리로 치환한다.
  */
 export function designateBlank(content, blanks, wordSeg) {
+  if (content.slice(wordSeg.start, wordSeg.end) !== wordSeg.text) {
+    return { content, blanks }; // 오프셋이 낡았다: 잘못 잘라 붙이는 대신 아무것도 하지 않는다
+  }
   const { core, trailing } = splitTrailing(wordSeg.text);
   const key = nextBlankKey(blanks.map((b) => b.blankKey));
   const replacement = `{{${key}}}${trailing}`;
@@ -65,8 +71,18 @@ export function designateBlank(content, blanks, wordSeg) {
 }
 
 export function releaseBlank(content, blanks, key) {
-  const answer = blanks.find((b) => b.blankKey === key)?.answerText ?? "";
-  const nextContent = content.replace(`{{${key}}}`, answer);
+  const blank = blanks.find((b) => b.blankKey === key);
+  if (!blank) {
+    return { content, blanks }; // 알 수 없는 키: adjustBlankBoundary와 같이 아무것도 하지 않는다
+  }
+  const marker = `{{${key}}}`;
+  const at = content.indexOf(marker);
+  if (at < 0) {
+    return { content, blanks };
+  }
+  // String.replace(문자열, 문자열)은 교체 문자열의 "$&" 등을 특수 패턴으로 해석한다.
+  // 정답 텍스트를 있는 그대로 넣기 위해 슬라이스로 직접 이어붙인다.
+  const nextContent = content.slice(0, at) + blank.answerText + content.slice(at + marker.length);
   return { content: nextContent, blanks: blanks.filter((b) => b.blankKey !== key) };
 }
 
@@ -90,8 +106,10 @@ export function adjustBlankBoundary(content, blanks, key, delta) {
 
   if (delta > 0) {
     const ch = content[after];
-    if (!ch || /\s/.test(ch)) {
-      return { content, blanks }; // 뒤가 공백/끝이면 흡수할 것이 없다
+    // 뒤가 공백/끝/구두점이면 흡수할 것이 없다. "{" "}"는 인접한 다른 {{bN}} 마커의 일부일
+    // 수 있으므로 항상 거부한다 — 흡수하면 그 마커가 깨져 복구 불가능해진다.
+    if (!ch || /\s/.test(ch) || ch === "{" || ch === "}" || TRAILING_PUNCT_CHAR.test(ch)) {
+      return { content, blanks };
     }
     const nextContent = content.slice(0, after) + content.slice(after + 1);
     return {
