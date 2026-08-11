@@ -15,6 +15,7 @@ import ProblemExcelUploadPage from "@/pages/admin/problems/ProblemExcelUploadPag
 import SolveHomePage from "@/pages/solve/SolveHomePage.jsx";
 import SolveProblemListPage from "@/pages/solve/SolveProblemListPage.jsx";
 import ProblemSolvePage from "@/pages/solve/ProblemSolvePage.jsx";
+import AttemptHistoryPage from "@/pages/solve/AttemptHistoryPage.jsx";
 
 export const router = createBrowserRouter([
   {
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <SolveHomePage /> },
           { path: "problems", element: <SolveProblemListPage /> },
+          { path: "history", element: <AttemptHistoryPage /> },
           { path: ":id", element: <ProblemSolvePage /> },
         ],
       },
