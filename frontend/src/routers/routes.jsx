@@ -13,6 +13,9 @@ import ProblemListPage from "@/pages/admin/problems/ProblemListPage.jsx";
 import ProblemFormPage from "@/pages/admin/problems/ProblemFormPage.jsx";
 import ProblemExcelUploadPage from "@/pages/admin/problems/ProblemExcelUploadPage.jsx";
 import SolveHomePage from "@/pages/solve/SolveHomePage.jsx";
+import SolveProblemListPage from "@/pages/solve/SolveProblemListPage.jsx";
+import ProblemSolvePage from "@/pages/solve/ProblemSolvePage.jsx";
+import AttemptHistoryPage from "@/pages/solve/AttemptHistoryPage.jsx";
 
 export const router = createBrowserRouter([
   {
@@ -47,7 +50,15 @@ export const router = createBrowserRouter([
           },
         ],
       },
-      { path: "/solve", element: <SolveHomePage /> },
+      {
+        path: "/solve",
+        children: [
+          { index: true, element: <SolveHomePage /> },
+          { path: "problems", element: <SolveProblemListPage /> },
+          { path: "history", element: <AttemptHistoryPage /> },
+          { path: ":id", element: <ProblemSolvePage /> },
+        ],
+      },
     ],
   },
 ]);

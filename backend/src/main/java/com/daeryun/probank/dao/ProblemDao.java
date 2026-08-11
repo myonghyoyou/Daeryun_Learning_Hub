@@ -32,4 +32,8 @@ public interface ProblemDao {
                    @Param("keyword") String keyword);
 
     void updateDepartment(@Param("id") Long id, @Param("departmentId") Long departmentId);
+
+    /** 풀이용 전사 공통 목록: status = ACTIVE 만, 정답 비노출. keyword/tag 는 선택 필터. */
+    List<com.daeryun.probank.dto.solve.ProblemSolveListItem> findAllActive(@Param("keyword") String keyword,
+                                                                            @Param("tag") String tag);
 }
