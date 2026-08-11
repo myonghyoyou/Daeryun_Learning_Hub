@@ -169,6 +169,29 @@ test("adjustBlankBoundary no-ops for a key whose marker exists but has no blanks
   assert.deepEqual(next, { content, blanks });
 });
 
+// B1: 같은 키의 마커가 두 번 있을 때 하나만 되돌리면 나머지가 "아무 빈칸도 선언하지 않는"
+// 고아 마커로 남는다. 모든 출현을 함께 되돌려야 한다.
+test("releaseBlank: restores every occurrence so no orphan marker remains", () => {
+  const content = "수도는 {{b1}}이고 다시 {{b1}}이며 항구는 {{b2}}이다";
+  const blanks = [
+    { blankKey: "b1", answerText: "서울" },
+    { blankKey: "b2", answerText: "부산" },
+  ];
+  const next = releaseBlank(content, blanks, "b1");
+  assert.strictEqual(next.content, "수도는 서울이고 다시 서울이며 항구는 {{b2}}이다");
+  assert.ok(!next.content.includes("{{b1}}"));
+  assert.deepStrictEqual(next.blanks, [{ blankKey: "b2", answerText: "부산" }]);
+});
+
+// B1: 출현이 2개 이상이면 경계 조정은 성립하지 않는다(정답은 공유되는데 각 마커 뒤 글자가
+// 다르다). 조용히 잘못 조정하는 대신 아무것도 하지 않아야 한다.
+test("adjustBlankBoundary: no-ops when the key appears more than once", () => {
+  const content = "{{b1}}이고 {{b1}}이며";
+  const blanks = [{ blankKey: "b1", answerText: "서울" }];
+  assert.deepStrictEqual(adjustBlankBoundary(content, blanks, "b1", 1), { content, blanks });
+  assert.deepStrictEqual(adjustBlankBoundary(content, blanks, "b1", -1), { content, blanks });
+});
+
 // 왕복 안정성: 여러 단어를 지정한 뒤 지정 순서와 다른 순서로 해제해도 본문은 원형(조사
 // 포함) 그대로 복원되어야 한다.
 test("round trip: designating several words then releasing them in a different order restores the original content", () => {

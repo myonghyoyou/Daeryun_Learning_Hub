@@ -73,17 +73,26 @@ export function designateBlank(content, blanks, wordSeg) {
 export function releaseBlank(content, blanks, key) {
   const blank = blanks.find((b) => b.blankKey === key);
   if (!blank) {
-    return { content, blanks }; // 알 수 없는 키: adjustBlankBoundary와 같이 아무것도 하지 않는다
+    return { content, blanks }; // 알 수 없는 키: 아무것도 하지 않는다
   }
   const marker = `{{${key}}}`;
-  const at = content.indexOf(marker);
-  if (at < 0) {
-    return { content, blanks };
+  // 한 키의 정답은 하나다. 출현 중 하나만 되돌리면 나머지가 "아무 빈칸도 선언하지 않는"
+  // 고아 마커가 되고, validateBlanks는 선언된 키만 검사하므로 그대로 저장된다.
+  // 그래서 전부 되돌린다. replace 대신 슬라이스로 잇는 이유는 정답의 "$&" 등이
+  // 특수 패턴으로 해석되지 않게 하기 위해서다.
+  let out = "";
+  let from = 0;
+  for (;;) {
+    const at = content.indexOf(marker, from);
+    if (at < 0) break;
+    out += content.slice(from, at) + blank.answerText;
+    from = at + marker.length;
   }
-  // String.replace(문자열, 문자열)은 교체 문자열의 "$&" 등을 특수 패턴으로 해석한다.
-  // 정답 텍스트를 있는 그대로 넣기 위해 슬라이스로 직접 이어붙인다.
-  const nextContent = content.slice(0, at) + blank.answerText + content.slice(at + marker.length);
-  return { content: nextContent, blanks: blanks.filter((b) => b.blankKey !== key) };
+  if (from === 0) {
+    return { content, blanks }; // 본문에 마커가 없다
+  }
+  out += content.slice(from);
+  return { content: out, blanks: blanks.filter((b) => b.blankKey !== key) };
 }
 
 /**
@@ -97,6 +106,9 @@ export function adjustBlankBoundary(content, blanks, key, delta) {
   const at = content.indexOf(marker);
   if (at < 0) {
     return { content, blanks };
+  }
+  if (content.indexOf(marker, at + marker.length) >= 0) {
+    return { content, blanks }; // 같은 키가 여러 번 등장하면 경계 조정이 성립하지 않는다
   }
   const after = at + marker.length;
   const blank = blanks.find((b) => b.blankKey === key);

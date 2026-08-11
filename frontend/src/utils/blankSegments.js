@@ -8,7 +8,10 @@
  * 쉼표 등 구두점은 어절에서 떼어 punct 세그먼트로 둔다("편성,"→word "편성" + punct ",";
  * 결정 5, 쉼표 제외 공백 어절). 조사는 여기서 떼지 않고 클릭 시점의 splitTrailing(Task 1)이 뗀다.
  */
-const MARKER = /\{\{(b\d+)\}\}/g;
+// 서버는 키 형식을 강제하지 않는다. 지정 모드가 만드는 b1·b2… 뿐 아니라 이 앱의 입력란
+// placeholder이자 기존 데이터의 형식인 blank_1 같은 키도 마커로 인식해야 한다. 인식하지
+// 못하면 마커가 평범한 어절로 렌더돼 클릭 시 마커 문자열이 정답이 되고 본문이 깨진다.
+const MARKER = /\{\{([A-Za-z0-9_-]+)\}\}/g;
 
 function segmentText(text, offset, out) {
   // 공백 / 구두점(,.·:;) / 어절 세 갈래로 나눈다. 구두점을 별도 세그먼트로 떼어 어절을
@@ -37,7 +40,13 @@ export function segmentContent(content, blanks) {
     if (m.index > last) {
       segmentText(content.slice(last, m.index), last, out);
     }
-    out.push({ type: "blank", key: m[1], answer: answerByKey.get(m[1]) ?? "" });
+    out.push({
+      type: "blank",
+      key: m[1],
+      answer: answerByKey.get(m[1]) ?? "",
+      start: m.index,
+      end: m.index + m[0].length,
+    });
     last = m.index + m[0].length;
   }
   if (last < content.length) {

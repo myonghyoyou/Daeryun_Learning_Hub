@@ -5,7 +5,8 @@ import { segmentContent } from "@/utils/blankSegments.js";
 // BASE_CLASS와 같은 focus-visible 규칙을 써서 이 화면에서만 포커스 링이 사라지지 않게 한다.
 const ICON_BUTTON_CLASS =
   "inline-flex items-center justify-center rounded-xs text-ink-muted hover:text-ink-strong " +
-  "focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua";
+  "focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua " +
+  "disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
  * 빈칸 지정 모드. content 문자열을 세그먼트로 렌더한다 — 일반 어절은 클릭하면 빈칸이 되고,
@@ -19,6 +20,13 @@ const ICON_BUTTON_CLASS =
  */
 export default function BlankDesignator({ content, blanks, onDesignate, onRelease, onAdjust }) {
   const segments = segmentContent(content, blanks);
+  // 같은 키의 마커가 여러 번 나오면 ±1 경계 조정이 성립하지 않는다(정답은 하나인데 각
+  // 마커 뒤 글자가 다르다). 버튼을 막고 이유를 title로 알린다 — 눌러도 아무 일이 없으면
+  // 고장으로 보인다.
+  const keyCounts = segments.reduce((acc, s) => {
+    if (s.type === "blank") acc[s.key] = (acc[s.key] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div
@@ -52,10 +60,16 @@ export default function BlankDesignator({ content, blanks, onDesignate, onReleas
         }
         // blank: Input 모양 칩 + 조정/해제. 칩 자체는 <span>이라 안의 <button> 3개가 서로
         // 형제로만 존재한다 — <button> 안에 <button>을 중첩하지 않는다. key는 word와 같은
-        // 이유로 blankKey(seg.key)라는 안정적 식별자를 쓴다 — 배열 인덱스가 아니다.
+        // 이유로 seg.start(원본 content 안의 마커 시작 오프셋)라는 안정적 식별자를 쓴다 —
+        // 같은 blankKey(seg.key)의 마커가 본문에 두 번 이상 나올 수 있어 seg.key만으로는
+        // 형제 노드의 key가 중복될 수 있다.
+        const multipleOccurrences = keyCounts[seg.key] > 1;
+        const adjustDisabledTitle = multipleOccurrences
+          ? `${seg.key} 마커가 본문에 여러 번 있어 정답 범위를 조정할 수 없습니다`
+          : undefined;
         return (
           <span
-            key={`blank-${seg.key}`}
+            key={`blank-${seg.start}`}
             className="mx-0.5 inline-flex h-[30px] items-center gap-1 rounded-sm border border-brand-aqua bg-surface-default px-2 align-middle"
           >
             <button
@@ -63,6 +77,8 @@ export default function BlankDesignator({ content, blanks, onDesignate, onReleas
               onClick={() => onAdjust(seg.key, -1)}
               aria-label={`${seg.key} 정답 한 글자 줄이기`}
               className={ICON_BUTTON_CLASS}
+              disabled={multipleOccurrences}
+              title={adjustDisabledTitle}
             >
               <CaretLeft size={12} aria-hidden="true" />
             </button>
@@ -72,6 +88,8 @@ export default function BlankDesignator({ content, blanks, onDesignate, onReleas
               onClick={() => onAdjust(seg.key, 1)}
               aria-label={`${seg.key} 정답 한 글자 늘리기`}
               className={ICON_BUTTON_CLASS}
+              disabled={multipleOccurrences}
+              title={adjustDisabledTitle}
             >
               <CaretRight size={12} aria-hidden="true" />
             </button>
