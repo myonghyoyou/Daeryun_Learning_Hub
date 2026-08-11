@@ -242,6 +242,25 @@ class ProblemServiceImplTest {
         Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
     }
 
+    // 위 테스트는 "선언된 키가 본문에 있는가"만 본다. 반대 방향(본문의 마커가 선언돼
+    // 있는가)이 없으면 정답이 없는 {{b7}} 같은 고아 마커가 검증을 통과해 저장되고,
+    // 학습자 화면에 마커가 날것으로 노출되며 채점도 되지 않는다.
+    @Test
+    void create_fillBlank_withOrphanMarkerInContent_rejects() {
+        ProblemCreateRequest request = new ProblemCreateRequest();
+        request.setType(ProblemType.FILL_BLANK);
+        request.setContent("수도는 {{b7}}이고 항구는 {{b1}}이다");
+        BlankInput blank1 = new BlankInput();
+        blank1.setBlankKey("b1");
+        blank1.setAnswerText("부산");
+        request.setBlanks(Collections.singletonList(blank1));
+        request.setBlankRevealCount(1);
+
+        BizException exception = assertThrows(BizException.class, () -> service.create(request, null, actor));
+        assertEquals("정답이 등록되지 않은 빈칸 마커가 본문에 있습니다: b7", exception.getMessage());
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
     // department_id는 요청 값이 아니라 세션의 AuthUser에서 와야 한다(부서 격리).
     // ProblemCreateRequest에는 애초에 departmentId 필드가 없으므로 클라이언트가
     // 값을 보낼 수조차 없지만, 저장되는 Problem이 실제로 actor.getDepartmentId()에서

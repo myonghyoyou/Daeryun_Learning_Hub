@@ -92,3 +92,24 @@ test("validateBlanks rejects a blankRevealCount outside [1, blanks.length]", () 
 test("validateBlanks accepts blankRevealCount as a numeric string from an <input type=number>", () => {
   assert.equal(validateBlanks({ ...validForm, blankRevealCount: "1" }), null);
 });
+
+test("validateBlanks: rejects a marker in content that has no blank entry", () => {
+  const message = validateBlanks({
+    content: "수도는 {{b7}}이고 항구는 {{b1}}이다",
+    blanks: [{ blankKey: "b1", answerText: "부산" }],
+    blankRevealCount: 1,
+  });
+  assert.strictEqual(message, "정답이 등록되지 않은 빈칸 마커가 본문에 있습니다: b7");
+});
+
+test("validateBlanks: still accepts content whose markers are all declared", () => {
+  const message = validateBlanks({
+    content: "수도는 {{b1}}이고 항구는 {{b2}}이다",
+    blanks: [
+      { blankKey: "b1", answerText: "서울" },
+      { blankKey: "b2", answerText: "부산" },
+    ],
+    blankRevealCount: 2,
+  });
+  assert.strictEqual(message, null);
+});

@@ -26,6 +26,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +40,12 @@ public class ProblemServiceImpl implements ProblemService {
     private static final int MAX_CHOICES = 5;
     private static final int MAX_TAGS = 20;
     private static final int MAX_TAG_LENGTH = 100;
+
+    /**
+     * 본문에서 빈칸 마커를 찾는 패턴. 프론트엔드 blankSegments.js 의 MARKER 와 같은 문자 집합을
+     * 써야 두 곳의 판정이 갈라지지 않는다.
+     */
+    private static final Pattern BLANK_MARKER_PATTERN = Pattern.compile("\\{\\{([A-Za-z0-9_-]+)\\}\\}");
 
     // imageUrl 검증 규칙(접두어/경로 탈출/길이 상한)은 ImageUrlValidator 하나에만 있다. JSON API 경로
     // (이 클래스)와 엑셀 업로드 경로(ExcelProblemUploadServiceImpl) 모두 그 클래스를 호출한다 — 규칙이
@@ -398,6 +406,17 @@ public class ProblemServiceImpl implements ProblemService {
         for (String key : keys) {
             if (!content.contains("{{" + key + "}}")) {
                 throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "본문에 없는 빈칸 마커입니다: " + key);
+            }
+        }
+        // 위 루프는 "선언된 키가 본문에 있는가"만 본다. 그 반대(본문의 마커가 선언돼 있는가)를
+        // 보지 않으면, 정답이 없는 {{b7}} 같은 고아 마커가 검증을 통과해 저장되고 학습자 화면에
+        // 날것으로 노출된다. 채점도 되지 않는다.
+        Matcher markerMatcher = BLANK_MARKER_PATTERN.matcher(content);
+        while (markerMatcher.find()) {
+            String markerKey = markerMatcher.group(1);
+            if (!uniqueKeys.contains(markerKey)) {
+                throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                        "정답이 등록되지 않은 빈칸 마커가 본문에 있습니다: " + markerKey);
             }
         }
         if (blankRevealCount == null || blankRevealCount < 1 || blankRevealCount > blanks.size()) {
