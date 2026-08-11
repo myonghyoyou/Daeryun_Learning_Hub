@@ -22,18 +22,25 @@ export default function BlankDesignator({ content, blanks, onDesignate, onReleas
 
   return (
     <div
+      role="group"
       className="min-h-[76px] rounded-sm border border-line-default bg-surface-subtle p-3 leading-9"
       aria-label="빈칸 지정 영역"
     >
       {segments.map((seg, i) => {
         if (seg.type === "space" || seg.type === "punct") {
-          // 공백·구두점은 클릭 대상이 아니고 평범한 텍스트로 그린다.
-          return <span key={i}>{seg.text}</span>;
+          // 공백·구두점은 클릭 대상도 상태도 없는 inert 텍스트라 배열 인덱스 키로 충분하다
+          // (word/blank처럼 뒤 세그먼트가 밀릴 때 포커스를 잘못 물려받을 대상이 아니다).
+          // word/blank와 접두사로 구분해 배열 전체에서 키가 겹치지 않게 한다.
+          return <span key={`gap-${i}`}>{seg.text}</span>;
         }
         if (seg.type === "word") {
+          // word는 배열 인덱스가 아니라 content 안의 안정적인 시작 오프셋으로 키를 잡는다.
+          // 앞쪽에서 빈칸을 지정하면 뒤쪽 word들의 배열 인덱스가 모두 밀리는데, 인덱스
+          // 키였다면 React가 이전 위치의 <button> DOM을 엉뚱한 word에 재사용해 그 버튼이
+          // 갖고 있던 포커스가 클릭하지 않은 단어로 조용히 옮겨간다.
           return (
             <button
-              key={i}
+              key={`word-${seg.start}`}
               type="button"
               onClick={() => onDesignate(seg)}
               className="cursor-pointer rounded-xs px-0.5 hover:bg-surface-blue focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
@@ -44,10 +51,11 @@ export default function BlankDesignator({ content, blanks, onDesignate, onReleas
           );
         }
         // blank: Input 모양 칩 + 조정/해제. 칩 자체는 <span>이라 안의 <button> 3개가 서로
-        // 형제로만 존재한다 — <button> 안에 <button>을 중첩하지 않는다.
+        // 형제로만 존재한다 — <button> 안에 <button>을 중첩하지 않는다. key는 word와 같은
+        // 이유로 blankKey(seg.key)라는 안정적 식별자를 쓴다 — 배열 인덱스가 아니다.
         return (
           <span
-            key={i}
+            key={`blank-${seg.key}`}
             className="mx-0.5 inline-flex h-[30px] items-center gap-1 rounded-sm border border-brand-aqua bg-surface-default px-2 align-middle"
           >
             <button

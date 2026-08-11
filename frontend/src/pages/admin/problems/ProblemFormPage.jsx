@@ -228,7 +228,14 @@ export default function ProblemFormPage() {
   // 그대로 흘린다 — content 문자열({{bN}} 마커 포함)이 단일 진실이라 쓰기 모드 textarea와
   // 여기서 만든 결과가 항상 같은 값을 공유한다.
   function handleDesignate(wordSeg) {
-    const next = designateBlank(content, blanks, wordSeg);
+    // 새 등록 폼과 handleTypeChange는 blanks를 [createBlank()](키·정답 모두 빈 자리표시자
+    // 한 행)로 seed한다. designateBlank는 항상 append만 하므로, 이 빈 자리표시자를 그대로
+    // 두면 사용자가 지정 모드에서 만든 첫 빈칸 뒤에 손대지 않은 빈 행이 남아
+    // validateBlanks("빈칸 키와 정답을 모두 입력하세요.")에 걸린다 — 사용자는 아무 잘못도
+    // 안 했는데 저장이 막힌다. 키·정답이 "둘 다" 빈 행만 지운다(OR): 키만 먼저 채워 넣은
+    // 행은 사용자 입력이 있으므로 살려야 한다.
+    const seeded = blanks.filter((b) => b.blankKey.trim() || b.answerText.trim());
+    const next = designateBlank(content, seeded, wordSeg);
     setContent(next.content);
     setBlanks(next.blanks);
     clearError("blanks");
@@ -620,6 +627,7 @@ export default function ProblemFormPage() {
                   type="button"
                   variant={blankMode === "write" ? "primary" : "secondary"}
                   size="sm"
+                  aria-pressed={blankMode === "write"}
                   onClick={() => setBlankMode("write")}
                 >
                   쓰기 모드
@@ -628,6 +636,7 @@ export default function ProblemFormPage() {
                   type="button"
                   variant={blankMode === "designate" ? "primary" : "secondary"}
                   size="sm"
+                  aria-pressed={blankMode === "designate"}
                   onClick={() => setBlankMode("designate")}
                 >
                   빈칸 지정 모드
