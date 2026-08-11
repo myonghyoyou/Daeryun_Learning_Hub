@@ -8,7 +8,10 @@
     </insert>
 
     <select id="findByUserId" resultType="com.daeryun.probank.dto.solve.AttemptHistoryItem">
-        SELECT a.problem_id, p.content AS problem_content, a.submitted_answer, a.is_correct, a.submitted_at
+        <!-- is_correct 는 DTO 의 boolean 프로퍼티명이 correct 이므로 AS correct 로 맞춘다.
+             별칭이 없으면 mapUnderscoreToCamelCase 가 isCorrect 로 바꿔 매핑에 실패한다(항상 false). -->
+        SELECT a.problem_id, p.content AS problem_content, a.submitted_answer,
+               a.is_correct AS correct, a.submitted_at
         FROM attempts a
         JOIN problems p ON p.id = a.problem_id
         WHERE a.user_id = #{userId}
