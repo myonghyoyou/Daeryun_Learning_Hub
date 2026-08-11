@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.AttemptBlankAnswerDao">
+
+    <insert id="insertAll">
+        INSERT INTO attempt_blank_answers (attempt_id, blank_key, submitted_answer, is_correct)
+        VALUES
+        <foreach collection="answers" item="answer" separator=",">
+            (#{answer.attemptId}, #{answer.blankKey}, #{answer.submittedAnswer}, #{answer.correct})
+        </foreach>
+    </insert>
+
+</mapper>
