@@ -24,6 +24,12 @@ public class SolveController {
         return ResponseEntity.ok(ResponseDto.ok(solveService.list(keyword, tag)));
     }
 
+    @GetMapping("/random")
+    public ResponseEntity<ResponseDto<?>> randomSet(@RequestParam int count,
+                                                     @RequestParam(required = false) Long departmentId) {
+        return ResponseEntity.ok(ResponseDto.ok(solveService.randomSet(count, departmentId)));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ResponseDto<?>> getDetail(@PathVariable Long id) {
         return ResponseEntity.ok(ResponseDto.ok(solveService.getDetail(id)));

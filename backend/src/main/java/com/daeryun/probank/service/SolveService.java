@@ -8,6 +8,7 @@ import java.util.List;
 
 public interface SolveService {
     List<ProblemSolveListItem> list(String keyword, String tag);
+    List<ProblemSolveListItem> randomSet(int count, Long departmentId);
     ProblemSolveDetailResponse getDetail(Long problemId);
     List<String> selectRandomBlankKeys(List<ProblemBlank> blanks, int count);
     com.daeryun.probank.dto.solve.AttemptResult submit(Long problemId, com.daeryun.probank.dto.solve.AttemptSubmitRequest request,

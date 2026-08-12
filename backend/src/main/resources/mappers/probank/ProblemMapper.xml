@@ -23,6 +23,21 @@
         ORDER BY p.created_at DESC
     </select>
 
+    <!-- 무작위 추출을 DB에서 한다. 화면에서 전체를 받아 섞으면 문제 은행이 커질수록 전송량이
+         비례해 늘고, 목록에 페이지네이션이 붙는 순간 깨진다. -->
+    <select id="findRandomActive" resultMap="solveProblemListItemMap">
+        SELECT p.id, p.type, p.content,
+               COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+        FROM problems p
+        LEFT JOIN problem_tags pt ON pt.problem_id = p.id
+        LEFT JOIN tags t ON t.id = pt.tag_id
+        WHERE p.status = 'ACTIVE'
+        <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+        GROUP BY p.id
+        ORDER BY random()
+        LIMIT #{count}
+    </select>
+
     <insert id="insert" parameterType="Problem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO problems
             (type, content, image_url, reference_text, explanation, blank_reveal_count, status, department_id, created_by)
