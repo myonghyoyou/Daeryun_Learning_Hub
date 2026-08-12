@@ -26,6 +26,7 @@ export default function ProblemSkeleton() {
         </ul>
         <div className={SUBMIT_AREA_CLASS}>
           <div className="h-11 w-full animate-pulse rounded-sm bg-surface-subtle sm:w-24" />
+          <div className="mt-2 h-5 w-3/4 animate-pulse rounded-xs bg-surface-subtle" />
         </div>
       </Surface>
     </>
