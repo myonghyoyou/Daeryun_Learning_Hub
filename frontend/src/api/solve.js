@@ -19,3 +19,10 @@ export function submitAttempt(id, payload) {
 export function myAttemptHistory() {
   return apiGet("/api/attempts/me");
 }
+
+export function fetchRandomSet(count, departmentId) {
+  const params = new URLSearchParams();
+  params.set("count", String(count));
+  if (departmentId) params.set("departmentId", String(departmentId));
+  return apiGet(`/api/problems/random?${params.toString()}`);
+}
