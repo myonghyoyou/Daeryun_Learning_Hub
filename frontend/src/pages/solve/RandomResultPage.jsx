@@ -3,23 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
-import { SESSION_STORAGE_KEY, summarize } from "@/utils/solveSession.js";
-
-/**
- * sessionStorage 값은 사용자가 개발자 도구로 고칠 수 있다. 없거나·JSON이 깨졌거나·형태가
- * 아니면 null을 돌려준다 — 호출부가 설정 화면으로 돌려보낸다.
- */
-function readSession() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed?.problemIds) || typeof parsed?.index !== "number") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
+import { SESSION_STORAGE_KEY, summarize, parseSession, isFinished } from "@/utils/solveSession.js";
 
 /**
  * 랜덤 세트 결과 요약 화면. 세션은 마운트 시 한 번만 읽어 state에 담아 두고(useState lazy
@@ -27,20 +11,27 @@ function readSession() {
  * 들어가는 것을 막기 위해서다. state의 session은 지우지 않으므로 같은 컴포넌트 인스턴스가
  * 다시 렌더되어도(예: StrictMode 이중 실행) 리다이렉트 effect가 다시 발동하지 않는다 —
  * effect는 session state 자체가 아니라 sessionStorage를 지우고, session state는 그대로다.
+ *
+ * 세션이 아직 끝나지 않았으면(예: 진행 중에 이 URL을 직접 입력) 부분 집계를 그리지 않고
+ * 진행 화면으로 돌려보낸다 — 이때는 세션을 지우지 않아 세트로 계속 돌아갈 수 있다.
  */
 export default function RandomResultPage() {
   const navigate = useNavigate();
-  const [session] = useState(() => readSession());
+  const [session] = useState(() => parseSession(sessionStorage.getItem(SESSION_STORAGE_KEY)));
 
   useEffect(() => {
     if (!session) {
       navigate("/solve/random", { replace: true });
       return;
     }
+    if (!isFinished(session)) {
+      navigate("/solve/random/play", { replace: true });
+      return;
+    }
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
   }, [session, navigate]);
 
-  if (!session) {
+  if (!session || !isFinished(session)) {
     return (
       <SolveShell>
         <p className="px-1 py-10 text-center text-body text-ink-muted">이동 중...</p>

@@ -38,3 +38,40 @@ export function summarize(session) {
     correctCount: session.results.filter((r) => r.correct).length,
   };
 }
+
+/**
+ * sessionStorage 에 저장된 원본 문자열을 세션으로 파싱한다. 사용자가 개발자 도구로 값을
+ * 지우거나 고칠 수 있으므로 없거나·JSON이 깨졌거나·형태가 아니면 null을 돌려준다 —
+ * 호출부(화면)가 설정 화면으로 돌려보낸다.
+ *
+ * sessionStorage 접근은 화면이 하고(alias 없이 이 파일을 node --test 로 돌리기 위해)
+ * 이 함수는 문자열을 받아 파싱·검증만 하는 순수 함수다.
+ */
+export function parseSession(raw) {
+  if (!raw) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  if (!Array.isArray(parsed.problemIds)) return null;
+  if (typeof parsed.index !== "number") return null;
+  if (!Array.isArray(parsed.results)) return null;
+  return parsed;
+}
+
+/**
+ * 세트를 지금까지 푼 만큼만 남기고 끝난 것으로 만든다. 진행 중 문제 로드가 계속 실패할 때
+ * (네트워크 문제, 또는 그사이 문제가 보관 처리됨) 이미 제출한 기록은 지키면서 결과 화면으로
+ * 빠져나가는 탈출구로 쓴다. problemIds 를 index 까지 잘라 isFinished 가 참이 되게 하고,
+ * results 는 손대지 않으므로 summarize().total(푼 개수)은 그대로다.
+ */
+export function endSessionEarly(session) {
+  return {
+    problemIds: session.problemIds.slice(0, session.index),
+    index: session.index,
+    results: session.results,
+  };
+}

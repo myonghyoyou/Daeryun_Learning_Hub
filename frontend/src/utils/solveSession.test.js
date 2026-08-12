@@ -6,6 +6,8 @@ import {
   recordResult,
   isFinished,
   summarize,
+  parseSession,
+  endSessionEarly,
 } from "./solveSession.js";
 
 test("createSession: starts at the first problem with no results", () => {
@@ -63,4 +65,54 @@ test("summarize: total is results count, not problemIds count", () => {
   assert.strictEqual(currentProblemId(session), 33);
   // total은 3(문제 세트 크기)이 아니라 2(푼 개수)여야 한다
   assert.deepStrictEqual(summarize(session), { total: 2, correctCount: 1 });
+});
+
+test("parseSession: accepts a well-formed session", () => {
+  const raw = JSON.stringify({ problemIds: [11, 22], index: 1, results: [{ problemId: 11, correct: true }] });
+  assert.deepStrictEqual(parseSession(raw), {
+    problemIds: [11, 22],
+    index: 1,
+    results: [{ problemId: 11, correct: true }],
+  });
+});
+
+test("parseSession: null or empty raw value returns null", () => {
+  assert.strictEqual(parseSession(null), null);
+  assert.strictEqual(parseSession(undefined), null);
+  assert.strictEqual(parseSession(""), null);
+});
+
+test("parseSession: broken JSON returns null", () => {
+  assert.strictEqual(parseSession("{not valid json"), null);
+});
+
+test("parseSession: rejects a non-array problemIds", () => {
+  const raw = JSON.stringify({ problemIds: "11,22", index: 0, results: [] });
+  assert.strictEqual(parseSession(raw), null);
+});
+
+test("parseSession: rejects a non-number index", () => {
+  const raw = JSON.stringify({ problemIds: [11, 22], index: "0", results: [] });
+  assert.strictEqual(parseSession(raw), null);
+});
+
+test("parseSession: rejects a non-array results", () => {
+  const raw = JSON.stringify({ problemIds: [11, 22], index: 0, results: null });
+  assert.strictEqual(parseSession(raw), null);
+});
+
+test("endSessionEarly: truncates problemIds to what was already answered, keeps results", () => {
+  let session = createSession([11, 22, 33, 44]);
+  session = recordResult(session, true);
+  session = recordResult(session, false);
+  // 4문제 세트 중 2개만 기록된 상태에서 3번째 로드가 계속 실패한다고 가정
+  assert.strictEqual(isFinished(session), false);
+
+  const ended = endSessionEarly(session);
+  assert.strictEqual(isFinished(ended), true);
+  assert.deepStrictEqual(ended.results, session.results);
+  assert.deepStrictEqual(summarize(ended), { total: 2, correctCount: 1 });
+
+  // 원본은 그대로여야 한다
+  assert.strictEqual(isFinished(session), false);
 });

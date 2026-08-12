@@ -28,7 +28,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
   }, [problem.id]);
 
   const revealedAnswers = useMemo(() => {
-    if (!problem || problem.type !== "FILL_BLANK") return {};
+    if (problem.type !== "FILL_BLANK") return {};
     return Object.fromEntries((problem.revealedBlanks ?? []).map((b) => [b.blankKey, b.answerText]));
   }, [problem]);
 

@@ -7,23 +7,14 @@ import SolveShell from "@/pages/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
 import { getSolveProblem } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
-import { SESSION_STORAGE_KEY, currentProblemId, isFinished, recordResult } from "@/utils/solveSession.js";
-
-/**
- * sessionStorage 값은 사용자가 개발자 도구로 고칠 수 있다. 없거나·JSON이 깨졌거나·형태가
- * 아니면 null을 돌려준다 — 호출부가 설정 화면으로 돌려보낸다.
- */
-function readSession() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed?.problemIds) || typeof parsed?.index !== "number") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
+import {
+  SESSION_STORAGE_KEY,
+  currentProblemId,
+  isFinished,
+  recordResult,
+  parseSession,
+  endSessionEarly,
+} from "@/utils/solveSession.js";
 
 /**
  * 랜덤 세트 진행 화면. 문제를 한 번에 하나씩 보여주고, 채점 결과를 확인할 시간을 준 뒤
@@ -34,10 +25,11 @@ function readSession() {
  */
 export default function RandomPlayPage() {
   const navigate = useNavigate();
-  const [session, setSession] = useState(() => readSession());
+  const [session, setSession] = useState(() => parseSession(sessionStorage.getItem(SESSION_STORAGE_KEY)));
   const [problem, setProblem] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [submittedResult, setSubmittedResult] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const problemId = session ? currentProblemId(session) : null;
 
@@ -70,13 +62,29 @@ export default function RandomPlayPage() {
     return () => {
       cancelled = true;
     };
-  }, [problemId]);
+  }, [problemId, retryCount]);
 
   function handleNext() {
     if (!session || !submittedResult) return;
     const next = recordResult(session, submittedResult.correct);
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
     setSession(next);
+  }
+
+  function handleRetry() {
+    setRetryCount((count) => count + 1);
+  }
+
+  /**
+   * 문제 로드가 계속 실패할 때(네트워크, 또는 그사이 보관 처리됨)의 탈출구. 이미 제출한
+   * 결과는 지키면서 세트를 지금까지 푼 만큼만으로 끝난 것으로 만들고 결과 화면으로 보낸다.
+   * recordResult 를 쓰지 않으므로 못 푼 문제가 오답으로 집계되지 않는다.
+   */
+  function handleViewResults() {
+    if (!session) return;
+    const ended = endSessionEarly(session);
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(ended));
+    navigate("/solve/random/result", { replace: true });
   }
 
   if (!session || isFinished(session)) {
@@ -93,6 +101,14 @@ export default function RandomPlayPage() {
         <Surface className="p-0">
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
             <p className="text-body font-semibold text-ink-strong">문제를 불러오지 못했습니다.</p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button variant="secondary" size="sm" onClick={handleRetry}>
+                다시 시도
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleViewResults}>
+                결과 보기
+              </Button>
+            </div>
           </div>
         </Surface>
       </SolveShell>
