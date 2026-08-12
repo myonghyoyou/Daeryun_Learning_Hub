@@ -3,11 +3,24 @@ import { toast } from "react-toastify";
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
+import Collapsible from "@/components/ui/Collapsible.jsx";
+import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT } from "@/components/solve/choiceLayout.js";
 import { submitAttempt } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
+import { hasNoAnswer } from "@/utils/answerState.js";
 
 const CHOICE_TYPES = ["MCQ_SINGLE", "MCQ_MULTI", "OX"];
+
+// 목록 화면(SolveProblemListPage.jsx)의 TYPE_LABELS·배지 마크업을 그대로 복제한다 —
+// 목록과 상세의 표기가 달라지면 안 된다.
+const TYPE_LABELS = {
+  MCQ_SINGLE: "객관식(단일)",
+  MCQ_MULTI: "객관식(다중)",
+  OX: "OX",
+  SHORT_ANSWER: "주관식",
+  FILL_BLANK: "빈칸 채우기",
+};
 
 /**
  * 문제 하나를 렌더하고 답 입력·제출·채점 결과 표시를 담당하는 표현 컴포넌트.
@@ -69,16 +82,28 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
 
   const answered = result !== null;
 
+  const nothingEntered = hasNoAnswer({
+    type: problem.type,
+    selectedChoiceIds,
+    submittedText,
+    blankInputs,
+    blanksToAnswer: problem.blanksToAnswer,
+  });
+
   return (
     <>
       <Surface className="p-5 md:p-6">
+        <span className="mb-3 inline-block rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
+          {TYPE_LABELS[problem.type] ?? problem.type}
+        </span>
+
         {problem.imageUrl && (
           <img src={problem.imageUrl} alt="문제 이미지" className="mb-4 max-h-60 rounded-md border border-line-default" />
         )}
         {problem.referenceText && (
-          <p className="mb-4 whitespace-pre-wrap rounded-md bg-surface-subtle p-3 text-body-small text-ink-default">
-            {problem.referenceText}
-          </p>
+          <div className="mb-4 rounded-md bg-surface-subtle p-3 text-body-small text-ink-default">
+            <Collapsible text={problem.referenceText} />
+          </div>
         )}
 
         {problem.type === "FILL_BLANK" ? (
@@ -102,14 +127,21 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-strong">{problem.content}</p>
         )}
 
+        {problem.type === "FILL_BLANK" && (
+          <p className="mt-3 text-body-small text-ink-muted">
+            빈칸 {problem.blanksToAnswer.length}개 중{" "}
+            {problem.blanksToAnswer.filter((key) => (blankInputs[key] ?? "").trim()).length}개 입력
+          </p>
+        )}
+
         {CHOICE_TYPES.includes(problem.type) && (
-          <ul className="mt-5 space-y-2">
+          <ul className={CHOICE_LIST_CLASS}>
             {problem.choices.map((choice) => {
               const selected = selectedChoiceIds.includes(choice.id);
               return (
                 <li key={choice.id}>
                   <label
-                    className={`flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-body transition-colors ${
+                    className={`flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-body transition-colors focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-brand-aqua ${CHOICE_ITEM_MIN_HEIGHT} ${
                       selected ? "border-brand-blue bg-selection-bg text-ink-strong" : "border-line-default bg-surface-default text-ink-default hover:bg-surface-subtle"
                     } ${answered ? "cursor-default opacity-70" : ""}`}
                   >
@@ -133,7 +165,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           <input
             aria-label="주관식 답안"
             disabled={answered}
-            className="mt-5 h-[38px] w-full rounded-sm border border-line-default bg-surface-default px-3 text-body text-ink-strong placeholder:text-ink-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
+            className="mt-5 h-[44px] w-full rounded-sm border border-line-default bg-surface-default px-3 text-body text-ink-strong placeholder:text-ink-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
             placeholder="답안을 입력하세요"
             value={submittedText}
             onChange={(event) => setSubmittedText(event.target.value)}
@@ -141,8 +173,13 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         )}
 
         {!answered && (
-          <div className="mt-6">
-            <Button onClick={handleSubmit} loading={submitting} size="lg">제출</Button>
+          <div className="sticky bottom-0 mt-6 -mx-5 border-t border-line-default bg-surface-default px-5 py-3 md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
+            <Button onClick={handleSubmit} loading={submitting} disabled={nothingEntered} size="lg" className="w-full sm:w-auto">
+              제출
+            </Button>
+            {nothingEntered && (
+              <p className="mt-2 text-body-small text-ink-muted">답안을 입력하면 제출할 수 있습니다.</p>
+            )}
           </div>
         )}
       </Surface>
