@@ -53,3 +53,14 @@ test("createSession: an empty set is finished immediately", () => {
   assert.strictEqual(currentProblemId(session), null);
   assert.deepStrictEqual(summarize(session), { total: 0, correctCount: 0 });
 });
+
+test("summarize: total is results count, not problemIds count", () => {
+  let session = createSession([11, 22, 33]);
+  session = recordResult(session, true);
+  session = recordResult(session, false);
+  // 3 문제 중 2개만 기록 — 1개는 아직 풀지 않음
+  assert.strictEqual(isFinished(session), false);
+  assert.strictEqual(currentProblemId(session), 33);
+  // total은 3(문제 세트 크기)이 아니라 2(푼 개수)여야 한다
+  assert.deepStrictEqual(summarize(session), { total: 2, correctCount: 1 });
+});
