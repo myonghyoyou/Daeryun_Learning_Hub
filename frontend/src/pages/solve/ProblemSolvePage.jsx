@@ -13,10 +13,12 @@ export default function ProblemSolvePage() {
   const { id } = useParams();
   const [problem, setProblem] = useState(null);
   const [loadError, setLoadError] = useState(false);
+  const [submittedResult, setSubmittedResult] = useState(null);
 
   useEffect(() => {
     setProblem(null);
     setLoadError(false);
+    setSubmittedResult(null);
     getSolveProblem(id)
       .then(setProblem)
       .catch((error) => {
@@ -55,7 +57,15 @@ export default function ProblemSolvePage() {
         문제 목록
       </Link>
 
-      <ProblemSolveCard problem={problem} />
+      <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
+
+      {submittedResult && (
+        <div className="mt-4">
+          <Link to="/solve/problems">
+            <Button variant="secondary" size="sm">다른 문제 풀기</Button>
+          </Link>
+        </div>
+      )}
     </SolveShell>
   );
 }

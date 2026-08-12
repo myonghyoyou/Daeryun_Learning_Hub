@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
-import { Link } from "react-router-dom";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import { submitAttempt } from "@/api/solve.js";
@@ -169,11 +168,6 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
               ))}
             </ul>
           )}
-          <div className="mt-4">
-            <Link to="/solve/problems">
-              <Button variant="secondary" size="sm">다른 문제 풀기</Button>
-            </Link>
-          </div>
         </Surface>
       )}
     </>
