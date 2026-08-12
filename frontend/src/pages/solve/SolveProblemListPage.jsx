@@ -11,6 +11,7 @@ import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { listSolveProblems } from "@/api/solve.js";
 import { listTagsInUse } from "@/api/problems.js";
 import { resolveErrorMessage } from "@/api/client.js";
+import { previewContent } from "@/utils/problemPreview.js";
 
 const TYPE_LABELS = {
   MCQ_SINGLE: "객관식(단일)",
@@ -112,7 +113,7 @@ export default function SolveProblemListPage() {
                 <span className="shrink-0 rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
                   {TYPE_LABELS[problem.type] ?? problem.type}
                 </span>
-                <span className="line-clamp-2 flex-1 text-body text-ink-strong">{problem.content}</span>
+                <span className="line-clamp-2 flex-1 text-body text-ink-strong">{previewContent(problem.content)}</span>
                 <ArrowRight size={16} aria-hidden="true" className="shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
               </Surface>
             </li>
