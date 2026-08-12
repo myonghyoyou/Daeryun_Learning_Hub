@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { MagnifyingGlass, ArrowRight } from "@phosphor-icons/react";
+import { MagnifyingGlass, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
@@ -55,6 +55,11 @@ export default function SolveProblemListPage() {
 
   return (
     <SolveShell>
+      <Link to="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <ArrowLeft size={16} aria-hidden="true" />
+        학습 홈
+      </Link>
+
       <section className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">문제 풀이</h1>
         <Link to="/solve/history" className="rounded-sm text-body-small font-semibold text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">

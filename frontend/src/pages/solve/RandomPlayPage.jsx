@@ -76,12 +76,21 @@ export default function RandomPlayPage() {
   }
 
   /**
-   * 문제 로드가 계속 실패할 때(네트워크, 또는 그사이 보관 처리됨)의 탈출구. 이미 제출한
-   * 결과는 지키면서 세트를 지금까지 푼 만큼만으로 끝난 것으로 만들고 결과 화면으로 보낸다.
-   * recordResult 를 쓰지 않으므로 못 푼 문제가 오답으로 집계되지 않는다.
+   * 문제 로드가 계속 실패할 때(네트워크, 또는 그사이 보관 처리됨)의 탈출구이자, 정상 진행
+   * 중 "그만하고 결과 보기" 버튼의 동작이다. 이미 제출한 결과는 지키면서 세트를 지금까지
+   * 푼 만큼만으로 끝난 것으로 만들고 결과 화면으로 보낸다. recordResult 를 쓰지 않으므로
+   * 못 푼 문제가 오답으로 집계되지 않는다.
+   *
+   * 아직 한 문제도 풀지 않았다면(index === 0) endSessionEarly 는 problemIds 를 0개로
+   * 잘라 결과 화면이 "0문제 중 0개 정답"을 보여주게 된다 — 깨지지는 않지만 보여줄 결과가
+   * 없다. 잃을 기록도 없으므로 이때는 학습 홈으로 보낸다.
    */
   function handleViewResults() {
     if (!session) return;
+    if (session.index === 0) {
+      navigate("/solve");
+      return;
+    }
     const ended = endSessionEarly(session);
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(ended));
     navigate("/solve/random/result", { replace: true });
@@ -106,7 +115,7 @@ export default function RandomPlayPage() {
                 다시 시도
               </Button>
               <Button variant="secondary" size="sm" onClick={handleViewResults}>
-                결과 보기
+                {session.index === 0 ? "학습 홈으로" : "결과 보기"}
               </Button>
             </div>
           </div>
@@ -125,10 +134,17 @@ export default function RandomPlayPage() {
 
   return (
     <SolveShell>
-      <section className="mb-6">
+      <section className="mb-6 flex items-center justify-between gap-3">
         <p className="text-body-small font-medium text-ink-muted">
           {session.index + 1} / {session.problemIds.length}
         </p>
+        {/* 진행 중 이탈은 이미 제출한 기록을 잃는 길이 되면 안 된다. 지금까지 푼 만큼으로
+            세트를 끝내고 결과 요약을 보여준다(로드 실패 화면의 "결과 보기"와 같은 장치).
+            단, 아직 한 문제도 풀지 않았다면(index === 0) 보여줄 결과가 없으므로
+            handleViewResults 가 결과 화면 대신 학습 홈으로 보낸다 — 문구도 그에 맞춘다. */}
+        <Button variant="secondary" size="sm" onClick={handleViewResults}>
+          {session.index === 0 ? "학습 홈으로" : "그만하고 결과 보기"}
+        </Button>
       </section>
 
       <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />

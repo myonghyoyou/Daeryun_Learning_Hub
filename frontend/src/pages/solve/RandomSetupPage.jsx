@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Select from "@/components/ui/Select.jsx";
 import Button from "@/components/ui/Button.jsx";
@@ -54,6 +55,11 @@ export default function RandomSetupPage() {
 
   return (
     <SolveShell>
+      <Link to="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <ArrowLeft size={16} aria-hidden="true" />
+        학습 홈
+      </Link>
+
       <section className="mb-6">
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">랜덤으로 풀기</h1>
         <p className="mt-1 text-body text-ink-default">문제 수와 부서를 정하면 무작위로 뽑아 드립니다.</p>
