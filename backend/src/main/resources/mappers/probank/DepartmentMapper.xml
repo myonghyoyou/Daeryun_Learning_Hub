@@ -21,6 +21,10 @@
         SELECT id, name, code, status, created_at FROM departments ORDER BY name
     </select>
 
+    <select id="findAllActive" resultType="Department">
+        SELECT id, name, code, status, created_at FROM departments WHERE status = 'ACTIVE' ORDER BY name
+    </select>
+
     <update id="update" parameterType="Department">
         UPDATE departments SET name = #{name}, status = #{status} WHERE id = #{id}
     </update>
