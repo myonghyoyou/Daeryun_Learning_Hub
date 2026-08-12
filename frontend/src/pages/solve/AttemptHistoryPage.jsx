@@ -6,6 +6,7 @@ import Surface from "@/components/ui/Surface.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
 import Button from "@/components/ui/Button.jsx";
+import Collapsible from "@/components/ui/Collapsible.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { myAttemptHistory } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
@@ -91,7 +92,7 @@ export default function AttemptHistoryPage() {
                     <span className="line-clamp-1 text-ink-strong">{previewContent(item.problemContent)}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="line-clamp-1">{item.submittedAnswer || "-"}</span>
+                    <Collapsible text={item.submittedAnswer || "-"} collapsedLines={1} />
                   </TableCell>
                   <TableCell><ResultText correct={item.correct} /></TableCell>
                   <TableCell>{formatAt(item.submittedAt)}</TableCell>
@@ -109,7 +110,9 @@ export default function AttemptHistoryPage() {
                     <p className="line-clamp-2 flex-1 text-body text-ink-strong">{previewContent(item.problemContent)}</p>
                     <ResultText correct={item.correct} />
                   </div>
-                  <p className="mt-2 line-clamp-1 text-body-small text-ink-muted">제출: {item.submittedAnswer || "-"}</p>
+                  <div className="mt-2">
+                    <Collapsible text={`제출: ${item.submittedAnswer || "-"}`} collapsedLines={2} className="text-body-small text-ink-muted" />
+                  </div>
                   <p className="mt-1 text-body-small text-ink-subtle">{formatAt(item.submittedAt)}</p>
                 </Surface>
               </li>
