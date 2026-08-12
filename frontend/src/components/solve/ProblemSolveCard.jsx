@@ -9,18 +9,9 @@ import { submitAttempt } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
 import { hasNoAnswer } from "@/utils/answerState.js";
+import { problemTypeLabel } from "@/utils/problemLabels.js";
 
 const CHOICE_TYPES = ["MCQ_SINGLE", "MCQ_MULTI", "OX"];
-
-// 목록 화면(SolveProblemListPage.jsx)의 TYPE_LABELS·배지 마크업을 그대로 복제한다 —
-// 목록과 상세의 표기가 달라지면 안 된다.
-const TYPE_LABELS = {
-  MCQ_SINGLE: "객관식(단일)",
-  MCQ_MULTI: "객관식(다중)",
-  OX: "OX",
-  SHORT_ANSWER: "주관식",
-  FILL_BLANK: "빈칸 채우기",
-};
 
 /**
  * 문제 하나를 렌더하고 답 입력·제출·채점 결과 표시를 담당하는 표현 컴포넌트.
@@ -94,7 +85,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
     <>
       <Surface className="p-5 md:p-6">
         <span className="mb-3 inline-block rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
-          {TYPE_LABELS[problem.type] ?? problem.type}
+          {problemTypeLabel(problem.type)}
         </span>
 
         {problem.imageUrl && (
