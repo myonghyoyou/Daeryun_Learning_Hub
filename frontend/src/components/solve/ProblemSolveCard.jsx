@@ -4,7 +4,7 @@ import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
-import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT } from "@/components/solve/choiceLayout.js";
+import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/components/solve/choiceLayout.js";
 import { submitAttempt } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
@@ -164,7 +164,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         )}
 
         {!answered && (
-          <div className="sticky bottom-0 mt-6 -mx-5 border-t border-line-default bg-surface-default px-5 py-3 md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
+          <div className={SUBMIT_AREA_CLASS}>
             <Button onClick={handleSubmit} loading={submitting} disabled={nothingEntered} size="lg" className="w-full sm:w-auto">
               제출
             </Button>
