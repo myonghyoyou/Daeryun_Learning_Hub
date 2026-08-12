@@ -8,12 +8,22 @@
  */
 export const SESSION_STORAGE_KEY = "solve-random-session";
 
-export function createSession(problemIds) {
-  return { problemIds: [...problemIds], index: 0, results: [] };
+export function createSession(problems) {
+  const list = problems.map((p) => ({ id: p.id, type: p.type, content: p.content }));
+  return {
+    problemIds: list.map((p) => p.id),
+    problems: list,
+    index: 0,
+    results: [],
+  };
 }
 
 export function currentProblemId(session) {
   return session.index < session.problemIds.length ? session.problemIds[session.index] : null;
+}
+
+export function problemById(session, id) {
+  return session.problems?.find((p) => p.id === id);
 }
 
 export function isFinished(session) {
@@ -27,6 +37,7 @@ export function recordResult(session, correct) {
   }
   return {
     problemIds: session.problemIds,
+    problems: session.problems,
     index: session.index + 1,
     results: [...session.results, { problemId, correct }],
   };
@@ -59,6 +70,7 @@ export function parseSession(raw) {
   if (!Array.isArray(parsed.problemIds)) return null;
   if (typeof parsed.index !== "number") return null;
   if (!Array.isArray(parsed.results)) return null;
+  if (!Array.isArray(parsed.problems)) return null;
   return parsed;
 }
 
@@ -71,6 +83,7 @@ export function parseSession(raw) {
 export function endSessionEarly(session) {
   return {
     problemIds: session.problemIds.slice(0, session.index),
+    problems: session.problems,
     index: session.index,
     results: session.results,
   };

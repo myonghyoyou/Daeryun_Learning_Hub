@@ -43,7 +43,7 @@ export default function RandomSetupPage() {
         toast.info("조건에 맞는 문제가 없습니다. 부서나 문제 수를 바꿔 보세요.");
         return;
       }
-      const session = createSession(problems.map((p) => p.id));
+      const session = createSession(problems);
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
       navigate("/solve/random/play");
     } catch (error) {
