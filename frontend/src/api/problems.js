@@ -11,6 +11,11 @@ export function listTags() {
   return apiGet("/api/tags");
 }
 
+/** 활성 문제에 실제로 붙어 있는 태그만. 직원 풀이 화면 필터용(관리자 화면은 listTags 유지). */
+export function listTagsInUse() {
+  return apiGet("/api/tags/in-use");
+}
+
 export function getProblem(id) {
   return apiGet(`/api/admin/problems/${id}`);
 }

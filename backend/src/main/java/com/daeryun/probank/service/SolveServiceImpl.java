@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 public class SolveServiceImpl implements SolveService {
 
     private final SecureRandom random = new SecureRandom();
+    private static final int MAX_RANDOM_COUNT = 50;
 
     private final ProblemDao problemDao;
     private final ProblemChoiceDao problemChoiceDao;
@@ -38,6 +39,16 @@ public class SolveServiceImpl implements SolveService {
     @Override
     public List<ProblemSolveListItem> list(String keyword, String tag) {
         return problemDao.findAllActive(keyword, tag);
+    }
+
+    @Override
+    public List<ProblemSolveListItem> randomSet(int count, Long departmentId) {
+        if (count < 1 || count > MAX_RANDOM_COUNT) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "문제 수는 1 이상 " + MAX_RANDOM_COUNT + " 이하여야 합니다.");
+        }
+        // 조건에 맞는 문제가 요청 수보다 적어도 오류가 아니다 — 있는 만큼 풀게 한다.
+        return problemDao.findRandomActive(count, departmentId);
     }
 
     @Override

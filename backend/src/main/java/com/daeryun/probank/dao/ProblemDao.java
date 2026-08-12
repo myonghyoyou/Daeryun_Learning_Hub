@@ -36,4 +36,11 @@ public interface ProblemDao {
     /** 풀이용 전사 공통 목록: status = ACTIVE 만, 정답 비노출. keyword/tag 는 선택 필터. */
     List<com.daeryun.probank.dto.solve.ProblemSolveListItem> findAllActive(@Param("keyword") String keyword,
                                                                             @Param("tag") String tag);
+
+    /**
+     * 풀이용 무작위 세트: status = ACTIVE 중 무작위 count 건. departmentId 가 null 이면 전 부서.
+     * 이미 푼 문제도 다시 뽑힌다(반복 학습이 목적이라 attempts 와 조인하지 않는다).
+     */
+    List<com.daeryun.probank.dto.solve.ProblemSolveListItem> findRandomActive(@Param("count") int count,
+                                                                               @Param("departmentId") Long departmentId);
 }

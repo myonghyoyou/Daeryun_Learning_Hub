@@ -235,6 +235,35 @@ class SolveServiceImplTest {
     }
 
     @Test
+    void randomSet_rejectsCountBelowOne() {
+        assertThrows(BizException.class, () -> service.randomSet(0, null));
+    }
+
+    @Test
+    void randomSet_rejectsCountAboveLimit() {
+        assertThrows(BizException.class, () -> service.randomSet(51, null));
+    }
+
+    @Test
+    void randomSet_passesCountAndDepartmentToDao() {
+        Mockito.when(problemDao.findRandomActive(10, 862L)).thenReturn(Collections.emptyList());
+
+        service.randomSet(10, 862L);
+
+        Mockito.verify(problemDao).findRandomActive(10, 862L);
+    }
+
+    @Test
+    void randomSet_allowsFewerResultsThanRequested() {
+        com.daeryun.probank.dto.solve.ProblemSolveListItem only =
+                new com.daeryun.probank.dto.solve.ProblemSolveListItem();
+        only.setId(1L);
+        Mockito.when(problemDao.findRandomActive(10, null)).thenReturn(Arrays.asList(only));
+
+        assertEquals(1, service.randomSet(10, null).size());
+    }
+
+    @Test
     void myHistory_returnsUserAttemptsOrderedByDaoResult() {
         com.daeryun.probank.dto.solve.AttemptHistoryItem item = new com.daeryun.probank.dto.solve.AttemptHistoryItem();
         item.setProblemId(1L);

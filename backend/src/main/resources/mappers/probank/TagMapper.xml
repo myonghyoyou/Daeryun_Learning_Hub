@@ -6,6 +6,18 @@
         SELECT id, name, created_at FROM tags ORDER BY name
     </select>
 
+    <!-- 관리자 화면은 보관 문제도 다루므로 findAll(전체)을 계속 쓴다. 이 쿼리는 직원 풀이
+         화면 전용으로, 고르면 반드시 0건이 나오는 선택지가 생기지 않도록 활성 문제 기준으로
+         좁힌다. 문제를 보관 처리하면 그 태그가 자동으로 선택지에서 빠진다. -->
+    <select id="findInUse" resultType="Tag">
+        SELECT DISTINCT t.id, t.name, t.created_at
+        FROM tags t
+        JOIN problem_tags pt ON pt.tag_id = t.id
+        JOIN problems p ON p.id = pt.problem_id
+        WHERE p.status = 'ACTIVE'
+        ORDER BY t.name
+    </select>
+
     <insert id="insertIgnoreAll">
         INSERT INTO tags (name)
         VALUES

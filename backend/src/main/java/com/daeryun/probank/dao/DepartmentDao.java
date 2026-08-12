@@ -10,4 +10,7 @@ public interface DepartmentDao {
     Department findById(Long id);
     List<Department> findAll();
     void update(Department department);
+
+    /** 활성 부서만. 직원 화면 선택지용이다 — 비활성 부서는 고를 수 없어야 한다. */
+    List<Department> findAllActive();
 }
