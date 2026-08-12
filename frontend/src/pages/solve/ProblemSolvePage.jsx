@@ -6,6 +6,7 @@ import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
+import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
 import { getSolveProblem } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
 
@@ -45,7 +46,7 @@ export default function ProblemSolvePage() {
   if (!problem) {
     return (
       <SolveShell>
-        <p className="px-1 py-10 text-center text-body text-ink-muted">불러오는 중...</p>
+        <ProblemSkeleton />
       </SolveShell>
     );
   }
