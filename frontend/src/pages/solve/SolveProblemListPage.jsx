@@ -9,7 +9,7 @@ import Select from "@/components/ui/Select.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { listSolveProblems } from "@/api/solve.js";
-import { listTags } from "@/api/problems.js";
+import { listTagsInUse } from "@/api/problems.js";
 import { resolveErrorMessage } from "@/api/client.js";
 
 const TYPE_LABELS = {
@@ -29,7 +29,7 @@ export default function SolveProblemListPage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    listTags()
+    listTagsInUse()
       .then((rows) => setTags(rows.map((item) => (item.name ?? item))))
       .catch(() => setTags([]));
   }, []);

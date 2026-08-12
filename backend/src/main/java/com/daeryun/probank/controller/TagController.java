@@ -26,4 +26,10 @@ public class TagController {
     public ResponseEntity<ResponseDto<?>> list() {
         return ResponseEntity.ok(ResponseDto.ok(tagService.list()));
     }
+
+    /** 활성 문제에 실제로 붙어 있는 태그만. 직원 풀이 화면의 필터 선택지에서 쓴다. */
+    @GetMapping("/in-use")
+    public ResponseEntity<ResponseDto<?>> listInUse() {
+        return ResponseEntity.ok(ResponseDto.ok(tagService.listInUse()));
+    }
 }

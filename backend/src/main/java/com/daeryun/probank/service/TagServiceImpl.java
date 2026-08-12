@@ -19,4 +19,9 @@ public class TagServiceImpl implements TagService {
     public List<Tag> list() {
         return tagDao.findAll();
     }
+
+    @Override
+    public List<Tag> listInUse() {
+        return tagDao.findInUse();
+    }
 }

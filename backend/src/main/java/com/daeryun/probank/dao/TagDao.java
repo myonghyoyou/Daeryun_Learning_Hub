@@ -10,6 +10,9 @@ public interface TagDao {
 
     List<Tag> findAll();
 
+    /** 활성(ACTIVE) 문제에 하나 이상 붙어 있는 태그만. 직원 풀이 화면의 필터 선택지용이다. */
+    List<Tag> findInUse();
+
     /**
      * 주어진 이름들 중 존재하지 않는 태그를 {@code tags.name}의 UNIQUE 제약을
      * {@code ON CONFLICT (name) DO NOTHING}으로 흡수하며 삽입한다. 동시에 같은
