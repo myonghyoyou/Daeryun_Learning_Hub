@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Surface from "@/components/ui/Surface.jsx";
-import Button from "@/components/ui/Button.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import {
   SESSION_STORAGE_KEY,
@@ -11,6 +10,7 @@ import {
   problemById,
 } from "@/utils/solveSession.js";
 import { previewContent } from "@/utils/problemPreview.js";
+import { buttonClass } from "@/utils/buttonClass.js";
 
 /**
  * 랜덤 세트 결과 요약 화면. 세션은 마운트 시 한 번만 읽어 state에 담아 두고(useState lazy
@@ -84,13 +84,11 @@ export default function RandomResultPage() {
         </ul>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Link to="/solve/random">
-            <Button size="md">다시 랜덤으로 풀기</Button>
+          <Link to="/solve/random" className={buttonClass({ variant: "primary", size: "md" })}>
+            다시 랜덤으로 풀기
           </Link>
-          <Link to="/solve">
-            <Button variant="secondary" size="md">
-              학습 홈으로
-            </Button>
+          <Link to="/solve" className={buttonClass({ variant: "secondary", size: "md" })}>
+            학습 홈으로
           </Link>
         </div>
       </Surface>

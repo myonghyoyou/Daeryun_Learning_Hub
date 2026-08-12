@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Sparkle, ArrowRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { buttonClass } from "@/utils/buttonClass.js";
 
 /**
  * 학습 홈의 추천 문제 세트(디자인 시스템 8.2). 서버 추천 로직 없이 바로 시작할 수 있는
@@ -22,11 +22,9 @@ export default function RecommendedSetCard() {
         <span className="rounded-xs bg-surface-subtle px-2 py-0.5 text-body-small text-ink-muted">10문제</span>
         <span className="rounded-xs bg-surface-subtle px-2 py-0.5 text-body-small text-ink-muted">전사 공통</span>
       </div>
-      <Link to="/solve/random" className="mt-4 inline-block">
-        <Button size="md">
-          세트 시작하기
-          <ArrowRight size={16} aria-hidden="true" />
-        </Button>
+      <Link to="/solve/random" className={buttonClass({ variant: "primary", size: "md", className: "mt-4" })}>
+        세트 시작하기
+        <ArrowRight size={16} aria-hidden="true" />
       </Link>
     </Surface>
   );

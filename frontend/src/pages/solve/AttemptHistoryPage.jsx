@@ -5,12 +5,12 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
-import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { myAttemptHistory } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { previewContent } from "@/utils/problemPreview.js";
+import { buttonClass } from "@/utils/buttonClass.js";
 
 const COLUMNS = [
   { key: "problem", label: "문제" },
@@ -78,7 +78,7 @@ export default function AttemptHistoryPage() {
           <EmptyState
             title="아직 푼 문제가 없습니다."
             description="문제를 풀면 여기에서 정답 여부를 확인할 수 있어요."
-            action={<Link to="/solve/problems"><Button size="sm">문제 풀러 가기</Button></Link>}
+            action={<Link to="/solve/problems" className={buttonClass({ variant: "primary", size: "sm" })}>문제 풀러 가기</Link>}
           />
         </Surface>
       ) : (
