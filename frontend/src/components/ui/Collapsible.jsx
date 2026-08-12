@@ -7,6 +7,7 @@ import { CaretDown, CaretUp } from "@phosphor-icons/react";
  * 미리 매핑해 두고, 목록에 없는 값은 기본값(3)으로 고정한다.
  */
 const LINE_CLAMP_CLASSES = {
+  1: "line-clamp-1",
   2: "line-clamp-2",
   3: "line-clamp-3",
   4: "line-clamp-4",
