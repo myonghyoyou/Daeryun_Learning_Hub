@@ -3,7 +3,14 @@ import { useNavigate, Link } from "react-router-dom";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
-import { SESSION_STORAGE_KEY, summarize, parseSession, isFinished } from "@/utils/solveSession.js";
+import {
+  SESSION_STORAGE_KEY,
+  summarize,
+  parseSession,
+  isFinished,
+  problemById,
+} from "@/utils/solveSession.js";
+import { previewContent } from "@/utils/problemPreview.js";
 
 /**
  * 랜덤 세트 결과 요약 화면. 세션은 마운트 시 한 번만 읽어 state에 담아 두고(useState lazy
@@ -47,10 +54,34 @@ export default function RandomResultPage() {
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">결과 요약</h1>
       </section>
 
-      <Surface className="max-w-md p-6 text-center">
-        <p className="text-body text-ink-default">
+      <Surface className="max-w-2xl p-6">
+        <p className="text-center text-body text-ink-default">
           {total}문제 중 <span className="text-section-title font-bold text-ink-strong">{correctCount}개</span> 정답
         </p>
+
+        <ul className="mt-6 space-y-2 text-left">
+          {session.results.map((r, index) => {
+            const problem = problemById(session, r.problemId);
+            return (
+              <li
+                key={index}
+                className="flex items-start gap-3 rounded-md border border-line-default p-3"
+              >
+                <span className="shrink-0 text-body-small font-medium text-ink-muted">{index + 1}</span>
+                <span className="line-clamp-2 flex-1 text-body-small text-ink-strong">
+                  {previewContent(problem?.content) || "(불러올 수 없는 문제)"}
+                </span>
+                <span
+                  className={`shrink-0 text-body-small font-semibold ${
+                    r.correct ? "text-success-text" : "text-danger-text"
+                  }`}
+                >
+                  {r.correct ? "정답" : "오답"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link to="/solve/random">

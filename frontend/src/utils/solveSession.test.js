@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createSession,
   currentProblemId,
+  problemById,
   recordResult,
   isFinished,
   summarize,
@@ -10,8 +11,10 @@ import {
   endSessionEarly,
 } from "./solveSession.js";
 
+const P = (id) => ({ id, type: "OX", content: `문제 ${id}` });
+
 test("createSession: starts at the first problem with no results", () => {
-  const session = createSession([11, 22, 33]);
+  const session = createSession([P(11), P(22), P(33)]);
   assert.deepStrictEqual(session.problemIds, [11, 22, 33]);
   assert.strictEqual(session.index, 0);
   assert.deepStrictEqual(session.results, []);
@@ -19,8 +22,23 @@ test("createSession: starts at the first problem with no results", () => {
   assert.strictEqual(isFinished(session), false);
 });
 
+test("createSession: keeps both the id order and the problem metadata", () => {
+  const session = createSession([P(11), P(22)]);
+  assert.deepStrictEqual(session.problemIds, [11, 22]);
+  assert.deepStrictEqual(session.problems, [
+    { id: 11, type: "OX", content: "문제 11" },
+    { id: 22, type: "OX", content: "문제 22" },
+  ]);
+});
+
+test("problemById: finds the stored metadata", () => {
+  const session = createSession([P(11), P(22)]);
+  assert.deepStrictEqual(problemById(session, 22), { id: 22, type: "OX", content: "문제 22" });
+  assert.strictEqual(problemById(session, 999), undefined);
+});
+
 test("recordResult: advances and does not mutate the input", () => {
-  const session = createSession([11, 22]);
+  const session = createSession([P(11), P(22)]);
   const next = recordResult(session, true);
 
   assert.strictEqual(next.index, 1);
@@ -33,7 +51,7 @@ test("recordResult: advances and does not mutate the input", () => {
 });
 
 test("isFinished: true only after the last problem is recorded", () => {
-  let session = createSession([11, 22]);
+  let session = createSession([P(11), P(22)]);
   session = recordResult(session, true);
   assert.strictEqual(isFinished(session), false);
   session = recordResult(session, false);
@@ -42,7 +60,7 @@ test("isFinished: true only after the last problem is recorded", () => {
 });
 
 test("summarize: counts correct answers", () => {
-  let session = createSession([11, 22, 33]);
+  let session = createSession([P(11), P(22), P(33)]);
   session = recordResult(session, true);
   session = recordResult(session, false);
   session = recordResult(session, true);
@@ -57,7 +75,7 @@ test("createSession: an empty set is finished immediately", () => {
 });
 
 test("summarize: total is results count, not problemIds count", () => {
-  let session = createSession([11, 22, 33]);
+  let session = createSession([P(11), P(22), P(33)]);
   session = recordResult(session, true);
   session = recordResult(session, false);
   // 3 문제 중 2개만 기록 — 1개는 아직 풀지 않음
@@ -68,9 +86,15 @@ test("summarize: total is results count, not problemIds count", () => {
 });
 
 test("parseSession: accepts a well-formed session", () => {
-  const raw = JSON.stringify({ problemIds: [11, 22], index: 1, results: [{ problemId: 11, correct: true }] });
+  const raw = JSON.stringify({
+    problemIds: [11, 22],
+    problems: [P(11), P(22)],
+    index: 1,
+    results: [{ problemId: 11, correct: true }],
+  });
   assert.deepStrictEqual(parseSession(raw), {
     problemIds: [11, 22],
+    problems: [P(11), P(22)],
     index: 1,
     results: [{ problemId: 11, correct: true }],
   });
@@ -87,22 +111,35 @@ test("parseSession: broken JSON returns null", () => {
 });
 
 test("parseSession: rejects a non-array problemIds", () => {
-  const raw = JSON.stringify({ problemIds: "11,22", index: 0, results: [] });
+  const raw = JSON.stringify({ problemIds: "11,22", index: 0, results: [], problems: [] });
   assert.strictEqual(parseSession(raw), null);
 });
 
 test("parseSession: rejects a non-number index", () => {
-  const raw = JSON.stringify({ problemIds: [11, 22], index: "0", results: [] });
+  const raw = JSON.stringify({ problemIds: [11, 22], index: "0", results: [], problems: [] });
   assert.strictEqual(parseSession(raw), null);
 });
 
 test("parseSession: rejects a non-array results", () => {
-  const raw = JSON.stringify({ problemIds: [11, 22], index: 0, results: null });
+  const raw = JSON.stringify({ problemIds: [11, 22], index: 0, results: null, problems: [] });
+  assert.strictEqual(parseSession(raw), null);
+});
+
+test("parseSession: rejects a session whose problems field is not an array", () => {
+  const raw = JSON.stringify({ problemIds: [1], index: 0, results: [], problems: "x" });
+  assert.strictEqual(parseSession(raw), null);
+});
+
+test("parseSession: rejects a pre-migration session with no problems field at all", () => {
+  // 이 변경 전에 저장된 세션의 실제 형태 — problems 키가 아예 없다(비배열이 아니라
+  // undefined). 의도적으로 거부한다: 이미 제출한 답은 서버에 남아 있고, 느슨하게
+  // 받아들이면 결과 화면이 문제 본문을 못 찾아 조용히 망가진다.
+  const raw = JSON.stringify({ problemIds: [11, 22], index: 0, results: [] });
   assert.strictEqual(parseSession(raw), null);
 });
 
 test("endSessionEarly: truncates problemIds to what was already answered, keeps results", () => {
-  let session = createSession([11, 22, 33, 44]);
+  let session = createSession([P(11), P(22), P(33), P(44)]);
   session = recordResult(session, true);
   session = recordResult(session, false);
   // 4문제 세트 중 2개만 기록된 상태에서 3번째 로드가 계속 실패한다고 가정
@@ -115,4 +152,13 @@ test("endSessionEarly: truncates problemIds to what was already answered, keeps 
 
   // 원본은 그대로여야 한다
   assert.strictEqual(isFinished(session), false);
+});
+
+test("endSessionEarly: keeps the problem metadata intact", () => {
+  let session = createSession([P(11), P(22), P(33)]);
+  session = recordResult(session, true);
+  const ended = endSessionEarly(session);
+  assert.strictEqual(ended.problemIds.length, 1);
+  // 잘린 문제의 메타까지 지우면 결과 화면이 이미 푼 문제를 못 찾는다
+  assert.deepStrictEqual(ended.problems, session.problems);
 });

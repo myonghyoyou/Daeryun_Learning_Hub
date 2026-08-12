@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { myAttemptHistory } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
+import { previewContent } from "@/utils/problemPreview.js";
 
 const COLUMNS = [
   { key: "problem", label: "문제" },
@@ -87,7 +88,7 @@ export default function AttemptHistoryPage() {
               {history.map((item, index) => (
                 <TableRow key={index}>
                   <TableCell className="max-w-[320px]">
-                    <span className="line-clamp-1 text-ink-strong">{item.problemContent}</span>
+                    <span className="line-clamp-1 text-ink-strong">{previewContent(item.problemContent)}</span>
                   </TableCell>
                   <TableCell>
                     <span className="line-clamp-1">{item.submittedAnswer || "-"}</span>
@@ -105,7 +106,7 @@ export default function AttemptHistoryPage() {
               <li key={index}>
                 <Surface className="p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="line-clamp-2 flex-1 text-body text-ink-strong">{item.problemContent}</p>
+                    <p className="line-clamp-2 flex-1 text-body text-ink-strong">{previewContent(item.problemContent)}</p>
                     <ResultText correct={item.correct} />
                   </div>
                   <p className="mt-2 line-clamp-1 text-body-small text-ink-muted">제출: {item.submittedAnswer || "-"}</p>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { MagnifyingGlass, ArrowRight } from "@phosphor-icons/react";
+import { MagnifyingGlass, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
@@ -11,6 +11,7 @@ import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { listSolveProblems } from "@/api/solve.js";
 import { listTagsInUse } from "@/api/problems.js";
 import { resolveErrorMessage } from "@/api/client.js";
+import { previewContent } from "@/utils/problemPreview.js";
 
 const TYPE_LABELS = {
   MCQ_SINGLE: "객관식(단일)",
@@ -54,6 +55,11 @@ export default function SolveProblemListPage() {
 
   return (
     <SolveShell>
+      <Link to="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <ArrowLeft size={16} aria-hidden="true" />
+        학습 홈
+      </Link>
+
       <section className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">문제 풀이</h1>
         <Link to="/solve/history" className="rounded-sm text-body-small font-semibold text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
@@ -112,7 +118,7 @@ export default function SolveProblemListPage() {
                 <span className="shrink-0 rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
                   {TYPE_LABELS[problem.type] ?? problem.type}
                 </span>
-                <span className="line-clamp-2 flex-1 text-body text-ink-strong">{problem.content}</span>
+                <span className="line-clamp-2 flex-1 text-body text-ink-strong">{previewContent(problem.content)}</span>
                 <ArrowRight size={16} aria-hidden="true" className="shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
               </Surface>
             </li>

@@ -8,12 +8,22 @@
  */
 export const SESSION_STORAGE_KEY = "solve-random-session";
 
-export function createSession(problemIds) {
-  return { problemIds: [...problemIds], index: 0, results: [] };
+export function createSession(problems) {
+  const list = problems.map((p) => ({ id: p.id, type: p.type, content: p.content }));
+  return {
+    problemIds: list.map((p) => p.id),
+    problems: list,
+    index: 0,
+    results: [],
+  };
 }
 
 export function currentProblemId(session) {
   return session.index < session.problemIds.length ? session.problemIds[session.index] : null;
+}
+
+export function problemById(session, id) {
+  return session.problems?.find((p) => p.id === id);
 }
 
 export function isFinished(session) {
@@ -27,6 +37,7 @@ export function recordResult(session, correct) {
   }
   return {
     problemIds: session.problemIds,
+    problems: session.problems,
     index: session.index + 1,
     results: [...session.results, { problemId, correct }],
   };
@@ -59,6 +70,13 @@ export function parseSession(raw) {
   if (!Array.isArray(parsed.problemIds)) return null;
   if (typeof parsed.index !== "number") return null;
   if (!Array.isArray(parsed.results)) return null;
+  // 이 필드가 없는 세션은 이 변경 이전에 저장된 옛 세션이다 — 의도적으로 거부한다.
+  // 느슨하게 받아 problems 를 빈 배열로 취급하면 세트는 이어지지만 결과 화면이 모든
+  // 항목을 "(불러올 수 없는 문제)"로 보여주게 된다. 대신 사용자는 설정 화면으로
+  // 돌아가 새 세트를 시작하면 되고, 이미 제출한 답은 서버(attempts 테이블)에 남아 있어
+  // 잃는 것은 브라우저 탭 안의 진행 위치뿐이다. 조용히 망가진 결과 화면보다 눈에 보이는
+  // 재시작이 낫다는 판단이다.
+  if (!Array.isArray(parsed.problems)) return null;
   return parsed;
 }
 
@@ -71,6 +89,7 @@ export function parseSession(raw) {
 export function endSessionEarly(session) {
   return {
     problemIds: session.problemIds.slice(0, session.index),
+    problems: session.problems,
     index: session.index,
     results: session.results,
   };
