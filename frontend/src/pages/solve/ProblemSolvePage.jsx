@@ -124,7 +124,7 @@ export default function ProblemSolvePage() {
                   key={index}
                   aria-label={`빈칸 ${segment.blankKey}`}
                   disabled={answered}
-                  className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
+                  className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 text-center py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
                   value={blankInputs[segment.blankKey] ?? ""}
                   onChange={(event) => setBlankInputs({ ...blankInputs, [segment.blankKey]: event.target.value })}
                 />
