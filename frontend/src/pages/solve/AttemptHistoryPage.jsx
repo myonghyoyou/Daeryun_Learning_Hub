@@ -5,6 +5,7 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import DataTable, { TableRow, TableCell } from "@/components/ui/DataTable.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
+import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { myAttemptHistory } from "@/api/solve.js";
