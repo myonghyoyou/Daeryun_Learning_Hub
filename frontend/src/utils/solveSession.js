@@ -70,6 +70,12 @@ export function parseSession(raw) {
   if (!Array.isArray(parsed.problemIds)) return null;
   if (typeof parsed.index !== "number") return null;
   if (!Array.isArray(parsed.results)) return null;
+  // 이 필드가 없는 세션은 이 변경 이전에 저장된 옛 세션이다 — 의도적으로 거부한다.
+  // 느슨하게 받아 problems 를 빈 배열로 취급하면 세트는 이어지지만 결과 화면이 모든
+  // 항목을 "(불러올 수 없는 문제)"로 보여주게 된다. 대신 사용자는 설정 화면으로
+  // 돌아가 새 세트를 시작하면 되고, 이미 제출한 답은 서버(attempts 테이블)에 남아 있어
+  // 잃는 것은 브라우저 탭 안의 진행 위치뿐이다. 조용히 망가진 결과 화면보다 눈에 보이는
+  // 재시작이 낫다는 판단이다.
   if (!Array.isArray(parsed.problems)) return null;
   return parsed;
 }

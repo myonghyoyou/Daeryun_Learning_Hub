@@ -130,6 +130,14 @@ test("parseSession: rejects a session whose problems field is not an array", () 
   assert.strictEqual(parseSession(raw), null);
 });
 
+test("parseSession: rejects a pre-migration session with no problems field at all", () => {
+  // 이 변경 전에 저장된 세션의 실제 형태 — problems 키가 아예 없다(비배열이 아니라
+  // undefined). 의도적으로 거부한다: 이미 제출한 답은 서버에 남아 있고, 느슨하게
+  // 받아들이면 결과 화면이 문제 본문을 못 찾아 조용히 망가진다.
+  const raw = JSON.stringify({ problemIds: [11, 22], index: 0, results: [] });
+  assert.strictEqual(parseSession(raw), null);
+});
+
 test("endSessionEarly: truncates problemIds to what was already answered, keeps results", () => {
   let session = createSession([P(11), P(22), P(33), P(44)]);
   session = recordResult(session, true);
