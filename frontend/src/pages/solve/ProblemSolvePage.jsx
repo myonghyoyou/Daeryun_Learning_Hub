@@ -43,14 +43,10 @@ export default function ProblemSolvePage() {
     );
   }
 
-  if (!problem) {
-    return (
-      <SolveShell>
-        <ProblemSkeleton />
-      </SolveShell>
-    );
-  }
-
+  // 로딩 중에도 "문제 목록" 링크를 같은 자리에 그린다. skeleton 만 그리면 로드가 끝나는
+  // 순간 링크(높이 20px + mb-4)가 새로 끼어들어 카드가 통째로 36px 아래로 밀린다 —
+  // skeleton 이 막으려던 바로 그 현상이다. 랜덤 세트 진행 화면도 같은 이유로 진행률
+  // 헤더를 skeleton 상태에서 함께 그린다(RandomPlayPage).
   return (
     <SolveShell>
       <Link to="/solve/problems" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
@@ -58,14 +54,20 @@ export default function ProblemSolvePage() {
         문제 목록
       </Link>
 
-      <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
+      {problem ? (
+        <>
+          <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
 
-      {submittedResult && (
-        <div className="mt-4">
-          <Link to="/solve/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
-            다른 문제 풀기
-          </Link>
-        </div>
+          {submittedResult && (
+            <div className="mt-4">
+              <Link to="/solve/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
+                다른 문제 풀기
+              </Link>
+            </div>
+          )}
+        </>
+      ) : (
+        <ProblemSkeleton />
       )}
     </SolveShell>
   );
