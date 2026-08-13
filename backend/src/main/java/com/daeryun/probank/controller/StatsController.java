@@ -28,4 +28,9 @@ public class StatsController {
                                                             @LoginUser AuthUser actor) {
         return ResponseEntity.ok(ResponseDto.ok(statsService.listProblemStats(actor, departmentId, status, page, size)));
     }
+
+    @GetMapping("/problems/{id}")
+    public ResponseEntity<ResponseDto<?>> getProblemDetail(@PathVariable Long id, @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(statsService.getProblemDetail(id, actor)));
+    }
 }

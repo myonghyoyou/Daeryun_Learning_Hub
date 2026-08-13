@@ -122,4 +122,103 @@ class StatsServiceImplTest {
         assertEquals(3L, result.get(0).getProblemId());
         assertEquals(7L, result.get(1).getProblemId());
     }
+
+    private com.daeryun.probank.domain.Problem problem(long id, ProblemType type, long departmentId) {
+        com.daeryun.probank.domain.Problem entity = new com.daeryun.probank.domain.Problem();
+        entity.setId(id);
+        entity.setType(type);
+        entity.setDepartmentId(departmentId);
+        entity.setContent("1+1=?");
+        entity.setStatus(ProblemStatus.ACTIVE);
+        return entity;
+    }
+
+    private com.daeryun.probank.domain.ProblemChoice choice(long id, String text) {
+        com.daeryun.probank.domain.ProblemChoice entity = new com.daeryun.probank.domain.ProblemChoice();
+        entity.setId(id);
+        entity.setChoiceText(text);
+        return entity;
+    }
+
+    private com.daeryun.probank.dto.stats.ChoiceDistributionRaw dist(long choiceId, int count) {
+        com.daeryun.probank.dto.stats.ChoiceDistributionRaw entity =
+                new com.daeryun.probank.dto.stats.ChoiceDistributionRaw();
+        entity.setChoiceId(choiceId);
+        entity.setSelectedCount(count);
+        return entity;
+    }
+
+    @Test
+    void getProblemDetail_mcqSingle_mapsDistributionOntoCurrentChoices() {
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem(1L, ProblemType.MCQ_SINGLE, 10L));
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(choice(10L, "1"), choice(11L, "2")));
+        Mockito.when(attemptChoiceDao.findDistribution(1L)).thenReturn(Arrays.asList(dist(10L, 1), dist(11L, 2)));
+        Mockito.when(attemptChoiceDao.countAnalyzedAttempts(1L)).thenReturn(3);
+        Mockito.when(statsDao.findProblemStat(1L)).thenReturn(raw(1L, "1+1=?", 3, 2));
+        Mockito.when(attemptDao.findRecentWrong(1L, 5)).thenReturn(Collections.emptyList());
+
+        com.daeryun.probank.dto.stats.ProblemStatDetailResponse detail = service.getProblemDetail(1L, deptAdmin);
+
+        assertEquals(2, detail.getChoiceDistribution().size());
+        assertEquals(2, detail.getChoiceDistribution().get(1).getSelectedCount());
+        assertEquals(0, detail.getExcludedAttempts());
+    }
+
+    @Test
+    void getProblemDetail_choiceNeverPicked_stillAppearsWithZero() {
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem(1L, ProblemType.MCQ_SINGLE, 10L));
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(choice(10L, "1"), choice(11L, "2")));
+        Mockito.when(attemptChoiceDao.findDistribution(1L)).thenReturn(Collections.singletonList(dist(10L, 3)));
+        Mockito.when(attemptChoiceDao.countAnalyzedAttempts(1L)).thenReturn(3);
+        Mockito.when(statsDao.findProblemStat(1L)).thenReturn(raw(1L, "1+1=?", 3, 3));
+        Mockito.when(attemptDao.findRecentWrong(1L, 5)).thenReturn(Collections.emptyList());
+
+        com.daeryun.probank.dto.stats.ProblemStatDetailResponse detail = service.getProblemDetail(1L, deptAdmin);
+
+        assertEquals(0, detail.getChoiceDistribution().get(1).getSelectedCount());
+    }
+
+    @Test
+    void getProblemDetail_reportsAttemptsExcludedFromDistribution() {
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem(1L, ProblemType.MCQ_SINGLE, 10L));
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Collections.singletonList(choice(10L, "1")));
+        Mockito.when(attemptChoiceDao.findDistribution(1L)).thenReturn(Collections.singletonList(dist(10L, 2)));
+        // 시도는 5건인데 현재 보기와 매칭되는 것은 2건 — 나머지 3건은 문제 수정 이전 기록이다.
+        Mockito.when(attemptChoiceDao.countAnalyzedAttempts(1L)).thenReturn(2);
+        Mockito.when(statsDao.findProblemStat(1L)).thenReturn(raw(1L, "1+1=?", 5, 4));
+        Mockito.when(attemptDao.findRecentWrong(1L, 5)).thenReturn(Collections.emptyList());
+
+        com.daeryun.probank.dto.stats.ProblemStatDetailResponse detail = service.getProblemDetail(1L, deptAdmin);
+
+        assertEquals(3, detail.getExcludedAttempts());
+    }
+
+    @Test
+    void getProblemDetail_shortAnswer_hasNoDistribution() {
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem(1L, ProblemType.SHORT_ANSWER, 10L));
+        Mockito.when(statsDao.findProblemStat(1L)).thenReturn(raw(1L, "수도는?", 2, 1));
+        Mockito.when(attemptDao.findRecentWrong(1L, 5)).thenReturn(Collections.emptyList());
+
+        com.daeryun.probank.dto.stats.ProblemStatDetailResponse detail = service.getProblemDetail(1L, deptAdmin);
+
+        assertNull(detail.getChoiceDistribution());
+        Mockito.verify(attemptChoiceDao, Mockito.never()).findDistribution(Mockito.anyLong());
+    }
+
+    @Test
+    void getProblemDetail_otherDepartment_deniedForDeptAdmin() {
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem(1L, ProblemType.MCQ_SINGLE, 999L));
+
+        assertThrows(com.daeryun.probank.exception.BizException.class,
+                () -> service.getProblemDetail(1L, deptAdmin));
+    }
+
+    @Test
+    void getProblemDetail_otherDepartment_allowedForSuperAdmin() {
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem(1L, ProblemType.SHORT_ANSWER, 999L));
+        Mockito.when(statsDao.findProblemStat(1L)).thenReturn(raw(1L, "수도는?", 0, 0));
+        Mockito.when(attemptDao.findRecentWrong(1L, 5)).thenReturn(Collections.emptyList());
+
+        assertNotNull(service.getProblemDetail(1L, superAdmin));
+    }
 }

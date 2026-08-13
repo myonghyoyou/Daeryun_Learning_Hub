@@ -14,4 +14,6 @@ public interface StatsService {
 
     /** 대시보드 "문제 수" metric. 보관 문제는 세지 않는다. */
     int countActiveProblems(AuthUser actor, Long departmentId);
+
+    com.daeryun.probank.dto.stats.ProblemStatDetailResponse getProblemDetail(Long problemId, AuthUser actor);
 }
