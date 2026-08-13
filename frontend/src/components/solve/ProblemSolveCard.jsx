@@ -176,7 +176,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
       </Surface>
 
       {answered && (
-        <Surface className={`mt-4 p-5 ${result.correct ? "bg-success-bg" : "bg-danger-bg"}`}>
+        <Surface background={result.correct ? "bg-success-bg" : "bg-danger-bg"} className="mt-4 p-5">
           <p className={`flex items-center gap-2 text-section-title font-bold ${result.correct ? "text-success-text" : "text-danger-text"}`}>
             {result.correct ? <CheckCircle size={20} weight="fill" aria-hidden="true" /> : <XCircle size={20} weight="fill" aria-hidden="true" />}
             {result.correct ? "정답입니다!" : "오답입니다."}
