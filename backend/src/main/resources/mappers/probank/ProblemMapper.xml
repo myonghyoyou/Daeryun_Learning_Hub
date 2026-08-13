@@ -107,4 +107,21 @@
         <include refid="problemFilter"/>
     </select>
 
+    <select id="findRecent" resultMap="problemListItemMap">
+        SELECT p.id, p.type, p.content, p.status, p.department_id, d.name AS department_name, p.created_at,
+               COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        LEFT JOIN problem_tags pt ON pt.problem_id = p.id
+        LEFT JOIN tags t ON t.id = pt.tag_id
+        <where>
+            <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+        </where>
+        GROUP BY p.id, d.name
+        <!-- findAll 과 같은 이유로 p.id 타이브레이커를 둔다. 엑셀 업로드로 created_at 이
+             같은 행이 여럿 생기면 순서가 흔들린다. -->
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
