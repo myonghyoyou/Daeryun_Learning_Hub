@@ -41,6 +41,12 @@ public class StatsServiceImpl implements StatsService {
 
     private static final int RECENT_WRONG_LIMIT = 5;
 
+    // ProblemServiceImpl.DEFAULT_PAGE_SIZE/MAX_PAGE_SIZE 와 같은 값·같은 클램프 식이다.
+    // size 를 그대로 statsDao 에 넘기면 size<=0 은 LIMIT 음수/0 으로 DB 오류나 데이터 손실처럼
+    // 보이는 빈 목록을 만들고, size 상한이 없으면 큰 값이 문제×시도 GROUP BY 를 무제한으로 돌린다.
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final StatsDao statsDao;
     private final AttemptDao attemptDao;
     private final AttemptChoiceDao attemptChoiceDao;
@@ -68,11 +74,12 @@ public class StatsServiceImpl implements StatsService {
     public ProblemStatPageResponse listProblemStats(AuthUser actor, Long departmentId, String status, int page, int size) {
         Long scope = effectiveDepartmentId(actor, departmentId);
         int safePage = Math.max(1, page);
-        List<ProblemStatItem> items = statsDao.findProblemStats(scope, status, size, (safePage - 1) * size).stream()
+        int safeSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+        List<ProblemStatItem> items = statsDao.findProblemStats(scope, status, safeSize, (safePage - 1) * safeSize).stream()
                 .map(ProblemStatItem::from)
                 .sorted(LOWEST_ACCURACY_FIRST)
                 .collect(Collectors.toList());
-        return new ProblemStatPageResponse(items, statsDao.countProblemStats(scope, status), safePage, size);
+        return new ProblemStatPageResponse(items, statsDao.countProblemStats(scope, status), safePage, safeSize);
     }
 
     @Override

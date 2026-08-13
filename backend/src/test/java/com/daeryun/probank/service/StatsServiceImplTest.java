@@ -109,6 +109,31 @@ class StatsServiceImplTest {
         assertEquals(0.2, result.get(0).getAccuracyRate(), 0.0001);
     }
 
+    // ProblemServiceImpl.list 와 같은 클램프. size<=0 은 DEFAULT_PAGE_SIZE(20)로,
+    // size 상한 초과는 MAX_PAGE_SIZE(100)로 잘려야 한다 — 그렇지 않으면 size=-1 이 DB 에서
+    // "LIMIT must not be negative" 500 을, size=0 이 totalCount 는 그대로인 채 빈 목록을 낸다.
+    @Test
+    void listProblemStats_sizeZeroOrNegative_fallsBackToDefaultPageSize() {
+        Mockito.when(statsDao.findProblemStats(10L, null, 20, 0)).thenReturn(Collections.emptyList());
+        Mockito.when(statsDao.countProblemStats(10L, null)).thenReturn(0L);
+
+        ProblemStatPageResponse response = service.listProblemStats(deptAdmin, null, null, 1, 0);
+
+        Mockito.verify(statsDao).findProblemStats(10L, null, 20, 0);
+        assertEquals(20, response.getSize());
+    }
+
+    @Test
+    void listProblemStats_sizeAboveMax_clampsToMaxPageSize() {
+        Mockito.when(statsDao.findProblemStats(10L, null, 100, 0)).thenReturn(Collections.emptyList());
+        Mockito.when(statsDao.countProblemStats(10L, null)).thenReturn(0L);
+
+        ProblemStatPageResponse response = service.listProblemStats(deptAdmin, null, null, 1, 1_000_000);
+
+        Mockito.verify(statsDao).findProblemStats(10L, null, 100, 0);
+        assertEquals(100, response.getSize());
+    }
+
     @Test
     void sameAccuracy_breaksTieByProblemId_soOrderIsStable() {
         Mockito.when(statsDao.findProblemStats(10L, null, 20, 0)).thenReturn(Arrays.asList(
