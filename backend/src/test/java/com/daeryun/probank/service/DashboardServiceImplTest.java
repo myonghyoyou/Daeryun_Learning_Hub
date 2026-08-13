@@ -115,6 +115,36 @@ class DashboardServiceImplTest {
         assertEquals(response.getReviewNeededCount(), response.getLowAccuracyProblems().size());
     }
 
+    // LOW_ACCURACY_LIST_SIZE(=5) 로 자르는 limit(5) 는 allStats 가 이미 정답률 오름차순으로
+    // 왔다는 전제에 기댄다(getSummary 의 주석 참고). statsService 를 목으로 대체하는 이상
+    // 그 전제 자체는 이 테스트도 강제할 수 없지만, 목이 그 계약대로 "이미 정렬된" 7건을 주었을 때
+    // limit(5)가 정확히 앞 5건만, 순서를 보존한 채 잘라내는지는 고정할 수 있다 — 정렬이 깨지면
+    // (예: limit 앞에서 재정렬을 빠뜨리거나 순서를 뒤집으면) 이 테스트가 잡는다.
+    @Test
+    void lowAccuracyList_truncatesToFiveWorst_preservingAscendingOrder() {
+        List<ProblemStatItem> stats = Arrays.asList(
+                stat(101L, 20, 1, ProblemStatus.ACTIVE),  // 5%
+                stat(102L, 20, 2, ProblemStatus.ACTIVE),  // 10%
+                stat(103L, 20, 3, ProblemStatus.ACTIVE),  // 15%
+                stat(104L, 20, 4, ProblemStatus.ACTIVE),  // 20%
+                stat(105L, 20, 5, ProblemStatus.ACTIVE),  // 25%
+                stat(106L, 20, 6, ProblemStatus.ACTIVE),  // 30%
+                stat(107L, 20, 7, ProblemStatus.ACTIVE)   // 35%
+        );
+        Mockito.when(statsService.listAllProblemStats(deptAdmin, null)).thenReturn(stats);
+        Mockito.when(statsService.countActiveProblems(deptAdmin, null)).thenReturn(7);
+        Mockito.when(problemDao.findRecent(10L, 5)).thenReturn(Collections.emptyList());
+
+        DashboardSummaryResponse response = service.getSummary(deptAdmin, null);
+
+        assertEquals(7, response.getReviewNeededCount());
+        List<ProblemStatItem> lowAccuracyProblems = response.getLowAccuracyProblems();
+        assertEquals(5, lowAccuracyProblems.size());
+        assertEquals(
+                Arrays.asList(101L, 102L, 103L, 104L, 105L),
+                lowAccuracyProblems.stream().map(ProblemStatItem::getProblemId).collect(java.util.stream.Collectors.toList()));
+    }
+
     @Test
     void withNoAttempts_averageAccuracyIsNull() {
         Mockito.when(statsService.listAllProblemStats(deptAdmin, null))
