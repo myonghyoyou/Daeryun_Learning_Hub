@@ -234,6 +234,152 @@ class SolveServiceImplTest {
         assertThrows(BizException.class, () -> service.submit(1L, request, actor));
     }
 
+    /**
+     * attempts.submitted_answer 는 풀이 이력 화면이 "제출 답안" 칸에 그대로 보여주는 값이다.
+     * 예전에는 선택지 ID 집합을 toString 한 값(`[104]`)이 그대로 들어가 사용자에게 노출됐다.
+     */
+    private Attempt capturedAttempt() {
+        org.mockito.ArgumentCaptor<Attempt> captor = org.mockito.ArgumentCaptor.forClass(Attempt.class);
+        Mockito.verify(attemptDao).insert(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void submit_mcqSingle_storesChoiceTextNotChoiceId() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.MCQ_SINGLE);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(
+                choice(104L, "Java", true, 1), choice(105L, "HTTP", false, 2)));
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSelectedChoiceIds(Collections.singletonList(104L));
+
+        service.submit(1L, request, actor);
+
+        assertEquals("Java", capturedAttempt().getSubmittedAnswer());
+    }
+
+    @Test
+    void submit_mcqMulti_storesChoiceTextInProblemOrderNotSubmissionOrder() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.MCQ_MULTI);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        // ID 를 일부러 어긋나게 잡았다. 제출 ID 는 HashSet 에 담기므로 순회 순서가 ID 의
+        // 해시 순서(작은 값 먼저)를 따르는데, 여기서는 그 순서가 선택지 순서(Java 먼저)와
+        // 반대다. 제출 순서를 그대로 쓰는 구현이면 "Python, Java" 가 나와 이 테스트가 깨진다.
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(
+                choice(200L, "Java", true, 1), choice(3L, "Python", true, 2), choice(60L, "HTTP", false, 3)));
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSelectedChoiceIds(Arrays.asList(3L, 200L));
+
+        service.submit(1L, request, actor);
+
+        assertEquals("Java, Python", capturedAttempt().getSubmittedAnswer());
+    }
+
+    @Test
+    void submit_ox_storesChoiceText() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.OX);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(
+                choice(66L, "O", true, 1), choice(67L, "X", false, 2)));
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSelectedChoiceIds(Collections.singletonList(67L));
+
+        service.submit(1L, request, actor);
+
+        assertEquals("X", capturedAttempt().getSubmittedAnswer());
+    }
+
+    @Test
+    void submit_mcq_noSelection_storesEmptySummary() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.MCQ_MULTI);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(
+                choice(10L, "1", true, 1), choice(11L, "2", false, 2)));
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSelectedChoiceIds(Collections.emptyList());
+
+        service.submit(1L, request, actor);
+
+        // 화면은 빈 값을 "-" 로 그린다. 예전의 "[]" 처럼 기계적인 문자열이 보여선 안 된다.
+        assertEquals("", capturedAttempt().getSubmittedAnswer());
+    }
+
+    @Test
+    void submit_fillBlank_storesAnswersWithoutInternalBlankKeys() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.FILL_BLANK);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        problem.setBlankRevealCount(2);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        ProblemBlank b1 = new ProblemBlank();
+        b1.setBlankKey("b1");
+        b1.setAnswerText("편성");
+        ProblemBlank b2 = new ProblemBlank();
+        b2.setBlankKey("b2");
+        b2.setAnswerText("집행");
+        Mockito.when(problemBlankDao.findByProblemId(1L)).thenReturn(Arrays.asList(b1, b2));
+
+        BlankAnswerInput first = new BlankAnswerInput();
+        first.setBlankKey("b1");
+        first.setSubmittedAnswer("편성");
+        BlankAnswerInput second = new BlankAnswerInput();
+        second.setBlankKey("b2");
+        second.setSubmittedAnswer("집행");
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setBlankAnswers(Arrays.asList(first, second));
+
+        service.submit(1L, request, actor);
+
+        assertEquals("편성, 집행", capturedAttempt().getSubmittedAnswer());
+    }
+
+    @Test
+    void submit_fillBlank_blankLeftEmpty_marksItAsNotEntered() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.FILL_BLANK);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        problem.setBlankRevealCount(2);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        ProblemBlank b1 = new ProblemBlank();
+        b1.setBlankKey("b1");
+        b1.setAnswerText("편성");
+        ProblemBlank b2 = new ProblemBlank();
+        b2.setBlankKey("b2");
+        b2.setAnswerText("집행");
+        Mockito.when(problemBlankDao.findByProblemId(1L)).thenReturn(Arrays.asList(b1, b2));
+
+        BlankAnswerInput first = new BlankAnswerInput();
+        first.setBlankKey("b1");
+        first.setSubmittedAnswer("편성");
+        BlankAnswerInput second = new BlankAnswerInput();
+        second.setBlankKey("b2");
+        second.setSubmittedAnswer("   ");
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setBlankAnswers(Arrays.asList(first, second));
+
+        service.submit(1L, request, actor);
+
+        assertEquals("편성, (미입력)", capturedAttempt().getSubmittedAnswer());
+    }
+
     @Test
     void randomSet_rejectsCountBelowOne() {
         assertThrows(BizException.class, () -> service.randomSet(0, null));
