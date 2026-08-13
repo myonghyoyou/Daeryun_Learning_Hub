@@ -24,16 +24,19 @@ public class SolveServiceImpl implements SolveService {
     private final ProblemBlankDao problemBlankDao;
     private final AttemptDao attemptDao;
     private final AttemptBlankAnswerDao attemptBlankAnswerDao;
+    private final AttemptChoiceDao attemptChoiceDao;
 
     public SolveServiceImpl(ProblemDao problemDao, ProblemChoiceDao problemChoiceDao,
                              ProblemAnswerDao problemAnswerDao, ProblemBlankDao problemBlankDao,
-                             AttemptDao attemptDao, AttemptBlankAnswerDao attemptBlankAnswerDao) {
+                             AttemptDao attemptDao, AttemptBlankAnswerDao attemptBlankAnswerDao,
+                             AttemptChoiceDao attemptChoiceDao) {
         this.problemDao = problemDao;
         this.problemChoiceDao = problemChoiceDao;
         this.problemAnswerDao = problemAnswerDao;
         this.problemBlankDao = problemBlankDao;
         this.attemptDao = attemptDao;
         this.attemptBlankAnswerDao = attemptBlankAnswerDao;
+        this.attemptChoiceDao = attemptChoiceDao;
     }
 
     @Override
@@ -98,6 +101,7 @@ public class SolveServiceImpl implements SolveService {
         boolean correct;
         List<BlankAnswerResult> blankResults = null;
         String submittedAnswerSummary;
+        List<ProblemChoice> selectedChoices = java.util.Collections.emptyList();
 
         switch (problem.getType()) {
             case MCQ_SINGLE:
@@ -109,6 +113,10 @@ public class SolveServiceImpl implements SolveService {
                 java.util.Set<Long> submittedIds = new java.util.HashSet<>(
                         request.getSelectedChoiceIds() == null ? java.util.Collections.emptyList() : request.getSelectedChoiceIds());
                 correct = correctIds.equals(submittedIds);
+                // 문제에 정의된 순서로 고정한다. 제출 ID 는 Set 이라 순서가 없다.
+                selectedChoices = choices.stream()
+                        .filter(c -> submittedIds.contains(c.getId()))
+                        .collect(Collectors.toList());
                 submittedAnswerSummary = describeChoices(choices, submittedIds);
                 break;
             }
@@ -158,6 +166,19 @@ public class SolveServiceImpl implements SolveService {
                 ? submittedAnswerSummary.substring(0, 500) : submittedAnswerSummary);
         attempt.setCorrect(correct);
         attemptDao.insert(attempt);
+
+        // 통계의 보기별 선택 분포가 쓰는 유일한 소스다. submitted_answer 는 이력 화면이
+        // 그대로 렌더하는 표시용 텍스트라 집계용으로 파싱하지 않는다.
+        if (!selectedChoices.isEmpty()) {
+            List<AttemptChoice> attemptChoices = selectedChoices.stream().map(choice -> {
+                AttemptChoice entity = new AttemptChoice();
+                entity.setAttemptId(attempt.getId());
+                entity.setChoiceId(choice.getId());
+                entity.setChoiceText(choice.getChoiceText());
+                return entity;
+            }).collect(Collectors.toList());
+            attemptChoiceDao.insertAll(attemptChoices);
+        }
 
         if (blankResults != null) {
             List<AttemptBlankAnswer> entities = blankResults.stream().map(r -> {

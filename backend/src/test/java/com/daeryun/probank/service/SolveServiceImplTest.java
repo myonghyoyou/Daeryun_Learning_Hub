@@ -31,6 +31,7 @@ class SolveServiceImplTest {
     private ProblemBlankDao problemBlankDao;
     private AttemptDao attemptDao;
     private AttemptBlankAnswerDao attemptBlankAnswerDao;
+    private com.daeryun.probank.dao.AttemptChoiceDao attemptChoiceDao;
     private SolveServiceImpl service;
 
     @BeforeEach
@@ -41,8 +42,9 @@ class SolveServiceImplTest {
         problemBlankDao = Mockito.mock(ProblemBlankDao.class);
         attemptDao = Mockito.mock(AttemptDao.class);
         attemptBlankAnswerDao = Mockito.mock(AttemptBlankAnswerDao.class);
+        attemptChoiceDao = Mockito.mock(com.daeryun.probank.dao.AttemptChoiceDao.class);
         service = new SolveServiceImpl(problemDao, problemChoiceDao, problemAnswerDao, problemBlankDao,
-                attemptDao, attemptBlankAnswerDao);
+                attemptDao, attemptBlankAnswerDao, attemptChoiceDao);
     }
 
     private final AuthUser actor = new AuthUser(1L, "1001", "홍길동", UserRole.EMPLOYEE, 10L, false);
@@ -419,5 +421,76 @@ class SolveServiceImplTest {
 
         assertEquals(1, history.size());
         Mockito.verify(attemptDao).findByUserId(1L);
+    }
+
+    @Test
+    void submit_mcqMulti_recordsSelectedChoicesWithTextSnapshot() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.MCQ_MULTI);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(
+                choice(200L, "Java", true, 1), choice(3L, "Python", true, 2), choice(60L, "HTTP", false, 3)));
+        // insert 는 void 라 when(...) 으로 스텁할 수 없다 — doAnswer 를 써야 컴파일된다.
+        // MyBatis 의 useGeneratedKeys 가 하는 일(전달된 Attempt 에 id 를 채워 넣기)을 흉내 낸다.
+        Mockito.doAnswer(invocation -> {
+            ((Attempt) invocation.getArgument(0)).setId(77L);
+            return null;
+        }).when(attemptDao).insert(Mockito.any());
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSelectedChoiceIds(Arrays.asList(3L, 200L));
+
+        service.submit(1L, request, actor);
+
+        org.mockito.ArgumentCaptor<java.util.List> captor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        Mockito.verify(attemptChoiceDao).insertAll(captor.capture());
+        java.util.List<com.daeryun.probank.domain.AttemptChoice> saved = captor.getValue();
+        assertEquals(2, saved.size());
+        // 문제에 정의된 순서로 남는다. 제출 ID 는 Set 이라 순서가 없다.
+        assertEquals(200L, saved.get(0).getChoiceId());
+        assertEquals("Java", saved.get(0).getChoiceText());
+        assertEquals(3L, saved.get(1).getChoiceId());
+        assertEquals("Python", saved.get(1).getChoiceText());
+        assertEquals(77L, saved.get(0).getAttemptId());
+    }
+
+    @Test
+    void submit_mcq_noSelection_doesNotTouchAttemptChoiceDao() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.MCQ_MULTI);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        Mockito.when(problemChoiceDao.findByProblemId(1L)).thenReturn(Arrays.asList(
+                choice(10L, "1", true, 1), choice(11L, "2", false, 2)));
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSelectedChoiceIds(java.util.Collections.emptyList());
+
+        service.submit(1L, request, actor);
+
+        // 빈 리스트로 insertAll 을 부르면 MyBatis foreach 가 빈 VALUES 절을 만들어 SQL 오류가 난다.
+        Mockito.verify(attemptChoiceDao, Mockito.never()).insertAll(Mockito.anyList());
+    }
+
+    @Test
+    void submit_shortAnswer_doesNotRecordChoices() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.SHORT_ANSWER);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        ProblemAnswer answer = new ProblemAnswer();
+        answer.setAnswerText("Seoul");
+        Mockito.when(problemAnswerDao.findByProblemId(1L)).thenReturn(java.util.Collections.singletonList(answer));
+
+        AttemptSubmitRequest request = new AttemptSubmitRequest();
+        request.setSubmittedText("Seoul");
+
+        service.submit(1L, request, actor);
+
+        Mockito.verify(attemptChoiceDao, Mockito.never()).insertAll(Mockito.anyList());
     }
 }

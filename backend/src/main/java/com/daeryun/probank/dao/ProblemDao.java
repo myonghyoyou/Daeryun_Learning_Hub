@@ -43,4 +43,7 @@ public interface ProblemDao {
      */
     List<com.daeryun.probank.dto.solve.ProblemSolveListItem> findRandomActive(@Param("count") int count,
                                                                                @Param("departmentId") Long departmentId);
+
+    /** 최근 등록 문제. departmentId 가 null 이면 전 부서. 스코프는 호출부가 계산해 넘긴다. */
+    List<ProblemListItem> findRecent(@Param("departmentId") Long departmentId, @Param("limit") int limit);
 }

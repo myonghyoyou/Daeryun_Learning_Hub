@@ -29,10 +29,11 @@ export function TableRow({ children, className = "" }) {
   );
 }
 
-export function TableCell({ children, className = "", numeric = false }) {
+export function TableCell({ children, className = "", numeric = false, ...props }) {
   return (
     <td
       className={`h-12 px-4 text-body-small text-ink-default ${numeric ? "text-right tabular-nums" : ""} ${className}`}
+      {...props}
     >
       {children}
     </td>
