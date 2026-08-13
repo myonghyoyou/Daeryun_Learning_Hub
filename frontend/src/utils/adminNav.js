@@ -1,4 +1,4 @@
-import { Buildings, Users, Upload, ClipboardText } from "@phosphor-icons/react";
+import { Buildings, Users, Upload, ClipboardText, House, ChartBar } from "@phosphor-icons/react";
 
 /**
  * 8.6.1 관리자 Shell 메뉴 구성.
@@ -13,9 +13,8 @@ import { Buildings, Users, Upload, ClipboardText } from "@phosphor-icons/react";
  * 조용히 새거나 숨는다 — 이 Task에서 가장 spec에 직결된 파생 상태라 별도
  * 모듈로 분리해 테스트한다(adminNav.test.js).
  *
- * 대시보드 항목은 두지 않는다. /admin 은 라우터가 /admin/departments 로 리다이렉트하므로
- * end:true NavLink 가 활성화될 수 없고, 눌러도 "부서 관리"가 켜진 채 부서 화면으로 갈 뿐인
- * 죽은 링크가 된다. 실제 대시보드 화면은 Plan 5에서 추가하면서 함께 넣는다.
+ * 대시보드 항목은 Plan 5에서 추가했다. /admin 은 라우터가 /admin/dashboard 로 리다이렉트하고
+ * 실제 화면이 존재하므로 죽은 링크가 아니다.
  *
  * end 규칙: NavLink 는 기본적으로 접두사로 매칭하므로, 어떤 항목의 경로가 다른 항목의
  * 경로의 접두사이면 그 항목에 end:true 를 줘야 한다. 없으면 두 메뉴가 동시에 활성으로
@@ -33,7 +32,9 @@ export function buildNavGroups(role) {
   if (role !== "SUPER_ADMIN" && role !== "DEPT_ADMIN") {
     return [];
   }
-  const items = [];
+  // 대시보드는 두 역할 공통의 랜딩이라 맨 앞에 둔다(PRD 3.2). /admin/dashboard 는
+  // 다른 항목의 접두사가 아니므로 end 가 필요 없다.
+  const items = [{ to: "/admin/dashboard", label: "대시보드", icon: House }];
   if (role === "SUPER_ADMIN") {
     items.push(
       { to: "/admin/departments", label: "부서 관리", icon: Buildings },
@@ -44,6 +45,8 @@ export function buildNavGroups(role) {
   items.push(
     { to: "/admin/problems", label: "문제 관리", icon: ClipboardText, end: true },
     { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", icon: Upload },
+    // /admin/stats/:id 로 들어가도 "통계"가 켜져 있어야 하므로 end 를 주지 않는다.
+    { to: "/admin/stats", label: "통계", icon: ChartBar },
   );
   return [{ label: "관리 메뉴", items }];
 }

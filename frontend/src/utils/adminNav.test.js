@@ -16,11 +16,13 @@ test("SUPER_ADMIN sees the department, account, and problem management menus", (
     {
       label: "관리 메뉴",
       items: [
+        { to: "/admin/dashboard", label: "대시보드", end: false },
         { to: "/admin/departments", label: "부서 관리", end: false },
         { to: "/admin/users", label: "계정 관리", end: true },
         { to: "/admin/users/excel-upload", label: "계정 일괄 등록", end: false },
         { to: "/admin/problems", label: "문제 관리", end: true },
         { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
+        { to: "/admin/stats", label: "통계", end: false },
       ],
     },
   ]);
@@ -43,9 +45,9 @@ test("a menu path that prefixes another menu path must be exact-matched (end)", 
   }
 });
 
-// 대시보드 화면이 없는 동안에는 /admin 메뉴 항목을 두지 않는다(라우터가 /admin/departments로
-// 리다이렉트해 절대 활성화될 수 없는 죽은 링크가 되기 때문). Plan 5에서 실제 화면과 함께 추가한다.
-test("no menu item points at /admin while the dashboard screen does not exist", () => {
+// 대시보드 항목은 /admin 이 아니라 /admin/dashboard 를 가리켜야 한다. /admin 은 라우터가
+// 리다이렉트만 하는 경로라 end:true NavLink 가 절대 활성화될 수 없는 죽은 링크가 된다.
+test("the dashboard menu points at /admin/dashboard, never at the redirect-only /admin", () => {
   for (const role of ["SUPER_ADMIN", "DEPT_ADMIN", "EMPLOYEE", undefined, null]) {
     for (const group of buildNavGroups(role)) {
       for (const item of group.items) {
@@ -60,8 +62,10 @@ test("DEPT_ADMIN does not see department or account management (hidden, not disa
     {
       label: "관리 메뉴",
       items: [
+        { to: "/admin/dashboard", label: "대시보드", end: false },
         { to: "/admin/problems", label: "문제 관리", end: true },
         { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
+        { to: "/admin/stats", label: "통계", end: false },
       ],
     },
   ]);
@@ -84,4 +88,26 @@ test("every rendered item carries an icon component", () => {
       }
     }
   }
+});
+
+test("both admin roles land on the dashboard as the first menu item", () => {
+  for (const role of ["SUPER_ADMIN", "DEPT_ADMIN"]) {
+    const items = buildNavGroups(role).flatMap((group) => group.items);
+    assert.equal(items[0].to, "/admin/dashboard");
+  }
+});
+
+test("both admin roles see the statistics menu", () => {
+  for (const role of ["SUPER_ADMIN", "DEPT_ADMIN"]) {
+    const items = buildNavGroups(role).flatMap((group) => group.items);
+    assert.ok(items.some((item) => item.to === "/admin/stats"));
+  }
+});
+
+// /admin/stats/:id 로 들어가도 "통계"가 켜져 있어야 한다. end:true 를 주면 상세 화면에서
+// 메뉴가 통째로 꺼진다.
+test("the statistics menu is not exact-matched so the detail screen keeps it active", () => {
+  const stats = buildNavGroups("SUPER_ADMIN").flatMap((group) => group.items)
+    .find((item) => item.to === "/admin/stats");
+  assert.notEqual(stats.end, true);
 });
