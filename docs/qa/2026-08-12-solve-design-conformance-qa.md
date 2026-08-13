@@ -12,7 +12,15 @@
 
 ## 1. 한 줄 결과
 
-**Task 8 전 항목 수행 완료. 결함 3건을 찾아 모두 고쳤다.** 그중 하나(채점 결과 배경색)는 명세가 요구한 색이 화면에 **한 번도 나온 적이 없던** 문제다.
+**Task 8 전 항목 수행 완료. 결함 5건을 찾아 모두 고쳤다.** 그중 하나(채점 결과 배경색)는 명세가 요구한 색이 화면에 **한 번도 나온 적이 없던** 문제다.
+
+| | 내용 | 등급 |
+|---|---|---|
+| D1 | 채점 결과 Surface 가 항상 흰색 | Critical |
+| D2 | 로딩 skeleton 이 뒤로가기 링크를 빠뜨려 카드가 36px 튐 | Important |
+| D3 | 접기 토글에 `aria-expanded` 없음 | Minor |
+| D4 | skeleton 안내 자리 2px 어긋남 | Minor (보류 항목) |
+| D5 | 목록 행 hover 배경이 Surface 모서리 밖으로 샘 | Minor (보류 항목) |
 
 ---
 
@@ -64,6 +72,12 @@
 `Collapsible` 의 "더 보기"/"접기" 버튼에 `aria-expanded` 가 없었다. 눈에 보이는 문구는 바뀌므로 치명적이지는 않지만 disclosure 위젯의 표준 속성이다.
 
 **조치**: `useId()` 로 본문에 id 를 주고 버튼에 `aria-expanded` + `aria-controls` 추가. 실측 확인 — 접힘 `aria-expanded="false"`, 펼침 `"true"`, `aria-controls` 대상 요소 존재.
+
+### D5 — 목록 행 hover 배경이 Surface 모서리 밖으로 샘 (Minor, 보류 항목이었음)
+
+목록을 감싼 `Surface` 에 `overflow-hidden` 이 없어 첫/마지막 행의 hover 배경이 `rounded-lg`(10px) 모서리를 사각형으로 넘어갔다. Task 3 리뷰에서 Minor 로 잡혔다가 최종 리뷰 triage 로 넘어와 있던 항목이다.
+
+**조치**: `overflow-hidden` 추가. 행 포커스 링은 `outline-offset: -3px` 으로 행 **안쪽**에 그려지므로 클리핑에 걸리지 않는다 — 실측으로 재확인했다(`overflow: hidden`, 링 `3px solid rgb(0,180,227)` offset −3px, 링 범위 192~1248 이 Surface 내부 189~1251 안).
 
 ### D4 — 제출 안내 자리 2px 어긋남 (Minor, 보류 항목이었음)
 
@@ -216,7 +230,31 @@ QA 데이터를 만들다 확인했다 — 보기 8개로 만들려 하자 `resu
 
 ---
 
-## 12. 검증 명령 결과
+## 12. 브랜치 전체 최종 리뷰 결과
+
+Task 8 이후 브랜치 전체(master...HEAD, 프론트엔드 16파일)를 이음매 중심으로 검토했다.
+
+| 검토 대상 | 결과 |
+|---|---|
+| `choiceLayout.js` 상수를 카드·skeleton 이 공유 | `-mx-5` 가 카드의 `p-5`(모바일 20px)를 정확히 상쇄하고, 데스크톱에서는 `md:mx-0` 이 되돌린다. skeleton Surface 도 `p-5 md:p-6` 로 동일 — 어긋남 없음 |
+| `buttonClass` 전환 6곳 | `<Link><Button>` 패턴 저장소 전체 **0건** 잔존. 브랜치가 건드린 모든 `.jsx` 의 import 를 스캔해 **미사용 import 0건**, JSX 에서 참조하는데 정의/import 되지 않은 컴포넌트 **0건**. Task 6 에서 흰 화면을 냈던 결함 유형이 다시 없는지 확인한 것 |
+| `Collapsible` 을 참조 지문·이력 답안이 함께 사용 | `collapsedLines` 1/2/3 모두 빌드 CSS 에 생성 확인. 이력 표에서 120자 미만 답안은 토글 없이 전문이 나오는데(이전에는 무조건 1줄 클램프), 1440px 기준 답안 칸 폭이 771px 라 74자가 18px 한 줄에 들어가고 행 높이 48px 이 균일함을 실측 확인 |
+| 목록 Surface 에 `overflow-hidden` 추가 | 이 Surface 안에는 `position: sticky` 요소가 없어 sticky 가 깨질 여지 없음(sticky 는 제출 영역이며 문제 카드 Surface 안에 있고 그쪽은 `overflow` 를 건드리지 않음) |
+| 빌드 CSS 클래스 생성 | `line-clamp-1/2/3`, `sr-only`, `min-h-[56px]`, `h-[44px]`, `h-4.5`, `overflow-hidden`, `bg-success-bg`, `bg-danger-bg`, 음수 `-outline-offset-[3px]` **전부 생성 확인** |
+
+### 보류 minor triage 결과
+
+| 출처 | 항목 | 판단 |
+|---|---|---|
+| Task 3 | Surface `overflow-hidden` 누락 | **수정함** (D5) |
+| Task 4 | 안내 자리 2px | **수정함** (D4) |
+| Task 6 | 번들 500kB 초과 (504 kB, gzip 143 kB) | **보류 유지**. 코드 분할은 라우팅 구조를 건드리는 별도 변경이고 자체 검증이 필요하다. 디자인 정합 브랜치에 섞지 않는다 |
+| Task 6 | "전사 공통"(추천 카드) vs "전체 부서"(설정 화면) | **보류 유지**. 어느 쪽으로 통일할지는 문구 결정이라 임의로 바꾸지 않는다. 추천 카드가 약속한 기본값(10문제·전체 부서)이 설정 화면 기본값과 **실제로 일치**하는 것은 확인했다 |
+| Task 2 | (라벨 중복) | Task 3 에서 이미 해소 |
+
+---
+
+## 13. 검증 명령 결과
 
 ```
 frontend: npm test  -> 254 pass / 0 fail
