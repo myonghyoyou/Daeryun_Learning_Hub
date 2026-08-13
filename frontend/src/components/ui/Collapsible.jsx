@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CaretDown, CaretUp } from "@phosphor-icons/react";
 
 /**
@@ -20,6 +20,7 @@ const LINE_CLAMP_CLASSES = {
  */
 export default function Collapsible({ text, collapsedLines = 3, threshold = 120, className = "" }) {
   const [open, setOpen] = useState(false);
+  const bodyId = useId();
   if (!text) return null;
 
   const needsToggle = text.length > threshold;
@@ -31,9 +32,11 @@ export default function Collapsible({ text, collapsedLines = 3, threshold = 120,
 
   return (
     <div>
-      <p className={`whitespace-pre-wrap ${open ? "" : clampClass} ${className}`}>{text}</p>
+      <p id={bodyId} className={`whitespace-pre-wrap ${open ? "" : clampClass} ${className}`}>{text}</p>
       <button
         type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
         onClick={() => setOpen((prev) => !prev)}
         className="mt-1 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
       >

@@ -26,7 +26,9 @@ export default function ProblemSkeleton() {
         </ul>
         <div className={SUBMIT_AREA_CLASS}>
           <div className="h-11 w-full animate-pulse rounded-sm bg-surface-subtle sm:w-24" />
-          <div className="mt-2 h-5 w-3/4 animate-pulse rounded-xs bg-surface-subtle" />
+          {/* 실제 안내 문구("답안을 입력하면...")는 text-body-small 한 줄이라 높이가
+              정확히 18px 다. h-5(20px)로 두면 로드 완료 순간 2px 이 튄다. */}
+          <div className="mt-2 h-4.5 w-3/4 animate-pulse rounded-xs bg-surface-subtle" />
         </div>
       </Surface>
     </>
