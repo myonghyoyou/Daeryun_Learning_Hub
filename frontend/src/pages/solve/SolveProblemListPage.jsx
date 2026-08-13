@@ -120,7 +120,10 @@ export default function SolveProblemListPage() {
           />
         </Surface>
       ) : (
-        <Surface className="p-0">
+        // overflow-hidden 이 없으면 첫/마지막 행의 hover 배경이 Surface 의 rounded-lg
+        // 모서리 밖으로 사각형으로 새어 나온다. 행 포커스 링은 outline-offset 이 음수라
+        // 행 안쪽에 그려지므로 이 클리핑에 걸리지 않는다.
+        <Surface className="overflow-hidden p-0">
           <ul>
             {problems.map((problem) => (
               <li key={problem.id} className="border-b border-line-default last:border-b-0">
