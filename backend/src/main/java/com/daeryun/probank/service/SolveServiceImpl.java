@@ -2,9 +2,7 @@ package com.daeryun.probank.service;
 
 import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.dao.*;
-import com.daeryun.probank.dao.AttemptChoiceDao;
 import com.daeryun.probank.domain.*;
-import com.daeryun.probank.domain.AttemptChoice;
 import com.daeryun.probank.dto.solve.*;
 import com.daeryun.probank.exception.BizException;
 import org.springframework.stereotype.Service;

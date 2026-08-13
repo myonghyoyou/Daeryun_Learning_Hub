@@ -31,7 +31,6 @@ class SolveServiceImplTest {
     private ProblemBlankDao problemBlankDao;
     private AttemptDao attemptDao;
     private AttemptBlankAnswerDao attemptBlankAnswerDao;
-    // 필드 선언부에 추가
     private com.daeryun.probank.dao.AttemptChoiceDao attemptChoiceDao;
     private SolveServiceImpl service;
 
@@ -43,7 +42,6 @@ class SolveServiceImplTest {
         problemBlankDao = Mockito.mock(ProblemBlankDao.class);
         attemptDao = Mockito.mock(AttemptDao.class);
         attemptBlankAnswerDao = Mockito.mock(AttemptBlankAnswerDao.class);
-        // setUp() 안, service 생성 직전에 추가
         attemptChoiceDao = Mockito.mock(com.daeryun.probank.dao.AttemptChoiceDao.class);
         service = new SolveServiceImpl(problemDao, problemChoiceDao, problemAnswerDao, problemBlankDao,
                 attemptDao, attemptBlankAnswerDao, attemptChoiceDao);
