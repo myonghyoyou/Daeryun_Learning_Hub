@@ -52,19 +52,40 @@ export default function StatsDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // 로딩·오류 상태에서도 통계 목록 back-link 는 사라지면 안 된다(디자인 계약: 로딩 시
+  // Header·필터 위치는 유지하고 metric·표·상세 영역만 Skeleton 처리한다) — 그래서 back-link 는
+  // 아래 분기 밖에서 항상 렌더링하고, summary 가 필요한 제목·metric·표만 분기 안에 둔다.
+  const backLink = (
+    <Link
+      to="/admin/stats"
+      className="inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+    >
+      <ArrowLeft size={16} aria-hidden="true" />
+      통계 목록
+    </Link>
+  );
+
   if (loading) {
-    return <p className="px-1 py-10 text-center text-body-small text-ink-muted">통계를 불러오는 중입니다...</p>;
+    return (
+      <div className="space-y-6">
+        {backLink}
+        <p className="px-1 py-10 text-center text-body-small text-ink-muted">통계를 불러오는 중입니다...</p>
+      </div>
+    );
   }
 
   if (loadError) {
     return (
-      <Surface className="p-0">
-        <EmptyState
-          title="상세 통계를 불러오지 못했습니다."
-          description="잠시 후 다시 시도해 주세요."
-          action={<Button variant="secondary" size="sm" onClick={load}>다시 시도</Button>}
-        />
-      </Surface>
+      <div className="space-y-6">
+        {backLink}
+        <Surface className="p-0">
+          <EmptyState
+            title="상세 통계를 불러오지 못했습니다."
+            description={loadError}
+            action={<Button variant="secondary" size="sm" onClick={load}>다시 시도</Button>}
+          />
+        </Surface>
+      </div>
     );
   }
 
@@ -75,13 +96,7 @@ export default function StatsDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/admin/stats"
-        className="inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
-      >
-        <ArrowLeft size={16} aria-hidden="true" />
-        통계 목록
-      </Link>
+      {backLink}
 
       <div className="flex items-start justify-between gap-3">
         <div>

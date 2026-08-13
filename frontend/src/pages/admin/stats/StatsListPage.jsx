@@ -7,7 +7,7 @@ import { resolveErrorMessage } from "@/api/client.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { previewContent } from "@/utils/problemPreview.js";
 import { problemStatusLabel, problemTypeLabel, PROBLEM_STATUS_OPTIONS } from "@/utils/problemLabels.js";
-import { formatAccuracyRate, isReviewNeeded, REVIEW_MIN_ATTEMPTS } from "@/utils/statsFormat.js";
+import { formatAccuracyRate, isReviewNeeded, REVIEW_ACCURACY_THRESHOLD, REVIEW_MIN_ATTEMPTS } from "@/utils/statsFormat.js";
 import { PAGE_SIZE } from "@/utils/pagination.js";
 import { buttonClass } from "@/utils/buttonClass.js";
 import Surface from "@/components/ui/Surface.jsx";
@@ -108,7 +108,7 @@ export default function StatsListPage() {
 
       {!loading && !loadError && (
         <p className="text-body-small text-ink-muted">
-          전체 {totalCount}건 · 검토 필요 판정 기준은 시도 {REVIEW_MIN_ATTEMPTS}회 이상 · 정답률 50% 미만입니다.
+          전체 {totalCount}건 · 검토 필요 판정 기준은 시도 {REVIEW_MIN_ATTEMPTS}회 이상 · 정답률 {REVIEW_ACCURACY_THRESHOLD * 100}% 미만입니다.
         </p>
       )}
 

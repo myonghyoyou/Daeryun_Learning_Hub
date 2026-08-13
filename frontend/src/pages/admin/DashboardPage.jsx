@@ -7,12 +7,14 @@ import { listDepartments } from "@/api/departments.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { previewContent } from "@/utils/problemPreview.js";
-import { formatAccuracyRate, REVIEW_MIN_ATTEMPTS } from "@/utils/statsFormat.js";
+import { formatAccuracyRate, REVIEW_ACCURACY_THRESHOLD, REVIEW_MIN_ATTEMPTS } from "@/utils/statsFormat.js";
 import { buttonClass } from "@/utils/buttonClass.js";
+import { problemStatusLabel } from "@/utils/problemLabels.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Select from "@/components/ui/Select.jsx";
 import Button from "@/components/ui/Button.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
+import StatusBadge from "@/components/ui/StatusBadge.jsx";
 
 function Metric({ label, value, note }) {
   return (
@@ -96,7 +98,7 @@ export default function DashboardPage() {
         <Surface className="p-0">
           <EmptyState
             title="대시보드를 불러오지 못했습니다."
-            description="잠시 후 다시 시도해 주세요."
+            description={loadError}
             action={<Button variant="secondary" size="sm" onClick={() => load()}>다시 시도</Button>}
           />
         </Surface>
@@ -111,7 +113,7 @@ export default function DashboardPage() {
             <Metric
               label="검토 필요 문제"
               value={summary.reviewNeededCount}
-              note={`활성 · 시도 ${REVIEW_MIN_ATTEMPTS}회 이상 · 정답률 50% 미만`}
+              note={`활성 · 시도 ${REVIEW_MIN_ATTEMPTS}회 이상 · 정답률 ${REVIEW_ACCURACY_THRESHOLD * 100}% 미만`}
             />
             <Metric label="전체 시도 수" value={summary.totalAttempts} note="보관 문제 포함" />
             <Metric
@@ -125,7 +127,7 @@ export default function DashboardPage() {
             <Surface className="p-5 md:col-span-7">
               <h2 className="text-section-title font-semibold text-ink-strong">지금 손봐야 할 문제</h2>
               <p className="mt-1 text-body-small text-ink-muted">
-                시도 {REVIEW_MIN_ATTEMPTS}회 이상 쌓였는데 정답률이 50% 아래인 활성 문제입니다.
+                시도 {REVIEW_MIN_ATTEMPTS}회 이상 쌓였는데 정답률이 {REVIEW_ACCURACY_THRESHOLD * 100}% 아래인 활성 문제입니다.
               </p>
               {summary.lowAccuracyProblems.length === 0 ? (
                 <p className="mt-4 text-body-small text-ink-muted">
@@ -171,10 +173,15 @@ export default function DashboardPage() {
                   {summary.recentProblems.map((problem) => (
                     <li
                       key={problem.id}
-                      className="truncate border-b border-line-default pb-2 text-body-small text-ink-default last:border-b-0 last:pb-0"
-                      title={previewContent(problem.content)}
+                      className="flex items-center justify-between gap-3 border-b border-line-default pb-2 last:border-b-0 last:pb-0"
                     >
-                      {previewContent(problem.content)}
+                      <span
+                        className="min-w-0 flex-1 truncate text-body-small text-ink-default"
+                        title={previewContent(problem.content)}
+                      >
+                        {previewContent(problem.content)}
+                      </span>
+                      <StatusBadge status={problem.status} label={problemStatusLabel(problem.status)} />
                     </li>
                   ))}
                 </ul>
