@@ -12,6 +12,8 @@ import UserExcelUploadPage from "@/pages/admin/users/UserExcelUploadPage.jsx";
 import ProblemListPage from "@/pages/admin/problems/ProblemListPage.jsx";
 import ProblemFormPage from "@/pages/admin/problems/ProblemFormPage.jsx";
 import ProblemExcelUploadPage from "@/pages/admin/problems/ProblemExcelUploadPage.jsx";
+import StatsListPage from "@/pages/admin/stats/StatsListPage.jsx";
+import StatsDetailPage from "@/pages/admin/stats/StatsDetailPage.jsx";
 import SolveHomePage from "@/pages/solve/SolveHomePage.jsx";
 import RandomSetupPage from "@/pages/solve/RandomSetupPage.jsx";
 import RandomPlayPage from "@/pages/solve/RandomPlayPage.jsx";
@@ -49,6 +51,8 @@ export const router = createBrowserRouter([
               { path: "problems/new", element: <ProblemFormPage /> },
               { path: "problems/:id/edit", element: <ProblemFormPage /> },
               { path: "problems/excel-upload", element: <ProblemExcelUploadPage /> },
+              { path: "stats", element: <StatsListPage /> },
+              { path: "stats/:id", element: <StatsDetailPage /> },
             ],
           },
         ],
