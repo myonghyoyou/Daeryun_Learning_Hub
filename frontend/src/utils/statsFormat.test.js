@@ -37,6 +37,14 @@ test("isReviewNeeded: 미응시는 대상이 아니다", () => {
   assert.equal(isReviewNeeded({ status: "ACTIVE", totalAttempts: 0, accuracyRate: null }), false);
 });
 
+// 위 테스트는 totalAttempts 0 에서 먼저 걸러져 null 가드까지 도달하지 않는다. 가드를 지워도
+// 통과하므로 별도로 고정한다 — 그런데 그 가드는 실제로 하중을 받는다. JS 에서 null < 0.5 는
+// null 을 0 으로 강제 변환해 true 가 되므로, 가드가 없으면 정답률이 null 인 항목이 "검토 필요"로
+// 잡힌다. 시도 수가 5회 이상인데 정답률이 null 인 조합은 서버가 만들지 않지만, 방어는 남긴다.
+test("isReviewNeeded: 시도 수가 충분해도 정답률이 null 이면 대상이 아니다", () => {
+  assert.equal(isReviewNeeded({ status: "ACTIVE", totalAttempts: 8, accuracyRate: null }), false);
+});
+
 test("REVIEW_MIN_ATTEMPTS는 서버 상수와 같은 5다", () => {
   assert.equal(REVIEW_MIN_ATTEMPTS, 5);
 });
