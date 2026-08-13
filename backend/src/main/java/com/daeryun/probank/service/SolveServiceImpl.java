@@ -109,7 +109,7 @@ public class SolveServiceImpl implements SolveService {
                 java.util.Set<Long> submittedIds = new java.util.HashSet<>(
                         request.getSelectedChoiceIds() == null ? java.util.Collections.emptyList() : request.getSelectedChoiceIds());
                 correct = correctIds.equals(submittedIds);
-                submittedAnswerSummary = submittedIds.toString();
+                submittedAnswerSummary = describeChoices(choices, submittedIds);
                 break;
             }
             case SHORT_ANSWER: {
@@ -143,9 +143,7 @@ public class SolveServiceImpl implements SolveService {
                     blankResults.add(new BlankAnswerResult(input.getBlankKey(), input.getSubmittedAnswer(), blankCorrect, correctAnswer));
                 }
                 correct = allCorrect;
-                submittedAnswerSummary = submitted.stream()
-                        .map(b -> b.getBlankKey() + "=" + b.getSubmittedAnswer())
-                        .collect(Collectors.joining(","));
+                submittedAnswerSummary = describeBlanks(submitted);
                 break;
             }
             default:
@@ -183,5 +181,33 @@ public class SolveServiceImpl implements SolveService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase().replaceAll("\\s+", " ");
+    }
+
+    /**
+     * attempts.submitted_answer 는 풀이 이력 화면이 "제출 답안" 칸에 **그대로 보여주는 값**이다.
+     * 그래서 선택지 ID(`[104]`)가 아니라 사람이 읽는 선택지 본문을 남긴다.
+     *
+     * 순서는 제출 순서가 아니라 문제에 정의된 선택지 순서를 따른다 — 제출 ID는 Set 이라
+     * 순서가 보장되지 않고, 사용자가 화면에서 본 순서와 맞추는 편이 읽기에도 자연스럽다.
+     *
+     * 저장 시점의 스냅샷이라는 점이 중요하다. 나중에 선택지 문구가 수정돼도 "그때 무엇을
+     * 골랐는지"는 바뀌지 않는다.
+     */
+    private String describeChoices(List<ProblemChoice> choices, java.util.Set<Long> submittedIds) {
+        return choices.stream()
+                .filter(c -> submittedIds.contains(c.getId()))
+                .map(ProblemChoice::getChoiceText)
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * 빈칸도 같은 이유로 내부 키(`b1=편성`)가 아니라 입력한 답만 남긴다. 키는 화면 어디에도
+     * 노출되지 않는 내부 식별자다. 비워 둔 칸은 채점 결과 화면과 같은 문구로 표시한다.
+     */
+    private String describeBlanks(List<BlankAnswerInput> submitted) {
+        return submitted.stream()
+                .map(b -> b.getSubmittedAnswer() == null || b.getSubmittedAnswer().trim().isEmpty()
+                        ? "(미입력)" : b.getSubmittedAnswer())
+                .collect(Collectors.joining(", "));
     }
 }
