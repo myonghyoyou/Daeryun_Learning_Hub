@@ -76,6 +76,23 @@ CREATE TABLE IF NOT EXISTS attempt_blank_answers (
     is_correct BOOLEAN NOT NULL
 );
 
+-- 객관식/OX 제출에서 고른 보기. attempt_blank_answers 와 대칭 구조다.
+--
+-- choice_id 에 외래키를 걸지 않는 것은 의도다. 문제를 수정하면 ProblemServiceImpl.update()
+-- 가 problem_choices 를 통째로 지우고 새 ID로 다시 넣기 때문에, ON DELETE CASCADE 는
+-- 문제를 수정할 때마다 풀이 기록을 지워 버리고 RESTRICT 는 문제 수정을 막는다.
+-- 대신 제출 시점의 보기 본문을 함께 남겨, 수정 뒤에도 무엇을 골랐는지는 보존한다.
+-- choice_text 가 NULL 인 행은 과거 데이터를 백필하면서 원본 보기를 찾지 못한 경우다.
+CREATE TABLE IF NOT EXISTS attempt_choices (
+    id BIGSERIAL PRIMARY KEY,
+    attempt_id BIGINT NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
+    choice_id BIGINT NOT NULL,
+    choice_text VARCHAR(500),
+    UNIQUE (attempt_id, choice_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_attempt_choices_choice_id ON attempt_choices(choice_id);
+
 CREATE TABLE IF NOT EXISTS excel_upload_logs (
     id BIGSERIAL PRIMARY KEY,
     uploaded_by BIGINT NOT NULL REFERENCES users(id),
