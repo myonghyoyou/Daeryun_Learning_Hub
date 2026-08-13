@@ -5,6 +5,7 @@ import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
+import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
 import { getSolveProblem } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
 import {
@@ -163,7 +164,16 @@ export default function RandomPlayPage() {
   if (!problem) {
     return (
       <SolveShell>
-        <p className="px-1 py-10 text-center text-body text-ink-muted">불러오는 중...</p>
+        <section className="mb-6 flex items-center justify-between gap-3">
+          <p className="text-body-small font-medium text-ink-muted">
+            {session.index + 1} / {session.problemIds.length}
+          </p>
+          <Button variant="secondary" size="sm" onClick={handleViewResults}>
+            {noResultsToShow ? "학습 홈으로" : "그만하고 결과 보기"}
+          </Button>
+        </section>
+
+        <ProblemSkeleton />
       </SolveShell>
     );
   }

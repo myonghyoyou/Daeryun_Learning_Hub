@@ -21,7 +21,7 @@ export default function SolveShell({ children }) {
         </Link>
         <LogoutButton onLogout={handleLogout} loggingOut={loggingOut} />
       </header>
-      <main className="mx-auto w-full max-w-[1040px] px-5 py-6 md:px-7 md:py-8">{children}</main>
+      <main className="mx-auto w-full max-w-[1120px] px-5 py-6 md:px-7 md:py-8">{children}</main>
     </div>
   );
 }
