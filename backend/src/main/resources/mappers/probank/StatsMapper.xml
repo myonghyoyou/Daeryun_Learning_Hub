@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.daeryun.probank.dao.StatsDao">
+
+    <!-- 보관(ARCHIVED) 문제도 집계에 들어간다. 보관 확인 Modal 이 "기존 풀이 이력도 그대로
+         보존됩니다"라고 약속하므로, 보관하는 순간 시도 수가 사라지면 그 약속을 어긴다.
+         "고쳐야 할 문제" 판정에서만 활성으로 좁히며 그 필터는 서비스 계층이 건다. -->
+    <sql id="statsFilter">
+        <where>
+            <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+            <if test="status != null and status != ''">AND p.status = #{status}</if>
+        </where>
+    </sql>
+
+    <sql id="statsColumns">
+        p.id AS problem_id, p.content, p.type, p.status, p.department_id, d.name AS department_name,
+        COUNT(a.id) AS total_attempts,
+        COALESCE(SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END), 0) AS correct_attempts,
+        MAX(a.submitted_at) AS last_attempt_at
+    </sql>
+
+    <!-- 정렬은 반드시 SQL 에서 한다. 페이징이 이 순서 위에서 잘리기 때문이다 —
+         p.id 로 잘라 놓고 서비스가 페이지 안에서만 다시 정렬하면 "정답률이 가장 낮은 문제"가
+         3페이지에 남아 이 Plan 의 핵심 요구("낮은 문제를 상위에")가 깨진다.
+
+         NULLIF 가 시도 0건을 NULL 로 만들고 NULLS LAST 가 그것을 맨 뒤로 보낸다(= 미응시).
+         마지막 p.id 는 동률 타이브레이커다 — 없으면 페이지 경계에서 중복·누락이 생긴다
+         (ProblemMapper.findAll 이 같은 이유로 p.id 를 달고 있다).
+
+         StatsServiceImpl.LOWEST_ACCURACY_FIRST 가 같은 규칙을 자바로 다시 적는다.
+         한쪽만 바꾸면 페이지 안과 밖의 순서가 어긋난다 — 반드시 함께 고쳐라. -->
+    <sql id="accuracyOrder">
+        ORDER BY (COALESCE(SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END), 0)::numeric
+                  / NULLIF(COUNT(a.id), 0)) ASC NULLS LAST,
+                 p.id
+    </sql>
+
+    <select id="findProblemStats" resultType="com.daeryun.probank.dto.stats.ProblemStatRaw">
+        SELECT <include refid="statsColumns"/>
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        LEFT JOIN attempts a ON a.problem_id = p.id
+        <include refid="statsFilter"/>
+        GROUP BY p.id, d.name
+        <include refid="accuracyOrder"/>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- attempts 조인을 넣지 않는다. 필터가 p.* 만 보므로 조인이 불필요하고,
+         넣은 채 count(*) 를 쓰면 시도 수만큼 부풀어 총건수가 틀린다. -->
+    <select id="countProblemStats" resultType="long">
+        SELECT count(*)
+        FROM problems p
+        <include refid="statsFilter"/>
+    </select>
+
+    <select id="findAllProblemStats" resultType="com.daeryun.probank.dto.stats.ProblemStatRaw">
+        SELECT <include refid="statsColumns"/>
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        LEFT JOIN attempts a ON a.problem_id = p.id
+        <where>
+            <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+        </where>
+        GROUP BY p.id, d.name
+        <include refid="accuracyOrder"/>
+    </select>
+
+    <select id="countActiveProblems" resultType="int">
+        SELECT count(*)
+        FROM problems p
+        WHERE p.status = 'ACTIVE'
+        <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
+    </select>
+
+    <select id="findProblemStat" resultType="com.daeryun.probank.dto.stats.ProblemStatRaw">
+        SELECT <include refid="statsColumns"/>
+        FROM problems p
+        JOIN departments d ON d.id = p.department_id
+        LEFT JOIN attempts a ON a.problem_id = p.id
+        WHERE p.id = #{problemId}
+        GROUP BY p.id, d.name
+    </select>
+
+</mapper>
