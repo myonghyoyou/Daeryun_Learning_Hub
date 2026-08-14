@@ -411,7 +411,32 @@ import org.springframework.dao.DuplicateKeyException;
 Run: `cd backend && ./gradlew test --tests '*ProblemServiceImplTest*'`
 Expected: `BUILD SUCCESSFUL` — 기존 테스트와 신규 5건이 모두 통과
 
-- [ ] **Step 9: 마이그레이션 적용과 확인**
+- [ ] **Step 9: `DuplicateKeyException` 이 실제로 던져지는지 확인**
+
+Step 7 의 `catch (DuplicateKeyException e)` 는 **가정 위에 서 있다.** MyBatis 가 던지는 `PersistenceException` 을 Spring 의 예외 계층으로 번역해 주어야 그 catch 가 걸린다. 번역이 없으면 catch 는 영원히 안 걸리고 사용자는 `처리 중 오류가 발생하였습니다`(-1) 를 본다 — 고치려던 바로 그 증상이다.
+
+근거는 있다: `ProbankApplication` 에 `@MapperScan("com.daeryun.probank.dao")` 가 있고 `mybatis-spring-boot-starter:2.2.2` 를 쓰므로 매퍼가 `SqlSessionTemplate` 을 거치고, 거기 붙은 `MyBatisExceptionTranslator` 가 SQLState 23505 를 `DuplicateKeyException` 으로 바꾼다. **하지만 추론이지 확인이 아니다.**
+
+`ProblemSourceNumberDaoTest`(Task 5 에서 만들지만 이 검증은 여기서 먼저 한다)에 아래를 넣어 **예외의 타입을 직접 단언한다.** 파일을 지금 만들고 이 테스트 하나만 넣은 뒤, Task 5 에서 나머지를 채운다.
+
+```java
+    @Test
+    void duplicateSourceNumber_surfacesAsDuplicateKeyExceptionNotRawPersistenceException() {
+        // ProblemServiceImpl 의 catch(DuplicateKeyException) 가 이 타입 위에 서 있다.
+        // 번역이 없으면 그 catch 는 영원히 안 걸리고 사용자는 -1 만 본다.
+        Problem first = newProblem(departmentId, 7);
+        problemDao.insert(first);
+
+        Problem second = newProblem(departmentId, 7);
+
+        assertThrows(DuplicateKeyException.class, () -> problemDao.insert(second));
+    }
+```
+
+Run: `cd backend && ./gradlew test --tests '*ProblemSourceNumberDaoTest*'`
+Expected: 통과. **실패하면 Step 7 의 설계가 성립하지 않으므로 멈추고 보고하라** — 잡아야 할 타입이 무엇인지(예: `org.springframework.dao.DataIntegrityViolationException`) 확인한 뒤 catch 를 그 타입으로 넓혀야 한다.
+
+- [ ] **Step 10: 마이그레이션 적용과 확인**
 
 ```bash
 cd c:/projects/daeryun-learning-hub && docker exec -i -e PGPASSWORD=probank_dev probank-postgres \
@@ -431,11 +456,13 @@ Expected: 컬럼 `source_number / integer / YES`, 제약 1건.
 NULL 이 여럿이어도 제약이 걸리는지 직접 확인한다:
 ```bash
 docker exec -e PGPASSWORD=probank_dev probank-postgres psql -U probank -d probank_dev -c "
-SELECT count(*) AS rows_with_null_source FROM problems WHERE source_number IS NULL;"
+SELECT count(*) AS rows_with_null_source,
+       count(*) FILTER (WHERE source_number IS NULL) > 1 AS more_than_one_null
+FROM problems;"
 ```
-Expected: 14 — 이 값이 여럿인데도 제약 생성이 성공했다는 것이 "PostgreSQL 의 UNIQUE 는 NULL 을 구분한다"의 실제 확인이다.
+Expected: `more_than_one_null = t`. **제약을 건 뒤에도 NULL 행이 둘 이상 공존한다는 것**이 "PostgreSQL 의 UNIQUE 는 NULL 을 서로 다른 값으로 본다"의 실제 확인이다. (건수 자체는 적재·정리 상황에 따라 달라지므로 특정 숫자를 기대하지 마라.)
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add backend/src/main/resources/schema.sql backend/db/migration/2026-08-14-add-source-number.sql backend/src/main/java/com/daeryun/probank/domain/Problem.java backend/src/main/java/com/daeryun/probank/dto/problem/ProblemCreateRequest.java backend/src/main/java/com/daeryun/probank/dto/problem/ProblemDetailResponse.java backend/src/main/resources/mappers/probank/ProblemMapper.xml backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java
@@ -681,12 +708,24 @@ Expected: FAIL — `changeDepartment` 가 `void` 이고 `updateDepartmentAndSour
     }
 ```
 
-- [ ] **Step 5: 테스트 실행하여 통과 확인**
+- [ ] **Step 5: 깨지는 기존 테스트 고치기**
+
+`changeDepartment_movesTheProblemAndRecordsBothSides`(파일 682행 부근)가 깨진다. `Mockito.verify(problemDao).updateDepartment(5L, 9L);` 가 이름이 바뀐 메서드를 가리키기 때문이다. 아래로 바꾼다:
+
+```java
+        Mockito.verify(problemDao).updateDepartmentAndSourceNumber(5L, 9L, 1);
+```
+
+`findMaxSourceNumber(9L)` 를 스텁하지 않았으므로 목이 `null` 을 돌려주고 새 번호는 1 이 된다. 감사 로그 단언(`"from":1`, `"to":9`)은 새 JSON 에도 그대로 있으므로 손대지 않는다.
+
+`changeDepartment_rejectsInactiveTarget` 은 DAO 에 닿기 전에 예외가 나므로 영향이 없다.
+
+- [ ] **Step 6: 테스트 실행하여 통과 확인**
 
 Run: `cd backend && ./gradlew test`
-Expected: `BUILD SUCCESSFUL` — 전체 스위트가 통과해야 한다(`changeDepartment` 시그니처 변경이 다른 호출부를 깨뜨리지 않았는지 확인)
+Expected: `BUILD SUCCESSFUL` — 전체 스위트를 돌린다. `changeDepartment` 의 반환형이 `void → int` 로 바뀌었고 DAO 메서드 이름도 바뀌었으므로, 놓친 호출부가 있으면 여기서 드러난다.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add backend/src/main/java/com/daeryun/probank/dao/ProblemDao.java backend/src/main/resources/mappers/probank/ProblemMapper.xml backend/src/main/java/com/daeryun/probank/service/ProblemService.java backend/src/main/java/com/daeryun/probank/service/ProblemServiceImpl.java backend/src/main/java/com/daeryun/probank/controller/ProblemController.java backend/src/test/java/com/daeryun/probank/service/ProblemServiceImplTest.java
@@ -770,6 +809,25 @@ git commit -m "feat: reassign the source number when a problem moves department"
     }
 
     @Test
+    void duplicateAgainstExistingProblem_saysTheNumberIsTakenNotJustThatSavingFailed() throws Exception {
+        // 같은 파일을 두 번 올리는 상황. "문제 저장 중 오류가 발생했습니다" 로 뭉뚱그리면
+        // 653행이 전부 그 메시지로 실패하고 원인이 번호라는 사실이 어디에도 안 나온다.
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "9"},
+        });
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemProvisioningService)
+                .provisionWithChoices(Mockito.any(), Mockito.anyList(), Mockito.anyList());
+
+        ExcelUploadResult result = service.upload(file, 77L, superAdmin);
+
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("9"),
+                "어떤 번호가 겹쳤는지 알려야 한다: " + result.getErrorDetail());
+    }
+
+    @Test
     void validRowPersistsTheSourceNumber() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
                 HEADER,
@@ -824,6 +882,33 @@ Expected: FAIL
 ```java
         problem.setSourceNumber(sourceNumber);
 ```
+
+**그리고 DB 에 이미 있는 번호와 겹치는 경우를 따로 잡는다.** 지금 이 서비스는 저장 실패를 아래처럼 뭉뚱그린다(파일의 257행 부근):
+
+```java
+        } catch (RuntimeException e) {
+            ...
+            return RowResult.fail(rowNumber, "문제 저장 중 오류가 발생했습니다.");
+        }
+```
+
+파일 안 중복만 막고 여기를 그대로 두면, **같은 파일을 두 번 올리거나 번호가 기존 문제와 겹칠 때 653행이 전부 "문제 저장 중 오류가 발생했습니다" 로 실패한다.** 원인이 번호라는 사실이 어디에도 안 나온다 — 단건 등록에서 없애려던 `-1` 과 같은 종류의 실패다. 12개 파일을 올리는 이번 적재에서 재시도는 흔한 일이다.
+
+`catch (RuntimeException e)` **앞에** 더 좁은 catch 를 둔다:
+```java
+        } catch (DuplicateKeyException e) {
+            // 파일 안 중복은 위에서 걸렀다. 여기 오는 것은 이미 DB 에 있는 번호와 겹치는 경우다
+            // (같은 파일 재업로드, 또는 다른 파일과 번호가 겹침).
+            return RowResult.fail(rowNumber, "문항 번호 " + sourceNumber + "번은 이 부서에 이미 있습니다.");
+        } catch (RuntimeException e) {
+```
+
+import 를 추가한다:
+```java
+import org.springframework.dao.DuplicateKeyException;
+```
+
+> `provisionWithChoices` / `provisionWithAnswers` 는 `@Transactional(propagation = REQUIRES_NEW)` 라 행 하나가 실패해도 그 행만 롤백된다. 그래서 이 catch 는 다음 행 처리를 막지 않는다.
 
 - [ ] **Step 5: 테스트 실행하여 통과 확인**
 
@@ -1349,6 +1434,11 @@ Expected: 모든 행이 `문항 번호는 필수입니다.` 로 실패한다. �
 
 그 다음 13번째 컬럼에 번호를 채운 파일을 만들어 올려 성공을 확인하고, 같은 번호가 두 행에 있는 파일로 `파일 안에서 문항 번호가 중복됩니다` 를 확인한다.
 
+**성공한 파일을 한 번 더 올린다.**
+Expected: 모든 행이 `문항 번호 N번은 이 부서에 이미 있습니다.` 로 실패한다. **`문제 저장 중 오류가 발생했습니다.` 가 나오면 실패다** — 그 메시지로는 원인이 번호라는 걸 알 수 없고, 12개 파일을 올리며 재시도하는 이번 적재에서 실제로 마주칠 상황이다.
+
+> `docs/문제은행_엑셀/README.md` 는 12컬럼 형식을 설명하고 있어 이 Task 이후 사실과 어긋난다. git 미추적 파일이라 이 계획의 커밋 대상은 아니지만, **실제 적재를 할 사람이 그 문서를 보고 따라 하므로** 13번째 컬럼을 반영해 두는 편이 좋다.
+
 - [ ] **Step 5: 학습자 화면 4곳 (1440×1024)**
 
 | 화면 | 확인 |
@@ -1360,7 +1450,11 @@ Expected: 모든 행이 `문항 번호는 필수입니다.` 로 실패한다. �
 
 배지 색을 실측한다: 배경 `--color-surface-subtle`, 글자 `--color-ink-muted`. 유형 배지와 **다른 색**이어야 한다.
 
-**번호가 없는 문제에는 배지가 아예 없어야 한다.** 기존 14건으로 확인한다 — `undefined번` 이나 빈 배지가 보이면 실패다.
+**번호가 없는 문제에는 배지가 아예 없어야 한다.** 번호를 넣지 않은 기존 문제로 확인한다 — `undefined번` 이나 빈 배지가 보이면 실패다.
+
+> 이 변경으로 **학습자 문제 목록에 부서명이 처음으로 노출된다.** 지금까지 그 화면은 유형·내용·태그만 보여 줬다. 학습자 목록은 원래 전 부서 공통이므로(학습 홈 문구가 "전사 공통 문제를 자유롭게 풀고") 정보 노출 문제가 아니라 정보 추가다. 결함으로 잡지 마라.
+>
+> 목록 정렬은 여전히 등록일 역순이다. 번호가 보이기 시작하면 번호순을 기대하기 쉽지만 **정렬은 이번 범위가 아니다**(spec §4). 이것도 결함으로 잡지 마라.
 
 - [ ] **Step 6: 랜덤 50**
 
@@ -1388,6 +1482,19 @@ git commit -m "docs: record the source-number design QA results"
 ```
 
 ---
+
+## 2차 검토에서 고친 것 (2026-08-14)
+
+초안을 코드베이스와 한 번 더 대조해 여섯 건을 고쳤다.
+
+- **엑셀에서 DB 중복이 일반 메시지로 묻혔다(가장 큰 것).** 이 서비스는 저장 실패를 `catch (RuntimeException e)` → `"문제 저장 중 오류가 발생했습니다."` 로 뭉뚱그린다. 초안은 파일 안 중복만 막았으므로, **같은 파일을 다시 올리면 653행이 전부 그 메시지로 실패**하고 원인이 번호라는 사실이 어디에도 안 나온다 — 단건 등록에서 없애려던 `-1` 과 같은 종류다. 12개 파일을 올리며 재시도하는 이번 적재에서 실제로 마주칠 상황이라 Task 4 에 좁은 catch 와 테스트를 추가했다.
+- **`DuplicateKeyException` 이 실제로 던져지는지 확인한 적이 없었다.** 설계 전체가 이 타입 위에 서 있는데 근거는 추론뿐이었다(`@MapperScan` + `mybatis-spring-boot-starter` → `MyBatisExceptionTranslator`). Task 1 에 **예외 타입을 직접 단언하는 DAO 테스트**를 Step 9 로 넣고, 실패하면 멈추고 보고하도록 했다.
+- **`changeDepartment` 기존 테스트가 깨지는 것을 예고하지 않았다.** `changeDepartment_movesTheProblemAndRecordsBothSides` 가 이름이 바뀐 `updateDepartment` 를 `verify` 한다. Task 3 에 고칠 코드를 명시했다(감사 로그 단언은 새 JSON 에도 살아남아 손댈 필요가 없다).
+- Task 1 의 확인 절차가 `rows_with_null_source = 14` 를 기대했다. 적재·정리로 달라질 숫자라 **"NULL 행이 둘 이상 공존한다"** 는 성질 자체를 확인하도록 바꿨다.
+- `docs/문제은행_엑셀/README.md` 가 12컬럼 형식을 설명하고 있어 이 작업 뒤 사실과 어긋난다. git 미추적이라 커밋 대상은 아니지만 **실제 적재를 할 사람이 보고 따라 하는 문서**라 Task 8 에 갱신 권고를 적었다.
+- 학습자 문제 목록에 **부서명이 처음 노출**되고, 번호가 보이면 번호순 정렬을 기대하기 쉽다. 둘 다 의도된 상태이므로 Task 8 에 "결함으로 잡지 마라" 로 못 박았다.
+
+확인만 하고 바꾸지 않은 것: `ProblemSolveDetailResponse` 는 `@AllArgsConstructor` 이고 호출부가 `SolveServiceImpl` **한 곳뿐**이라 필드를 뒤에 붙여도 안전하다. `provisionWithChoices`/`provisionWithAnswers` 는 `REQUIRES_NEW` 라 한 행의 실패가 다음 행을 막지 않는다.
 
 ## Self-Review 결과
 
