@@ -6,6 +6,7 @@ import com.daeryun.probank.dao.ProblemChoiceDao;
 import com.daeryun.probank.dao.ProblemDao;
 import com.daeryun.probank.dao.AttemptDao;
 import com.daeryun.probank.dao.AttemptBlankAnswerDao;
+import com.daeryun.probank.dao.DepartmentDao;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.domain.*;
 import com.daeryun.probank.dto.solve.AttemptResult;
@@ -32,6 +33,7 @@ class SolveServiceImplTest {
     private AttemptDao attemptDao;
     private AttemptBlankAnswerDao attemptBlankAnswerDao;
     private com.daeryun.probank.dao.AttemptChoiceDao attemptChoiceDao;
+    private DepartmentDao departmentDao;
     private SolveServiceImpl service;
 
     @BeforeEach
@@ -43,8 +45,9 @@ class SolveServiceImplTest {
         attemptDao = Mockito.mock(AttemptDao.class);
         attemptBlankAnswerDao = Mockito.mock(AttemptBlankAnswerDao.class);
         attemptChoiceDao = Mockito.mock(com.daeryun.probank.dao.AttemptChoiceDao.class);
+        departmentDao = Mockito.mock(DepartmentDao.class);
         service = new SolveServiceImpl(problemDao, problemChoiceDao, problemAnswerDao, problemBlankDao,
-                attemptDao, attemptBlankAnswerDao, attemptChoiceDao);
+                attemptDao, attemptBlankAnswerDao, attemptChoiceDao, departmentDao);
     }
 
     private final AuthUser actor = new AuthUser(1L, "1001", "홍길동", UserRole.EMPLOYEE, 10L, false);
@@ -76,6 +79,27 @@ class SolveServiceImplTest {
         boolean hasCorrectField = Arrays.stream(response.getChoices().get(0).getClass().getDeclaredFields())
                 .anyMatch(f -> f.getName().toLowerCase().contains("correct"));
         assertFalse(hasCorrectField);
+    }
+
+    @Test
+    void getDetail_carriesDepartmentNameAndSourceNumber() {
+        Problem problem = new Problem();
+        problem.setId(1L);
+        problem.setType(ProblemType.SHORT_ANSWER);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        problem.setContent("문제");
+        problem.setDepartmentId(10L);
+        problem.setSourceNumber(3);
+        Mockito.when(problemDao.findById(1L)).thenReturn(problem);
+        Department department = new Department();
+        department.setId(10L);
+        department.setName("정보시스템팀");
+        Mockito.when(departmentDao.findById(10L)).thenReturn(department);
+
+        ProblemSolveDetailResponse response = service.getDetail(1L);
+
+        assertEquals("정보시스템팀", response.getDepartmentName());
+        assertEquals(Integer.valueOf(3), response.getSourceNumber());
     }
 
     @Test

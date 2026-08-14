@@ -11,29 +11,31 @@
     </resultMap>
 
     <select id="findAllActive" resultMap="solveProblemListItemMap">
-        SELECT p.id, p.type, p.content,
+        SELECT p.id, p.type, p.content, d.name AS department_name, p.source_number,
                COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
         FROM problems p
+        JOIN departments d ON d.id = p.department_id
         LEFT JOIN problem_tags pt ON pt.problem_id = p.id
         LEFT JOIN tags t ON t.id = pt.tag_id
         WHERE p.status = 'ACTIVE'
         <if test="keyword != null and keyword != ''">AND p.content ILIKE CONCAT('%', #{keyword}, '%')</if>
         <if test="tag != null and tag != ''">AND EXISTS (SELECT 1 FROM problem_tags fpt JOIN tags ft ON ft.id = fpt.tag_id WHERE fpt.problem_id = p.id AND lower(ft.name) = lower(#{tag}))</if>
-        GROUP BY p.id
+        GROUP BY p.id, d.name
         ORDER BY p.created_at DESC
     </select>
 
     <!-- 무작위 추출을 DB에서 한다. 화면에서 전체를 받아 섞으면 문제 은행이 커질수록 전송량이
          비례해 늘고, 목록에 페이지네이션이 붙는 순간 깨진다. -->
     <select id="findRandomActive" resultMap="solveProblemListItemMap">
-        SELECT p.id, p.type, p.content,
+        SELECT p.id, p.type, p.content, d.name AS department_name, p.source_number,
                COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
         FROM problems p
+        JOIN departments d ON d.id = p.department_id
         LEFT JOIN problem_tags pt ON pt.problem_id = p.id
         LEFT JOIN tags t ON t.id = pt.tag_id
         WHERE p.status = 'ACTIVE'
         <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
-        GROUP BY p.id
+        GROUP BY p.id, d.name
         ORDER BY random()
         LIMIT #{count}
     </select>
