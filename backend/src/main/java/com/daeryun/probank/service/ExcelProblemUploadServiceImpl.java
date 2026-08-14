@@ -21,14 +21,17 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -63,6 +66,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     private static final int COL_ANSWER = 9;
     private static final int COL_EXPLANATION = 10;
     private static final int COL_TAGS = 11;
+    private static final int COL_SOURCE_NUMBER = 12;
 
     /**
      * 한 요청에서 처리할 데이터 행 상한. 20MB 멀티파트 제한은 이보다 훨씬 많은 행을 허용할 수 있고,
@@ -98,6 +102,9 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
 
         List<RowResult> results = new ArrayList<>();
         DataFormatter dataFormatter = new DataFormatter();
+        // 파일 안 중복 검사는 업로드(요청) 단위여야 한다 — 서비스 빈은 싱글턴이라 필드로 두면 다른
+        // 요청/파일과 섞인다.
+        Set<Integer> seenSourceNumbers = new HashSet<>();
 
         try (Workbook workbook = openWorkbook(file)) {
             Sheet sheet = firstSheet(workbook);
@@ -112,7 +119,8 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
                 if (row == null) {
                     continue;
                 }
-                results.add(processRow(row, rowIndex + 1, effectiveDepartmentId, actor, dataFormatter));
+                results.add(processRow(row, rowIndex + 1, effectiveDepartmentId, actor, dataFormatter,
+                        seenSourceNumbers));
             }
         } catch (IOException e) {
             // try-with-resources 의 close() 만 남은 경로. 여는 실패는 openWorkbook 이 이미 변환한다.
@@ -178,7 +186,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
     }
 
     private RowResult processRow(Row row, int rowNumber, Long departmentId, AuthUser actor,
-                                  DataFormatter dataFormatter) {
+                                  DataFormatter dataFormatter, Set<Integer> seenSourceNumbers) {
         String typeText = cellValue(row, COL_TYPE, dataFormatter);
         String content = cellValue(row, COL_CONTENT, dataFormatter);
 
@@ -199,6 +207,26 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         }
 
         String answerText = cellValue(row, COL_ANSWER, dataFormatter);
+
+        String sourceNumberText = cellValue(row, COL_SOURCE_NUMBER, dataFormatter);
+        if (sourceNumberText == null || sourceNumberText.trim().isEmpty()) {
+            return RowResult.fail(rowNumber, "문항 번호는 필수입니다.");
+        }
+        int sourceNumber;
+        try {
+            sourceNumber = Integer.parseInt(sourceNumberText.trim());
+        } catch (NumberFormatException e) {
+            return RowResult.fail(rowNumber, "문항 번호는 숫자여야 합니다: " + sourceNumberText);
+        }
+        if (sourceNumber < 1) {
+            return RowResult.fail(rowNumber, "문항 번호는 1 이상이어야 합니다: " + sourceNumber);
+        }
+        // 파일 안 중복을 DB 에 닿기 전에 잡는다. 그냥 두면 첫 행은 들어가고 둘째 행이
+        // UNIQUE 위반으로 죽어, 사용자에게는 절반만 들어간 이유가 보이지 않는다.
+        if (!seenSourceNumbers.add(sourceNumber)) {
+            return RowResult.fail(rowNumber, "파일 안에서 문항 번호가 중복됩니다: " + sourceNumber);
+        }
+
         List<String> tags = normalizeTags(cellValue(row, COL_TAGS, dataFormatter));
         if (tags == null) {
             return RowResult.fail(rowNumber, "태그는 문제당 20개, 태그명은 100자 이하여야 합니다.");
@@ -226,6 +254,7 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         problem.setStatus(ProblemStatus.ACTIVE);
         problem.setDepartmentId(departmentId);
         problem.setCreatedBy(actor.getUserId());
+        problem.setSourceNumber(sourceNumber);
 
         if (type == ProblemType.SHORT_ANSWER) {
             return processShortAnswer(rowNumber, problem, answerText, tags);
@@ -254,6 +283,10 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         try {
             problemProvisioningService.provisionWithAnswers(problem, answerEntities, tags);
             return RowResult.success(rowNumber);
+        } catch (DuplicateKeyException e) {
+            // 파일 안 중복은 위에서 걸렀다. 여기 오는 것은 이미 DB 에 있는 번호와 겹치는 경우다
+            // (같은 파일 재업로드, 또는 다른 파일과 번호가 겹침).
+            return RowResult.fail(rowNumber, "문항 번호 " + problem.getSourceNumber() + "번은 이 부서에 이미 있습니다.");
         } catch (RuntimeException e) {
             LOGGER.warn("행 {} 문제 저장 실패", rowNumber, e);
             return RowResult.fail(rowNumber, "문제 저장 중 오류가 발생했습니다.");
@@ -328,6 +361,10 @@ public class ExcelProblemUploadServiceImpl implements ExcelProblemUploadService 
         try {
             problemProvisioningService.provisionWithChoices(problem, choices, tags);
             return RowResult.success(rowNumber);
+        } catch (DuplicateKeyException e) {
+            // 파일 안 중복은 위에서 걸렀다. 여기 오는 것은 이미 DB 에 있는 번호와 겹치는 경우다
+            // (같은 파일 재업로드, 또는 다른 파일과 번호가 겹침).
+            return RowResult.fail(rowNumber, "문항 번호 " + problem.getSourceNumber() + "번은 이 부서에 이미 있습니다.");
         } catch (RuntimeException e) {
             LOGGER.warn("행 {} 문제 저장 실패", rowNumber, e);
             return RowResult.fail(rowNumber, "문제 저장 중 오류가 발생했습니다.");
