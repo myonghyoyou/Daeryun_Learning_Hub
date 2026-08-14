@@ -23,10 +23,12 @@ import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.dto.problem.ProblemPageResponse;
 import com.daeryun.probank.exception.BizException;
+import com.daeryun.probank.common.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -87,6 +89,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.MCQ_SINGLE);
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("1", false), choice("2", true)));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -122,6 +125,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.OX);
         request.setContent("지구는 둥글다.");
         request.setChoices(Arrays.asList(choice("O", true), choice("X", false)));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -165,6 +169,7 @@ class ProblemServiceImplTest {
         blank2.setAnswerText("대한민국");
         request.setBlanks(Arrays.asList(blank1, blank2));
         request.setBlankRevealCount(1);
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -272,6 +277,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.singletonList("서울"));
+        request.setSourceNumber(1);
 
         service.create(request, null, otherDeptActor);
 
@@ -344,6 +350,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.MCQ_SINGLE);
         request.setContent("수정된 문제");
         request.setChoices(Arrays.asList(choice("1", false), choice("2", true)));
+        request.setSourceNumber(1);
 
         service.update(5L, request, actor);
 
@@ -406,6 +413,7 @@ class ProblemServiceImplTest {
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.singletonList("서울"));
         request.setImageUrl(imageUrl);
+        request.setSourceNumber(1);
         return request;
     }
 
@@ -415,6 +423,14 @@ class ProblemServiceImplTest {
         existing.setDepartmentId(10L);
         existing.setType(ProblemType.SHORT_ANSWER);
         return existing;
+    }
+
+    private Department activeDepartment(Long id, String name) {
+        Department department = new Department();
+        department.setId(id);
+        department.setName(name);
+        department.setStatus(Status.ACTIVE);
+        return department;
     }
 
     @Test
@@ -485,6 +501,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("  대한민국의 수도는?  ");
         request.setAnswers(Collections.singletonList("  서울  "));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -503,6 +520,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.MCQ_SINGLE);
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("  1  ", false), choice("  2  ", true)));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -522,6 +540,7 @@ class ProblemServiceImplTest {
         blank.setAnswerText("  서울  ");
         request.setBlanks(Collections.singletonList(blank));
         request.setBlankRevealCount(1);
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -538,6 +557,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("  수정된 문제  ");
         request.setAnswers(Collections.singletonList("  부산  "));
+        request.setSourceNumber(1);
 
         service.update(5L, request, actor);
 
@@ -564,6 +584,7 @@ class ProblemServiceImplTest {
             request.setContent("대한민국의 수도는?");
             request.setAnswers(Collections.singletonList("서울"));
             request.setTags(Collections.singletonList("I"));
+            request.setSourceNumber(1);
 
             service.create(request, null, actor);
 
@@ -685,16 +706,12 @@ class ProblemServiceImplTest {
         existing.setDepartmentId(1L);
         existing.setType(ProblemType.MCQ_SINGLE);
         Mockito.when(problemDao.findById(5L)).thenReturn(existing);
-        Department target = new Department();
-        target.setId(9L);
-        target.setName("영업팀");
-        target.setStatus(Status.ACTIVE);
-        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(activeDepartment(9L, "영업팀"));
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
 
         service.changeDepartment(5L, 9L, superAdmin);
 
-        Mockito.verify(problemDao).updateDepartment(5L, 9L);
+        Mockito.verify(problemDao).updateDepartmentAndSourceNumber(5L, 9L, 1);
         ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
         Mockito.verify(auditLogService).record(Mockito.eq(2L), Mockito.eq("PROBLEM_DEPARTMENT_CHANGED"),
                 Mockito.eq("PROBLEM"), Mockito.eq(5L), detail.capture());
@@ -716,7 +733,77 @@ class ProblemServiceImplTest {
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
 
         assertThrows(BizException.class, () -> service.changeDepartment(5L, 9L, superAdmin));
-        Mockito.verify(problemDao, Mockito.never()).updateDepartment(Mockito.anyLong(), Mockito.anyLong());
+        Mockito.verify(problemDao, Mockito.never()).updateDepartmentAndSourceNumber(
+                Mockito.anyLong(), Mockito.anyLong(), Mockito.anyInt());
+    }
+
+    @Test
+    void changeDepartment_reassignsNumberToTailOfNewDepartment() {
+        Problem existing = existingShortAnswer();   // id=5, departmentId=10
+        existing.setSourceNumber(5);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(activeDepartment(20L, "자금팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(20L)).thenReturn(11);
+
+        int assigned = service.changeDepartment(5L, 20L, actor);
+
+        assertEquals(12, assigned);
+        Mockito.verify(problemDao).updateDepartmentAndSourceNumber(5L, 20L, 12);
+    }
+
+    @Test
+    void changeDepartment_intoEmptyDepartment_startsAtOne() {
+        Problem existing = existingShortAnswer();
+        existing.setSourceNumber(5);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(activeDepartment(20L, "자금팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(20L)).thenReturn(null);
+
+        assertEquals(1, service.changeDepartment(5L, 20L, actor));
+    }
+
+    @Test
+    void changeDepartment_intoSameDepartment_isRejectedInsteadOfRenumbering() {
+        // 옮길 부서 Select 는 지금 부서까지 그대로 보여 주고, 수정 화면은 현재 부서를 표시하지
+        // 않는다. 그래서 관리자는 어느 항목이 no-op 인지 볼 수 없다. 가드가 없으면
+        // findMaxSourceNumber 가 이 문제 자신의 행을 세서 원래 번호를 max + 1 로 덮어쓴다.
+        Problem existing = existingShortAnswer();   // id=5, departmentId=10
+        existing.setSourceNumber(7);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(10L)).thenReturn(activeDepartment(10L, "총무팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(7);
+
+        BizException thrown = assertThrows(BizException.class,
+                () -> service.changeDepartment(5L, 10L, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertEquals("이미 총무팀 소속입니다.", thrown.getMessage());
+        Mockito.verify(problemDao, Mockito.never()).updateDepartmentAndSourceNumber(
+                Mockito.anyLong(), Mockito.anyLong(), Mockito.anyInt());
+        Mockito.verify(auditLogService, Mockito.never()).record(Mockito.anyLong(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.anyLong(), Mockito.anyString());
+    }
+
+    @Test
+    void changeDepartment_duplicateSourceNumber_returnsKoreanMessage() {
+        // 두 관리자가 같은 부서로 동시에 옮기면 같은 max 를 읽고 같은 번호를 쓴다. 번역이
+        // 없으면 진 쪽에게 -1 "처리 중 오류가 발생하였습니다" 만 나간다 — create/update 와
+        // 같은 안내여야 한다.
+        Problem existing = existingShortAnswer();   // id=5, departmentId=10
+        existing.setSourceNumber(5);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(activeDepartment(20L, "자금팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(20L)).thenReturn(11);
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemDao).updateDepartmentAndSourceNumber(5L, 20L, 12);
+
+        BizException thrown = assertThrows(BizException.class,
+                () -> service.changeDepartment(5L, 20L, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertEquals("자금팀 12번은 이미 있습니다. 다른 번호를 입력하세요.", thrown.getMessage());
+        Mockito.verify(auditLogService, Mockito.never()).record(Mockito.anyLong(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.anyLong(), Mockito.anyString());
     }
 
     /**
@@ -725,11 +812,7 @@ class ProblemServiceImplTest {
      */
     @Test
     void create_asSuperAdmin_usesRequestedDepartment() {
-        Department target = new Department();
-        target.setId(9L);
-        target.setName("영업팀");
-        target.setStatus(Status.ACTIVE);
-        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(activeDepartment(9L, "영업팀"));
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
         ProblemCreateRequest request = shortAnswerRequest();
 
@@ -766,6 +849,104 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("수도는?");
         request.setAnswers(Collections.singletonList("서울"));
+        request.setSourceNumber(1);
         return request;
+    }
+
+    // --- 출처 문항 번호 (source_number) ---
+
+    @Test
+    void create_withoutSourceNumber_isRejected() {
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(null);
+
+        BizException thrown = assertThrows(BizException.class, () -> service.create(request, null, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_withZeroOrNegativeSourceNumber_isRejected() {
+        for (int bad : new int[]{0, -1}) {
+            ProblemCreateRequest request = shortAnswerRequest();
+            request.setSourceNumber(bad);
+            assertThrows(BizException.class, () -> service.create(request, null, actor));
+        }
+    }
+
+    @Test
+    void update_withoutSourceNumber_isRejectedToo() {
+        // 등록과 수정에 같은 규칙을 적용한다. 예외를 기억하지 않아도 되도록.
+        Mockito.when(problemDao.findById(5L)).thenReturn(existingShortAnswer());
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(null);
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+    }
+
+    @Test
+    void create_persistsSourceNumber() {
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(7);
+
+        service.create(request, null, actor);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).insert(captor.capture());
+        assertEquals(Integer.valueOf(7), captor.getValue().getSourceNumber());
+    }
+
+    @Test
+    void create_duplicateNumber_isReportedInKoreanNotAsGenericFailure() {
+        // DB UNIQUE 위반을 그대로 두면 GlobalExceptionHandler 의 마지막 그물에 걸려
+        // "처리 중 오류가 발생하였습니다"(-1) 가 나간다 — 무엇이 문제인지 알 수 없다.
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(12);
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemDao).insert(Mockito.any());
+
+        BizException thrown = assertThrows(BizException.class, () -> service.create(request, null, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertTrue(thrown.getMessage().contains("12"), "메시지가 어떤 번호가 겹쳤는지 알려야 한다: " + thrown.getMessage());
+    }
+
+    @Test
+    void create_duplicateFromAnotherConstraint_isNotBlamedOnTheNumber() {
+        // 이 테이블의 다른 UNIQUE 위반까지 "번호가 겹쳤다"고 말하면 엉뚱한 곳을 고치게 된다.
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(12);
+        DuplicateKeyException other = new DuplicateKeyException("uq_some_other_constraint");
+        Mockito.doThrow(other).when(problemDao).insert(Mockito.any());
+
+        assertThrows(DuplicateKeyException.class, () -> service.create(request, null, actor));
+    }
+
+    @Test
+    void nextSourceNumber_isLastPlusOne() {
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(12);
+
+        assertEquals(13, service.nextSourceNumber(10L, actor));
+    }
+
+    @Test
+    void nextSourceNumber_firstProblemInDepartment_isOne() {
+        // 아직 번호가 하나도 없으면 SQL 의 MAX 가 NULL 을 돌려준다.
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(null);
+
+        assertEquals(1, service.nextSourceNumber(10L, actor));
+    }
+
+    @Test
+    void nextSourceNumber_deptAdminIsForcedToOwnDepartment() {
+        // 요청한 999 를 버리고 세션 부서(10)로 조회해야 한다.
+        AuthUser deptAdmin = new AuthUser(1L, "1001", "부서관리자", UserRole.DEPT_ADMIN, 10L, false);
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(3);
+
+        assertEquals(4, service.nextSourceNumber(999L, deptAdmin));
+
+        Mockito.verify(problemDao).findMaxSourceNumber(10L);
+        Mockito.verify(problemDao, Mockito.never()).findMaxSourceNumber(999L);
     }
 }

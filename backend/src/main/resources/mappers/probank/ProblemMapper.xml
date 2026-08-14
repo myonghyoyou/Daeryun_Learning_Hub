@@ -11,50 +11,55 @@
     </resultMap>
 
     <select id="findAllActive" resultMap="solveProblemListItemMap">
-        SELECT p.id, p.type, p.content,
+        SELECT p.id, p.type, p.content, d.name AS department_name, p.source_number,
                COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
         FROM problems p
+        JOIN departments d ON d.id = p.department_id
         LEFT JOIN problem_tags pt ON pt.problem_id = p.id
         LEFT JOIN tags t ON t.id = pt.tag_id
         WHERE p.status = 'ACTIVE'
         <if test="keyword != null and keyword != ''">AND p.content ILIKE CONCAT('%', #{keyword}, '%')</if>
         <if test="tag != null and tag != ''">AND EXISTS (SELECT 1 FROM problem_tags fpt JOIN tags ft ON ft.id = fpt.tag_id WHERE fpt.problem_id = p.id AND lower(ft.name) = lower(#{tag}))</if>
-        GROUP BY p.id
+        GROUP BY p.id, d.name
         ORDER BY p.created_at DESC
     </select>
 
     <!-- 무작위 추출을 DB에서 한다. 화면에서 전체를 받아 섞으면 문제 은행이 커질수록 전송량이
          비례해 늘고, 목록에 페이지네이션이 붙는 순간 깨진다. -->
     <select id="findRandomActive" resultMap="solveProblemListItemMap">
-        SELECT p.id, p.type, p.content,
+        SELECT p.id, p.type, p.content, d.name AS department_name, p.source_number,
                COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
         FROM problems p
+        JOIN departments d ON d.id = p.department_id
         LEFT JOIN problem_tags pt ON pt.problem_id = p.id
         LEFT JOIN tags t ON t.id = pt.tag_id
         WHERE p.status = 'ACTIVE'
         <if test="departmentId != null">AND p.department_id = #{departmentId}</if>
-        GROUP BY p.id
+        GROUP BY p.id, d.name
         ORDER BY random()
         LIMIT #{count}
     </select>
 
     <insert id="insert" parameterType="Problem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO problems
-            (type, content, image_url, reference_text, explanation, blank_reveal_count, status, department_id, created_by)
+            (type, content, image_url, reference_text, explanation, blank_reveal_count, status,
+             department_id, source_number, created_by)
         VALUES
-            (#{type}, #{content}, #{imageUrl}, #{referenceText}, #{explanation}, #{blankRevealCount}, #{status}, #{departmentId}, #{createdBy})
+            (#{type}, #{content}, #{imageUrl}, #{referenceText}, #{explanation}, #{blankRevealCount}, #{status},
+             #{departmentId}, #{sourceNumber}, #{createdBy})
     </insert>
 
     <select id="findById" resultType="Problem">
         SELECT id, type, content, image_url, reference_text, explanation, blank_reveal_count,
-               status, department_id, created_by, created_at, updated_at
+               status, department_id, source_number, created_by, created_at, updated_at
         FROM problems WHERE id = #{id}
     </select>
 
     <update id="update" parameterType="Problem">
         UPDATE problems
         SET content = #{content}, image_url = #{imageUrl}, reference_text = #{referenceText},
-            explanation = #{explanation}, blank_reveal_count = #{blankRevealCount}, updated_at = now()
+            explanation = #{explanation}, blank_reveal_count = #{blankRevealCount},
+            source_number = #{sourceNumber}, updated_at = now()
         WHERE id = #{id}
     </update>
 
@@ -62,8 +67,10 @@
         UPDATE problems SET status = #{status}, updated_at = now() WHERE id = #{id}
     </update>
 
-    <update id="updateDepartment">
-        UPDATE problems SET department_id = #{departmentId}, updated_at = now() WHERE id = #{id}
+    <update id="updateDepartmentAndSourceNumber">
+        UPDATE problems
+        SET department_id = #{departmentId}, source_number = #{sourceNumber}, updated_at = now()
+        WHERE id = #{id}
     </update>
 
     <!-- 목록과 카운트가 반드시 같은 조건을 써야 한다. 두 벌로 갈라지면 총건수와 실제 결과가
@@ -122,6 +129,12 @@
              같은 행이 여럿 생기면 순서가 흔들린다. -->
         ORDER BY p.created_at DESC, p.id DESC
         LIMIT #{limit}
+    </select>
+
+    <!-- 상태로 거르지 않는다. 보관된 문제도 번호를 점유하고 번호는 재사용하지 않는다(spec D5).
+         걸러 내면 보관된 12번과 같은 번호를 새로 발급해 UNIQUE 제약에 걸린다. -->
+    <select id="findMaxSourceNumber" resultType="java.lang.Integer">
+        SELECT MAX(source_number) FROM problems WHERE department_id = #{departmentId}
     </select>
 
 </mapper>

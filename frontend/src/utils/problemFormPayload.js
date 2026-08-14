@@ -17,6 +17,11 @@ export function buildProblemPayload(form) {
     referenceText: form.referenceText && form.referenceText.trim() ? form.referenceText.trim() : null,
     explanation: form.explanation && form.explanation.trim() ? form.explanation.trim() : null,
     tags,
+    // 빈 값은 0/NaN 이 아니라 null 로 보낸다. 서버의 "문항 번호를 입력하세요" 안내가
+    // 그대로 사용자에게 닿아야 한다.
+    sourceNumber: form.sourceNumber === "" || form.sourceNumber === null || form.sourceNumber === undefined
+      ? null
+      : Number(form.sourceNumber),
   };
 
   if (form.type === "SHORT_ANSWER") {

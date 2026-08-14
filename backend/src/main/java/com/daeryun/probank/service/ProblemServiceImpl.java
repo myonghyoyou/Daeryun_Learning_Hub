@@ -17,6 +17,7 @@ import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.dto.problem.ProblemPageResponse;
 import com.daeryun.probank.exception.BizException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,8 @@ public class ProblemServiceImpl implements ProblemService {
     private static final int MAX_ANSWER_TEXT_LENGTH = 500; // problem_answers/problem_blanks.answer_text VARCHAR(500)
     private static final int MAX_BLANK_KEY_LENGTH = 50;    // problem_blanks.blank_key VARCHAR(50)
 
+    private static final String SOURCE_NUMBER_UNIQUE_CONSTRAINT = "uq_problems_department_source_number";
+
     private final ProblemDao problemDao;
     private final ProblemChoiceDao problemChoiceDao;
     private final ProblemAnswerDao problemAnswerDao;
@@ -90,8 +93,11 @@ public class ProblemServiceImpl implements ProblemService {
     public void create(ProblemCreateRequest request, Long departmentId, AuthUser actor) {
         normalize(request);
         validate(request);
+        validateSourceNumber(request.getSourceNumber());
         // 부서 검증은 어떤 행도 쓰기 전에 끝낸다.
         Long owningDepartmentId = owningDepartmentResolver.resolve(departmentId, actor);
+        // 부서명도 쓰기 전에 읽어 둔다. 자세한 이유는 duplicateSourceNumber() 주석 참고.
+        String owningDepartmentName = lookupDepartmentName(owningDepartmentId);
 
         Problem problem = new Problem();
         problem.setType(request.getType());
@@ -106,8 +112,13 @@ public class ProblemServiceImpl implements ProblemService {
         // 파라미터로 받는 이유: 이 DTO 는 update() 와 공유되므로, 필드를 넣으면 수정 경로에도
         // 부서 지정 표면이 생긴다 — 부서 이동을 전용 엔드포인트로 분리한 이유와 같다.
         problem.setDepartmentId(owningDepartmentId);
+        problem.setSourceNumber(request.getSourceNumber());
         problem.setCreatedBy(actor.getUserId());
-        problemDao.insert(problem);
+        try {
+            problemDao.insert(problem);
+        } catch (DuplicateKeyException e) {
+            throw duplicateSourceNumber(e, owningDepartmentName, request.getSourceNumber());
+        }
 
         saveTypeSpecificData(problem.getId(), request);
         problemTagDao.replaceTags(problem.getId(), tagDao.findOrCreateByNames(normalizeTags(request.getTags())));
@@ -128,13 +139,21 @@ public class ProblemServiceImpl implements ProblemService {
         }
         normalize(request);
         validate(request);
+        validateSourceNumber(request.getSourceNumber());
 
         existing.setContent(request.getContent());
         existing.setImageUrl(request.getImageUrl());
         existing.setReferenceText(request.getReferenceText());
         existing.setExplanation(request.getExplanation());
         existing.setBlankRevealCount(request.getType() == ProblemType.FILL_BLANK ? request.getBlankRevealCount() : null);
-        problemDao.update(existing);
+        existing.setSourceNumber(request.getSourceNumber());
+        // 부서명은 쓰기 전에 읽어 둔다. 자세한 이유는 duplicateSourceNumber() 주석 참고.
+        String departmentName = lookupDepartmentName(existing.getDepartmentId());
+        try {
+            problemDao.update(existing);
+        } catch (DuplicateKeyException e) {
+            throw duplicateSourceNumber(e, departmentName, request.getSourceNumber());
+        }
 
         problemChoiceDao.deleteByProblemId(id);
         problemAnswerDao.deleteByProblemId(id);
@@ -429,6 +448,55 @@ public class ProblemServiceImpl implements ProblemService {
     }
 
     /**
+     * 번호는 등록·수정 모두 필수다(spec D2). 규칙이 하나여서 예외를 기억할 필요가 없다.
+     * 0 과 음수는 종이 문제은행의 문항 번호가 될 수 없다.
+     */
+    private void validateSourceNumber(Integer sourceNumber) {
+        if (sourceNumber == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "문항 번호를 입력하세요.");
+        }
+        if (sourceNumber < 1) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "문항 번호는 1 이상이어야 합니다.");
+        }
+    }
+
+    /**
+     * 안내 문구에 쓸 부서명을 <b>쓰기 전에</b> 읽어 둔다. INSERT/UPDATE 가 제약을 위반한 뒤에는
+     * 이 조회를 할 수 없다 — 이유는 {@link #duplicateSourceNumber} 주석에 있다.
+     * <p>
+     * 문제 등록·수정은 관리자가 폼을 저장하는 경로다. 저장 한 번에 SELECT 한 번이 더 붙지만
+     * 안내 문구를 정확히 내보내는 값이 그보다 크다. <b>이 조회를 catch 안으로 되돌리지 말 것</b> —
+     * 그게 정확히 QA-1 로 잡힌 결함이다.
+     */
+    private String lookupDepartmentName(Long departmentId) {
+        if (departmentId == null) {
+            return "해당 부서";
+        }
+        Department department = departmentDao.findById(departmentId);
+        return department == null ? "해당 부서" : department.getName();
+    }
+
+    /**
+     * UNIQUE(department_id, source_number) 위반을 사람이 읽는 메시지로 바꾼다.
+     * 그대로 두면 GlobalExceptionHandler 의 @ExceptionHandler(Exception.class) 에 걸려
+     * MSG_PROC_FAIL(-1) "처리 중 오류가 발생하였습니다" 로만 나간다.
+     * <p>
+     * 부서명을 {@code Long departmentId} 가 아니라 이미 조회된 {@code String} 으로 받는다.
+     * PostgreSQL 은 문장 하나가 실패하면 트랜잭션 전체를 abort 하므로(25P02), 실패한 쓰기와
+     * 같은 트랜잭션 안에서 부서를 다시 SELECT 하면 그 SELECT 가 새 예외를 던진다. 그러면 이
+     * 안내 문구는 만들어지지도 못한 채 -1 "처리 중 오류가 발생하였습니다" 로 나간다.
+     * <b>이 메서드는 DB 를 건드리지 않는다.</b>
+     */
+    private BizException duplicateSourceNumber(DuplicateKeyException cause, String departmentName, Integer sourceNumber) {
+        if (cause.getMessage() != null && !cause.getMessage().contains(SOURCE_NUMBER_UNIQUE_CONSTRAINT)) {
+            // 이 테이블의 다른 UNIQUE 위반이면 번호 탓으로 돌리지 않는다.
+            throw cause;
+        }
+        return new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                departmentName + " " + sourceNumber + "번은 이미 있습니다. 다른 번호를 입력하세요.");
+    }
+
+    /**
      * 문제의 귀속 부서를 옮긴다. 엑셀 업로드에서 부서를 잘못 골랐을 때 화면으로 되돌릴 수 있는
      * 유일한 경로다. 일반 수정(update)과 분리한 이유는 ProblemCreateRequest 에 departmentId 를
      * 넣지 않기 위해서다 — 그 DTO 에 필드가 생기면 등록 경로에도 위조 표면이 다시 열린다.
@@ -436,7 +504,7 @@ public class ProblemServiceImpl implements ProblemService {
      */
     @Override
     @Transactional
-    public void changeDepartment(Long id, Long departmentId, AuthUser actor) {
+    public int changeDepartment(Long id, Long departmentId, AuthUser actor) {
         Problem existing = problemDao.findById(id);
         if (existing == null) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 문제입니다.");
@@ -453,9 +521,46 @@ public class ProblemServiceImpl implements ProblemService {
                     "비활성 부서로는 옮길 수 없습니다: " + department.getName());
         }
 
+        // 이미 그 부서인데 그대로 "이동"하면 아래 findMaxSourceNumber 가 이 문제 자신의 행까지
+        // 세므로 max + 1 이 원래 번호를 덮어쓴다(부서 꼬리에 있던 문제는 정확히 1씩 밀린다).
+        // spec D5 에 따라 옛 번호는 영구히 비게 되므로, 조용한 no-op 대신 거절한다 — no-op 로
+        // 두면 "부서를 옮겼습니다" 라는 거짓 안내가 나간다.
+        if (departmentId.equals(existing.getDepartmentId())) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "이미 " + department.getName() + " 소속입니다.");
+        }
+
         Long from = existing.getDepartmentId();
-        problemDao.updateDepartment(id, departmentId);
+        // 옮겨 간 부서 기준으로 번호를 다시 매긴다. 원래 번호를 그대로 들고 가면 그 부서에
+        // 같은 번호가 있을 때 UNIQUE 제약에 걸린다(spec D6).
+        Integer max = problemDao.findMaxSourceNumber(departmentId);
+        int assigned = max == null ? 1 : max + 1;
+        // 두 관리자가 같은 부서로 동시에 옮기면 같은 max 를 읽어 같은 번호를 쓴다. 진 쪽에게
+        // create/update 와 같은 한국어 안내가 나가야 한다. 부서명은 이미 손에 있으므로 그대로
+        // 넘긴다 — duplicateSourceNumber() 는 DB 를 건드리지 않는다(주석 참고).
+        try {
+            problemDao.updateDepartmentAndSourceNumber(id, departmentId, assigned);
+        } catch (DuplicateKeyException e) {
+            throw duplicateSourceNumber(e, department.getName(), assigned);
+        }
         auditLogService.record(actor.getUserId(), "PROBLEM_DEPARTMENT_CHANGED", "PROBLEM", id,
-                "{\"from\":" + from + ",\"to\":" + departmentId + "}");
+                "{\"from\":" + from + ",\"to\":" + departmentId
+                        + ",\"sourceNumberFrom\":" + existing.getSourceNumber()
+                        + ",\"sourceNumberTo\":" + assigned + "}");
+        return assigned;
+    }
+
+    /**
+     * 등록 폼이 번호 칸을 미리 채우는 데 쓴다. 서버가 저장 시점에 자동으로 채우지는
+     * 않는다 — 관리자가 종이 문서를 보고 다른 번호로 고칠 수 있어야 하기 때문이다.
+     *
+     * 두 명이 동시에 열면 같은 값을 받는다. 그건 UNIQUE 제약이 막고, 나중에 저장한
+     * 쪽이 "…12번은 이미 있습니다" 를 받는다(Task 1).
+     */
+    @Override
+    public int nextSourceNumber(Long departmentId, AuthUser actor) {
+        Long scope = owningDepartmentResolver.resolve(departmentId, actor);
+        Integer max = problemDao.findMaxSourceNumber(scope);
+        return max == null ? 1 : max + 1;
     }
 }

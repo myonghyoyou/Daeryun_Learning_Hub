@@ -17,4 +17,6 @@ public class ProblemSolveDetailResponse {
     private List<ChoiceOption> choices;
     private List<String> blanksToAnswer;
     private List<RevealedBlank> revealedBlanks;
+    private String departmentName;
+    private Integer sourceNumber;
 }

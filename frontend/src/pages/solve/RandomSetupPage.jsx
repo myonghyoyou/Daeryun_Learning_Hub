@@ -15,6 +15,7 @@ const COUNT_OPTIONS = [
   { value: "5", label: "5문제" },
   { value: "10", label: "10문제" },
   { value: "20", label: "20문제" },
+  { value: "50", label: "50문제" },
 ];
 
 /**

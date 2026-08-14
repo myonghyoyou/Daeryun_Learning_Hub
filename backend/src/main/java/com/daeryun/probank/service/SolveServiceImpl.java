@@ -25,11 +25,12 @@ public class SolveServiceImpl implements SolveService {
     private final AttemptDao attemptDao;
     private final AttemptBlankAnswerDao attemptBlankAnswerDao;
     private final AttemptChoiceDao attemptChoiceDao;
+    private final DepartmentDao departmentDao;
 
     public SolveServiceImpl(ProblemDao problemDao, ProblemChoiceDao problemChoiceDao,
                              ProblemAnswerDao problemAnswerDao, ProblemBlankDao problemBlankDao,
                              AttemptDao attemptDao, AttemptBlankAnswerDao attemptBlankAnswerDao,
-                             AttemptChoiceDao attemptChoiceDao) {
+                             AttemptChoiceDao attemptChoiceDao, DepartmentDao departmentDao) {
         this.problemDao = problemDao;
         this.problemChoiceDao = problemChoiceDao;
         this.problemAnswerDao = problemAnswerDao;
@@ -37,6 +38,7 @@ public class SolveServiceImpl implements SolveService {
         this.attemptDao = attemptDao;
         this.attemptBlankAnswerDao = attemptBlankAnswerDao;
         this.attemptChoiceDao = attemptChoiceDao;
+        this.departmentDao = departmentDao;
     }
 
     @Override
@@ -79,9 +81,13 @@ public class SolveServiceImpl implements SolveService {
                     .collect(Collectors.toList());
         }
 
+        // Problem 도메인에는 departmentId 만 있다. 표기에 쓸 이름은 한 번 더 조회한다
+        // (departments 는 작은 마스터 테이블이다).
+        Department department = departmentDao.findById(problem.getDepartmentId());
         return new ProblemSolveDetailResponse(
                 problem.getId(), problem.getType(), problem.getContent(), problem.getImageUrl(),
-                problem.getReferenceText(), choices, blanksToAnswer, revealedBlanks);
+                problem.getReferenceText(), choices, blanksToAnswer, revealedBlanks,
+                department == null ? null : department.getName(), problem.getSourceNumber());
     }
 
     @Override

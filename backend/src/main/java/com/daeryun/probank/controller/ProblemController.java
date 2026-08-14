@@ -101,8 +101,14 @@ public class ProblemController {
     public ResponseEntity<ResponseDto<?>> changeDepartment(@PathVariable Long id,
                                                             @RequestBody DepartmentChangeRequest request,
                                                             @LoginUser AuthUser actor) {
-        problemService.changeDepartment(id, request.getDepartmentId(), actor);
-        return ResponseEntity.ok(ResponseDto.ok());
+        int assigned = problemService.changeDepartment(id, request.getDepartmentId(), actor);
+        return ResponseEntity.ok(ResponseDto.ok(java.util.Collections.singletonMap("sourceNumber", assigned)));
+    }
+
+    @GetMapping("/next-source-number")
+    public ResponseEntity<ResponseDto<?>> nextSourceNumber(@RequestParam(required = false) Long departmentId,
+                                                             @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(problemService.nextSourceNumber(departmentId, actor)));
     }
 
     @PostMapping("/excel-upload")

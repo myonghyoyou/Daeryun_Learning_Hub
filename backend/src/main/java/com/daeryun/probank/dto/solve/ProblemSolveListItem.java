@@ -9,4 +9,6 @@ public class ProblemSolveListItem {
     private ProblemType type;
     private String content;
     private java.util.List<String> tags;
+    private String departmentName;
+    private Integer sourceNumber;
 }

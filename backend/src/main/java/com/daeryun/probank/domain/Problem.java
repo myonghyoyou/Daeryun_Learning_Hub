@@ -15,6 +15,8 @@ public class Problem {
     private Integer blankRevealCount;
     private ProblemStatus status;
     private Long departmentId;
+    /** 출처(종이 문제은행)에서의 문항 번호. 영역은 departmentId 가 겸한다. */
+    private Integer sourceNumber;
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

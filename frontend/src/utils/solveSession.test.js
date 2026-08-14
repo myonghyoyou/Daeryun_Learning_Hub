@@ -26,14 +26,25 @@ test("createSession: keeps both the id order and the problem metadata", () => {
   const session = createSession([P(11), P(22)]);
   assert.deepStrictEqual(session.problemIds, [11, 22]);
   assert.deepStrictEqual(session.problems, [
-    { id: 11, type: "OX", content: "문제 11" },
-    { id: 22, type: "OX", content: "문제 22" },
+    { id: 11, type: "OX", content: "문제 11", departmentName: undefined, sourceNumber: undefined },
+    { id: 22, type: "OX", content: "문제 22", departmentName: undefined, sourceNumber: undefined },
   ]);
+});
+
+test("createSession: 출처 표기에 필요한 값을 버리지 않는다", () => {
+  const session = createSession([
+    { id: 1, type: "OX", content: "본문", departmentName: "회계팀", sourceNumber: 7, extra: "버려도 되는 값" },
+  ]);
+  const stored = session.problems[0];
+  assert.equal(stored.departmentName, "회계팀");
+  assert.equal(stored.sourceNumber, 7);
+  // 세션은 sessionStorage 에 들어가므로 필요한 것만 담는다.
+  assert.equal("extra" in stored, false);
 });
 
 test("problemById: finds the stored metadata", () => {
   const session = createSession([P(11), P(22)]);
-  assert.deepStrictEqual(problemById(session, 22), { id: 22, type: "OX", content: "문제 22" });
+  assert.deepStrictEqual(problemById(session, 22), { id: 22, type: "OX", content: "문제 22", departmentName: undefined, sourceNumber: undefined });
   assert.strictEqual(problemById(session, 999), undefined);
 });
 

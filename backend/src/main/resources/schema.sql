@@ -32,9 +32,19 @@ CREATE TABLE IF NOT EXISTS problems (
     blank_reveal_count INT,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'ARCHIVED')),
     department_id BIGINT NOT NULL REFERENCES departments(id),
+    -- 출처(종이 문제은행)에서의 문항 번호. 영역은 department_id 가 겸한다.
+    --
+    -- NOT NULL 을 걸지 않는 것은 의도다. 필수 여부는 ProblemServiceImpl 이 검증해
+    -- 한국어 안내를 돌려준다 — DB 제약 위반은 GlobalExceptionHandler 의 마지막
+    -- 그물에 걸려 "처리 중 오류가 발생하였습니다"(-1) 로만 나가 원인을 알려주지 못한다.
+    -- 반면 UNIQUE 는 DB 에 건다. 검사-후-삽입에는 경합이 있어 제약이 최후의 방어선이다.
+    -- PostgreSQL 의 UNIQUE 는 NULL 을 서로 다른 값으로 보므로, 번호가 비어 있는 기존
+    -- 행이 여럿이어도 제약을 거는 데 지장이 없다.
+    source_number INT,
     created_by BIGINT NOT NULL REFERENCES users(id),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now()
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT uq_problems_department_source_number UNIQUE (department_id, source_number)
 );
 
 CREATE TABLE IF NOT EXISTS problem_choices (

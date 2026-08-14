@@ -21,6 +21,7 @@ public class ProblemDetailResponse {
     private Integer blankRevealCount;
     private ProblemStatus status;
     private Long departmentId;
+    private Integer sourceNumber;
     private List<ProblemChoice> choices;
     private List<String> answers;
     private List<com.daeryun.probank.domain.ProblemBlank> blanks;
@@ -32,6 +33,6 @@ public class ProblemDetailResponse {
         return new ProblemDetailResponse(
                 problem.getId(), problem.getType(), problem.getContent(), problem.getImageUrl(),
                 problem.getReferenceText(), problem.getExplanation(), problem.getBlankRevealCount(),
-                problem.getStatus(), problem.getDepartmentId(), choices, answers, blanks, tags);
+                problem.getStatus(), problem.getDepartmentId(), problem.getSourceNumber(), choices, answers, blanks, tags);
     }
 }

@@ -11,4 +11,6 @@ public class AttemptHistoryItem {
     private String submittedAnswer;
     private boolean correct;
     private LocalDateTime submittedAt;
+    private String departmentName;
+    private Integer sourceNumber;
 }

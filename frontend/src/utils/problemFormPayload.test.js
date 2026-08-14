@@ -80,3 +80,22 @@ test("buildProblemPayload normalizes tags (trim, drop empty, case-insensitive de
   const payload = buildProblemPayload(baseForm({ tagsInput: " Java, java , React" }));
   assert.deepEqual(payload.tags, ["java", "react"]);
 });
+
+test("buildProblemPayload: sourceNumber를 숫자로 담는다", () => {
+  const payload = buildProblemPayload({ ...baseForm(), sourceNumber: "13" });
+  assert.equal(payload.sourceNumber, 13);
+});
+
+test("buildProblemPayload: 빈 sourceNumber는 null로 보낸다", () => {
+  // 서버가 "문항 번호를 입력하세요"로 막는다. 화면이 0이나 NaN을 만들어
+  // 보내면 그 메시지 대신 엉뚱한 검증에 걸린다.
+  for (const empty of ["", null, undefined]) {
+    const payload = buildProblemPayload({ ...baseForm(), sourceNumber: empty });
+    assert.equal(payload.sourceNumber, null);
+  }
+});
+
+test("buildProblemPayload: 여전히 departmentId를 넣지 않는다", () => {
+  const payload = buildProblemPayload({ ...baseForm(), sourceNumber: "1" });
+  assert.equal("departmentId" in payload, false);
+});

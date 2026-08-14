@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.ByteArrayOutputStream;
@@ -41,6 +42,11 @@ class ExcelProblemUploadServiceImplTest {
     private ExcelProblemUploadServiceImpl service;
     private final AuthUser actor = new AuthUser(1L, "1001", "관리자", UserRole.DEPT_ADMIN, 10L, false);
     private final AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
+
+    private static final String[] HEADER = {
+            "문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5",
+            "정답", "해설", "태그", "문항번호"
+    };
 
     @BeforeEach
     void setUp() {
@@ -88,8 +94,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void superAdminUploadsIntoTheRequestedDepartment() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "1"},
         });
 
         service.upload(file, 77L, superAdmin);
@@ -107,8 +113,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void deptAdminRequestedDepartmentIsIgnored() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "1"},
         });
 
         service.upload(file, 999L, actor);
@@ -125,8 +131,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void superAdminMustPickADepartment() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "1"},
         });
 
         BizException thrown = assertThrows(BizException.class, () -> service.upload(file, null, superAdmin));
@@ -139,8 +145,8 @@ class ExcelProblemUploadServiceImplTest {
     void unknownDepartmentIsRejected() throws Exception {
         Mockito.when(departmentDao.findById(404L)).thenReturn(null);
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "1"},
         });
 
         assertThrows(BizException.class, () -> service.upload(file, 404L, superAdmin));
@@ -157,8 +163,8 @@ class ExcelProblemUploadServiceImplTest {
         inactive.setStatus(Status.INACTIVE);
         Mockito.when(departmentDao.findById(88L)).thenReturn(inactive);
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "1"},
         });
 
         BizException thrown = assertThrows(BizException.class, () -> service.upload(file, 88L, superAdmin));
@@ -174,8 +180,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void auditDetailCarriesTheOwningDepartment() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", ""},
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "1"},
         });
 
         service.upload(file, 77L, superAdmin);
@@ -190,8 +196,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_mcqSingleRow_succeeds() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
+                HEADER,
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -205,8 +211,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_shortAnswerRow_succeeds() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,Seoul", ""},
+                HEADER,
+                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,Seoul", "", "", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -219,8 +225,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_fillBlankRow_fails() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"FILL_BLANK", "{{blank_1}}은 수도이다.", "", "", "", "", "", "", "", "", ""},
+                HEADER,
+                {"FILL_BLANK", "{{blank_1}}은 수도이다.", "", "", "", "", "", "", "", "", "", "", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -233,8 +239,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_invalidAnswerIndex_fails() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "", "", "", "5", ""},
+                HEADER,
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "", "", "", "5", "", "", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -254,8 +260,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_choicesWithInternalGap_fails() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "1+1=?", "", "", "A", "", "C", "", "", "2", ""},
+                HEADER,
+                {"MCQ_SINGLE", "1+1=?", "", "", "A", "", "C", "", "", "2", "", "", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -276,8 +282,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_shortAnswerWithBlankToken_fails() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,,Seoul", ""},
+                HEADER,
+                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,,Seoul", "", "", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -301,9 +307,9 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_withValidAndInvalidRowsInSameFile_partiallySucceeds() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "잘못된 정답 행", "", "", "1", "2", "", "", "", "9", ""},
-                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
+                HEADER,
+                {"MCQ_SINGLE", "잘못된 정답 행", "", "", "1", "2", "", "", "", "9", "", "", "1"},
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초", "2"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -329,9 +335,9 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_externalImageUrl_failsThatRowOnly() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "외부 이미지 URL 행", "https://attacker.example/track.gif", "", "1", "2", "", "", "", "1", ""},
-                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
+                HEADER,
+                {"MCQ_SINGLE", "외부 이미지 URL 행", "https://attacker.example/track.gif", "", "1", "2", "", "", "", "1", "", "", "1"},
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초", "2"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -351,8 +357,8 @@ class ExcelProblemUploadServiceImplTest {
     @Test
     void upload_blankImageCell_stillSucceeds() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
-                {"문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5", "정답", "해설", "태그"},
-                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초"},
+                HEADER,
+                {"MCQ_SINGLE", "1+1=?", "", "", "1", "2", "3", "", "", "2", "기본 연산", "수학,기초", "1"},
         });
 
         ExcelUploadResult result = service.upload(file, null, actor);
@@ -361,5 +367,101 @@ class ExcelProblemUploadServiceImplTest {
         assertEquals(0, result.getFailRows());
         Mockito.verify(problemProvisioningService).provisionWithChoices(Mockito.any(), Mockito.anyList(),
                 Mockito.anyList());
+    }
+
+    @Test
+    void rowWithoutSourceNumber_fails() throws Exception {
+        // 번호 칸이 없는 예전 파일은 행마다 뚜렷이 실패해야 한다.
+        // 조용히 통과시키면 번호 없는 문제가 대량으로 들어온다.
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", ""},
+        });
+
+        ExcelUploadResult result = service.upload(file, 77L, superAdmin);
+
+        assertEquals(0, result.getSuccessRows());
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("문항 번호"),
+                "실패 사유가 번호 때문임을 알려야 한다: " + result.getErrorDetail());
+    }
+
+    @Test
+    void rowWithNonNumericSourceNumber_fails() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "삼번"},
+        });
+
+        assertEquals(1, service.upload(file, 77L, superAdmin).getFailRows());
+    }
+
+    @Test
+    void duplicateSourceNumberWithinTheSameFile_failsTheSecondRow() throws Exception {
+        // 파일 안의 중복은 DB 에 닿기 전에 잡는다 — 첫 행만 들어가고 둘째 행이
+        // 제약 위반으로 죽으면 사용자는 왜 절반만 들어갔는지 알기 어렵다.
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"MCQ_SINGLE", "첫 문제", "", "", "서울", "부산", "", "", "", "1", "", "", "3"},
+                {"MCQ_SINGLE", "둘째 문제", "", "", "서울", "부산", "", "", "", "1", "", "", "3"},
+        });
+
+        ExcelUploadResult result = service.upload(file, 77L, superAdmin);
+
+        assertEquals(1, result.getSuccessRows());
+        assertEquals(1, result.getFailRows());
+    }
+
+    @Test
+    void duplicateAgainstExistingProblem_saysTheNumberIsTakenNotJustThatSavingFailed() throws Exception {
+        // 같은 파일을 두 번 올리는 상황. "문제 저장 중 오류가 발생했습니다" 로 뭉뚱그리면
+        // 653행이 전부 그 메시지로 실패하고 원인이 번호라는 사실이 어디에도 안 나온다.
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "9"},
+        });
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemProvisioningService)
+                .provisionWithChoices(Mockito.any(), Mockito.anyList(), Mockito.anyList());
+
+        ExcelUploadResult result = service.upload(file, 77L, superAdmin);
+
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("9"),
+                "어떤 번호가 겹쳤는지 알려야 한다: " + result.getErrorDetail());
+    }
+
+    @Test
+    void duplicateAgainstExistingProblem_shortAnswerPath_saysTheNumberIsTakenNotJustThatSavingFailed() throws Exception {
+        // processShortAnswer 는 provisionWithAnswers 를 쓰는 별도 경로다. 저 catch 가 지워지거나
+        // 순서가 바뀌어도 이 테스트가 없으면 전체 스위트는 초록으로 남는다.
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,Seoul", "", "", "9"},
+        });
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemProvisioningService)
+                .provisionWithAnswers(Mockito.any(), Mockito.anyList(), Mockito.anyList());
+
+        ExcelUploadResult result = service.upload(file, 77L, superAdmin);
+
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("9"),
+                "어떤 번호가 겹쳤는지 알려야 한다: " + result.getErrorDetail());
+    }
+
+    @Test
+    void validRowPersistsTheSourceNumber() throws Exception {
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"MCQ_SINGLE", "수도는?", "", "", "서울", "부산", "", "", "", "1", "", "", "42"},
+        });
+
+        service.upload(file, 77L, superAdmin);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemProvisioningService)
+                .provisionWithChoices(captor.capture(), Mockito.anyList(), Mockito.anyList());
+        assertEquals(Integer.valueOf(42), captor.getValue().getSourceNumber());
     }
 }

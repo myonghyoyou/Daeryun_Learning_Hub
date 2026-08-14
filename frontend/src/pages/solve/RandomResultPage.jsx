@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Surface from "@/components/ui/Surface.jsx";
+import SourceBadge from "@/components/ui/SourceBadge.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import {
   SESSION_STORAGE_KEY,
@@ -71,6 +72,7 @@ export default function RandomResultPage() {
                 <span className="line-clamp-2 flex-1 text-body-small text-ink-strong">
                   {previewContent(problem?.content) || "(불러올 수 없는 문제)"}
                 </span>
+                <SourceBadge item={problem} />
                 <span
                   className={`shrink-0 text-body-small font-semibold ${
                     r.correct ? "text-success-text" : "text-danger-text"
