@@ -96,6 +96,8 @@ public class ProblemServiceImpl implements ProblemService {
         validateSourceNumber(request.getSourceNumber());
         // 부서 검증은 어떤 행도 쓰기 전에 끝낸다.
         Long owningDepartmentId = owningDepartmentResolver.resolve(departmentId, actor);
+        // 부서명도 쓰기 전에 읽어 둔다. 자세한 이유는 duplicateSourceNumber() 주석 참고.
+        String owningDepartmentName = lookupDepartmentName(owningDepartmentId);
 
         Problem problem = new Problem();
         problem.setType(request.getType());
@@ -115,7 +117,7 @@ public class ProblemServiceImpl implements ProblemService {
         try {
             problemDao.insert(problem);
         } catch (DuplicateKeyException e) {
-            throw duplicateSourceNumber(e, owningDepartmentId, request.getSourceNumber());
+            throw duplicateSourceNumber(e, owningDepartmentName, request.getSourceNumber());
         }
 
         saveTypeSpecificData(problem.getId(), request);
@@ -145,10 +147,12 @@ public class ProblemServiceImpl implements ProblemService {
         existing.setExplanation(request.getExplanation());
         existing.setBlankRevealCount(request.getType() == ProblemType.FILL_BLANK ? request.getBlankRevealCount() : null);
         existing.setSourceNumber(request.getSourceNumber());
+        // 부서명은 쓰기 전에 읽어 둔다. 자세한 이유는 duplicateSourceNumber() 주석 참고.
+        String departmentName = lookupDepartmentName(existing.getDepartmentId());
         try {
             problemDao.update(existing);
         } catch (DuplicateKeyException e) {
-            throw duplicateSourceNumber(e, existing.getDepartmentId(), request.getSourceNumber());
+            throw duplicateSourceNumber(e, departmentName, request.getSourceNumber());
         }
 
         problemChoiceDao.deleteByProblemId(id);
@@ -457,17 +461,37 @@ public class ProblemServiceImpl implements ProblemService {
     }
 
     /**
+     * 안내 문구에 쓸 부서명을 <b>쓰기 전에</b> 읽어 둔다. INSERT/UPDATE 가 제약을 위반한 뒤에는
+     * 이 조회를 할 수 없다 — 이유는 {@link #duplicateSourceNumber} 주석에 있다.
+     * <p>
+     * 문제 등록·수정은 관리자가 폼을 저장하는 경로다. 저장 한 번에 SELECT 한 번이 더 붙지만
+     * 안내 문구를 정확히 내보내는 값이 그보다 크다. <b>이 조회를 catch 안으로 되돌리지 말 것</b> —
+     * 그게 정확히 QA-1 로 잡힌 결함이다.
+     */
+    private String lookupDepartmentName(Long departmentId) {
+        if (departmentId == null) {
+            return "해당 부서";
+        }
+        Department department = departmentDao.findById(departmentId);
+        return department == null ? "해당 부서" : department.getName();
+    }
+
+    /**
      * UNIQUE(department_id, source_number) 위반을 사람이 읽는 메시지로 바꾼다.
      * 그대로 두면 GlobalExceptionHandler 의 @ExceptionHandler(Exception.class) 에 걸려
      * MSG_PROC_FAIL(-1) "처리 중 오류가 발생하였습니다" 로만 나간다.
+     * <p>
+     * 부서명을 {@code Long departmentId} 가 아니라 이미 조회된 {@code String} 으로 받는다.
+     * PostgreSQL 은 문장 하나가 실패하면 트랜잭션 전체를 abort 하므로(25P02), 실패한 쓰기와
+     * 같은 트랜잭션 안에서 부서를 다시 SELECT 하면 그 SELECT 가 새 예외를 던진다. 그러면 이
+     * 안내 문구는 만들어지지도 못한 채 -1 "처리 중 오류가 발생하였습니다" 로 나간다.
+     * <b>이 메서드는 DB 를 건드리지 않는다.</b>
      */
-    private BizException duplicateSourceNumber(DuplicateKeyException cause, Long departmentId, Integer sourceNumber) {
+    private BizException duplicateSourceNumber(DuplicateKeyException cause, String departmentName, Integer sourceNumber) {
         if (cause.getMessage() != null && !cause.getMessage().contains(SOURCE_NUMBER_UNIQUE_CONSTRAINT)) {
             // 이 테이블의 다른 UNIQUE 위반이면 번호 탓으로 돌리지 않는다.
             throw cause;
         }
-        Department department = departmentDao.findById(departmentId);
-        String departmentName = department == null ? "해당 부서" : department.getName();
         return new BizException(ErrorCode.INPUT_VALUE_INVALID,
                 departmentName + " " + sourceNumber + "번은 이미 있습니다. 다른 번호를 입력하세요.");
     }
