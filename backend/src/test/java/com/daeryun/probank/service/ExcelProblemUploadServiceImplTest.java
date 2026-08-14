@@ -432,6 +432,25 @@ class ExcelProblemUploadServiceImplTest {
     }
 
     @Test
+    void duplicateAgainstExistingProblem_shortAnswerPath_saysTheNumberIsTakenNotJustThatSavingFailed() throws Exception {
+        // processShortAnswer 는 provisionWithAnswers 를 쓰는 별도 경로다. 저 catch 가 지워지거나
+        // 순서가 바뀌어도 이 테스트가 없으면 전체 스위트는 초록으로 남는다.
+        MockMultipartFile file = buildExcel(new String[][]{
+                HEADER,
+                {"SHORT_ANSWER", "대한민국의 수도는?", "", "", "", "", "", "", "", "서울,Seoul", "", "", "9"},
+        });
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemProvisioningService)
+                .provisionWithAnswers(Mockito.any(), Mockito.anyList(), Mockito.anyList());
+
+        ExcelUploadResult result = service.upload(file, 77L, superAdmin);
+
+        assertEquals(1, result.getFailRows());
+        assertTrue(result.getErrorDetail().contains("9"),
+                "어떤 번호가 겹쳤는지 알려야 한다: " + result.getErrorDetail());
+    }
+
+    @Test
     void validRowPersistsTheSourceNumber() throws Exception {
         MockMultipartFile file = buildExcel(new String[][]{
                 HEADER,
