@@ -425,6 +425,14 @@ class ProblemServiceImplTest {
         return existing;
     }
 
+    private Department activeDepartment(Long id, String name) {
+        Department department = new Department();
+        department.setId(id);
+        department.setName(name);
+        department.setStatus(Status.ACTIVE);
+        return department;
+    }
+
     @Test
     void create_withExternalImageUrl_rejects() {
         ProblemCreateRequest request = shortAnswerRequest("https://attacker.example/track.gif");
@@ -698,16 +706,12 @@ class ProblemServiceImplTest {
         existing.setDepartmentId(1L);
         existing.setType(ProblemType.MCQ_SINGLE);
         Mockito.when(problemDao.findById(5L)).thenReturn(existing);
-        Department target = new Department();
-        target.setId(9L);
-        target.setName("영업팀");
-        target.setStatus(Status.ACTIVE);
-        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(activeDepartment(9L, "영업팀"));
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
 
         service.changeDepartment(5L, 9L, superAdmin);
 
-        Mockito.verify(problemDao).updateDepartment(5L, 9L);
+        Mockito.verify(problemDao).updateDepartmentAndSourceNumber(5L, 9L, 1);
         ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
         Mockito.verify(auditLogService).record(Mockito.eq(2L), Mockito.eq("PROBLEM_DEPARTMENT_CHANGED"),
                 Mockito.eq("PROBLEM"), Mockito.eq(5L), detail.capture());
@@ -729,7 +733,33 @@ class ProblemServiceImplTest {
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
 
         assertThrows(BizException.class, () -> service.changeDepartment(5L, 9L, superAdmin));
-        Mockito.verify(problemDao, Mockito.never()).updateDepartment(Mockito.anyLong(), Mockito.anyLong());
+        Mockito.verify(problemDao, Mockito.never()).updateDepartmentAndSourceNumber(
+                Mockito.anyLong(), Mockito.anyLong(), Mockito.anyInt());
+    }
+
+    @Test
+    void changeDepartment_reassignsNumberToTailOfNewDepartment() {
+        Problem existing = existingShortAnswer();   // id=5, departmentId=10
+        existing.setSourceNumber(5);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(activeDepartment(20L, "자금팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(20L)).thenReturn(11);
+
+        int assigned = service.changeDepartment(5L, 20L, actor);
+
+        assertEquals(12, assigned);
+        Mockito.verify(problemDao).updateDepartmentAndSourceNumber(5L, 20L, 12);
+    }
+
+    @Test
+    void changeDepartment_intoEmptyDepartment_startsAtOne() {
+        Problem existing = existingShortAnswer();
+        existing.setSourceNumber(5);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(activeDepartment(20L, "자금팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(20L)).thenReturn(null);
+
+        assertEquals(1, service.changeDepartment(5L, 20L, actor));
     }
 
     /**
@@ -738,11 +768,7 @@ class ProblemServiceImplTest {
      */
     @Test
     void create_asSuperAdmin_usesRequestedDepartment() {
-        Department target = new Department();
-        target.setId(9L);
-        target.setName("영업팀");
-        target.setStatus(Status.ACTIVE);
-        Mockito.when(departmentDao.findById(9L)).thenReturn(target);
+        Mockito.when(departmentDao.findById(9L)).thenReturn(activeDepartment(9L, "영업팀"));
         AuthUser superAdmin = new AuthUser(2L, "admin", "총괄관리자", UserRole.SUPER_ADMIN, 1L, false);
         ProblemCreateRequest request = shortAnswerRequest();
 

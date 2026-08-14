@@ -65,8 +65,10 @@
         UPDATE problems SET status = #{status}, updated_at = now() WHERE id = #{id}
     </update>
 
-    <update id="updateDepartment">
-        UPDATE problems SET department_id = #{departmentId}, updated_at = now() WHERE id = #{id}
+    <update id="updateDepartmentAndSourceNumber">
+        UPDATE problems
+        SET department_id = #{departmentId}, source_number = #{sourceNumber}, updated_at = now()
+        WHERE id = #{id}
     </update>
 
     <!-- 목록과 카운트가 반드시 같은 조건을 써야 한다. 두 벌로 갈라지면 총건수와 실제 결과가

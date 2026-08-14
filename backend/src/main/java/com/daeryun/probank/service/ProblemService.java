@@ -17,7 +17,8 @@ public interface ProblemService {
                                                               String keyword, int page, int size);
     com.daeryun.probank.dto.problem.ProblemDetailResponse getDetail(Long id, AuthUser actor);
 
-    void changeDepartment(Long id, Long departmentId, AuthUser actor);
+    /** @return 새 부서에서 새로 부여된 문항 번호 */
+    int changeDepartment(Long id, Long departmentId, AuthUser actor);
 
     int nextSourceNumber(Long departmentId, AuthUser actor);
 }

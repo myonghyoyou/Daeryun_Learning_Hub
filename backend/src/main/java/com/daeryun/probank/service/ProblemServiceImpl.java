@@ -480,7 +480,7 @@ public class ProblemServiceImpl implements ProblemService {
      */
     @Override
     @Transactional
-    public void changeDepartment(Long id, Long departmentId, AuthUser actor) {
+    public int changeDepartment(Long id, Long departmentId, AuthUser actor) {
         Problem existing = problemDao.findById(id);
         if (existing == null) {
             throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "존재하지 않는 문제입니다.");
@@ -498,9 +498,16 @@ public class ProblemServiceImpl implements ProblemService {
         }
 
         Long from = existing.getDepartmentId();
-        problemDao.updateDepartment(id, departmentId);
+        // 옮겨 간 부서 기준으로 번호를 다시 매긴다. 원래 번호를 그대로 들고 가면 그 부서에
+        // 같은 번호가 있을 때 UNIQUE 제약에 걸린다(spec D6).
+        Integer max = problemDao.findMaxSourceNumber(departmentId);
+        int assigned = max == null ? 1 : max + 1;
+        problemDao.updateDepartmentAndSourceNumber(id, departmentId, assigned);
         auditLogService.record(actor.getUserId(), "PROBLEM_DEPARTMENT_CHANGED", "PROBLEM", id,
-                "{\"from\":" + from + ",\"to\":" + departmentId + "}");
+                "{\"from\":" + from + ",\"to\":" + departmentId
+                        + ",\"sourceNumberFrom\":" + existing.getSourceNumber()
+                        + ",\"sourceNumberTo\":" + assigned + "}");
+        return assigned;
     }
 
     /**

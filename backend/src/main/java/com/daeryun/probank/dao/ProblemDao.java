@@ -31,7 +31,13 @@ public interface ProblemDao {
                    @Param("tag") String tag,
                    @Param("keyword") String keyword);
 
-    void updateDepartment(@Param("id") Long id, @Param("departmentId") Long departmentId);
+    /**
+     * 부서와 문항 번호를 함께 바꾼다. 부서만 바꾸면 옮겨 간 부서에 같은 번호가 있을 때
+     * UNIQUE 제약에 걸리므로, 이동과 재부여는 한 문장이어야 한다.
+     */
+    void updateDepartmentAndSourceNumber(@Param("id") Long id,
+                                          @Param("departmentId") Long departmentId,
+                                          @Param("sourceNumber") Integer sourceNumber);
 
     /** 풀이용 전사 공통 목록: status = ACTIVE 만, 정답 비노출. keyword/tag 는 선택 필터. */
     List<com.daeryun.probank.dto.solve.ProblemSolveListItem> findAllActive(@Param("keyword") String keyword,
