@@ -762,6 +762,50 @@ class ProblemServiceImplTest {
         assertEquals(1, service.changeDepartment(5L, 20L, actor));
     }
 
+    @Test
+    void changeDepartment_intoSameDepartment_isRejectedInsteadOfRenumbering() {
+        // 옮길 부서 Select 는 지금 부서까지 그대로 보여 주고, 수정 화면은 현재 부서를 표시하지
+        // 않는다. 그래서 관리자는 어느 항목이 no-op 인지 볼 수 없다. 가드가 없으면
+        // findMaxSourceNumber 가 이 문제 자신의 행을 세서 원래 번호를 max + 1 로 덮어쓴다.
+        Problem existing = existingShortAnswer();   // id=5, departmentId=10
+        existing.setSourceNumber(7);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(10L)).thenReturn(activeDepartment(10L, "총무팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(7);
+
+        BizException thrown = assertThrows(BizException.class,
+                () -> service.changeDepartment(5L, 10L, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertEquals("이미 총무팀 소속입니다.", thrown.getMessage());
+        Mockito.verify(problemDao, Mockito.never()).updateDepartmentAndSourceNumber(
+                Mockito.anyLong(), Mockito.anyLong(), Mockito.anyInt());
+        Mockito.verify(auditLogService, Mockito.never()).record(Mockito.anyLong(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.anyLong(), Mockito.anyString());
+    }
+
+    @Test
+    void changeDepartment_duplicateSourceNumber_returnsKoreanMessage() {
+        // 두 관리자가 같은 부서로 동시에 옮기면 같은 max 를 읽고 같은 번호를 쓴다. 번역이
+        // 없으면 진 쪽에게 -1 "처리 중 오류가 발생하였습니다" 만 나간다 — create/update 와
+        // 같은 안내여야 한다.
+        Problem existing = existingShortAnswer();   // id=5, departmentId=10
+        existing.setSourceNumber(5);
+        Mockito.when(problemDao.findById(5L)).thenReturn(existing);
+        Mockito.when(departmentDao.findById(20L)).thenReturn(activeDepartment(20L, "자금팀"));
+        Mockito.when(problemDao.findMaxSourceNumber(20L)).thenReturn(11);
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemDao).updateDepartmentAndSourceNumber(5L, 20L, 12);
+
+        BizException thrown = assertThrows(BizException.class,
+                () -> service.changeDepartment(5L, 20L, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertEquals("자금팀 12번은 이미 있습니다. 다른 번호를 입력하세요.", thrown.getMessage());
+        Mockito.verify(auditLogService, Mockito.never()).record(Mockito.anyLong(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.anyLong(), Mockito.anyString());
+    }
+
     /**
      * 개별 등록에서도 총괄 관리자는 다른 부서 명의로 넣을 수 있어야 한다. 수동 입력 대상
      * 69문항이 12개 팀에 흩어져 있는데, 이게 없으면 전부 등록자 부서로 들어간다.

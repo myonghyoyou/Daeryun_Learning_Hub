@@ -521,12 +521,28 @@ public class ProblemServiceImpl implements ProblemService {
                     "비활성 부서로는 옮길 수 없습니다: " + department.getName());
         }
 
+        // 이미 그 부서인데 그대로 "이동"하면 아래 findMaxSourceNumber 가 이 문제 자신의 행까지
+        // 세므로 max + 1 이 원래 번호를 덮어쓴다(부서 꼬리에 있던 문제는 정확히 1씩 밀린다).
+        // spec D5 에 따라 옛 번호는 영구히 비게 되므로, 조용한 no-op 대신 거절한다 — no-op 로
+        // 두면 "부서를 옮겼습니다" 라는 거짓 안내가 나간다.
+        if (departmentId.equals(existing.getDepartmentId())) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                    "이미 " + department.getName() + " 소속입니다.");
+        }
+
         Long from = existing.getDepartmentId();
         // 옮겨 간 부서 기준으로 번호를 다시 매긴다. 원래 번호를 그대로 들고 가면 그 부서에
         // 같은 번호가 있을 때 UNIQUE 제약에 걸린다(spec D6).
         Integer max = problemDao.findMaxSourceNumber(departmentId);
         int assigned = max == null ? 1 : max + 1;
-        problemDao.updateDepartmentAndSourceNumber(id, departmentId, assigned);
+        // 두 관리자가 같은 부서로 동시에 옮기면 같은 max 를 읽어 같은 번호를 쓴다. 진 쪽에게
+        // create/update 와 같은 한국어 안내가 나가야 한다. 부서명은 이미 손에 있으므로 그대로
+        // 넘긴다 — duplicateSourceNumber() 는 DB 를 건드리지 않는다(주석 참고).
+        try {
+            problemDao.updateDepartmentAndSourceNumber(id, departmentId, assigned);
+        } catch (DuplicateKeyException e) {
+            throw duplicateSourceNumber(e, department.getName(), assigned);
+        }
         auditLogService.record(actor.getUserId(), "PROBLEM_DEPARTMENT_CHANGED", "PROBLEM", id,
                 "{\"from\":" + from + ",\"to\":" + departmentId
                         + ",\"sourceNumberFrom\":" + existing.getSourceNumber()
