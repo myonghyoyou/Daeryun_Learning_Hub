@@ -127,4 +127,10 @@
         LIMIT #{limit}
     </select>
 
+    <!-- 상태로 거르지 않는다. 보관된 문제도 번호를 점유하고 번호는 재사용하지 않는다(spec D5).
+         걸러 내면 보관된 12번과 같은 번호를 새로 발급해 UNIQUE 제약에 걸린다. -->
+    <select id="findMaxSourceNumber" resultType="java.lang.Integer">
+        SELECT MAX(source_number) FROM problems WHERE department_id = #{departmentId}
+    </select>
+
 </mapper>

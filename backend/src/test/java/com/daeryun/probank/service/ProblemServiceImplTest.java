@@ -852,4 +852,31 @@ class ProblemServiceImplTest {
 
         assertThrows(DuplicateKeyException.class, () -> service.create(request, null, actor));
     }
+
+    @Test
+    void nextSourceNumber_isLastPlusOne() {
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(12);
+
+        assertEquals(13, service.nextSourceNumber(10L, actor));
+    }
+
+    @Test
+    void nextSourceNumber_firstProblemInDepartment_isOne() {
+        // 아직 번호가 하나도 없으면 SQL 의 MAX 가 NULL 을 돌려준다.
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(null);
+
+        assertEquals(1, service.nextSourceNumber(10L, actor));
+    }
+
+    @Test
+    void nextSourceNumber_deptAdminIsForcedToOwnDepartment() {
+        // 요청한 999 를 버리고 세션 부서(10)로 조회해야 한다.
+        AuthUser deptAdmin = new AuthUser(1L, "1001", "부서관리자", UserRole.DEPT_ADMIN, 10L, false);
+        Mockito.when(problemDao.findMaxSourceNumber(10L)).thenReturn(3);
+
+        assertEquals(4, service.nextSourceNumber(999L, deptAdmin));
+
+        Mockito.verify(problemDao).findMaxSourceNumber(10L);
+        Mockito.verify(problemDao, Mockito.never()).findMaxSourceNumber(999L);
+    }
 }

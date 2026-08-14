@@ -105,6 +105,12 @@ public class ProblemController {
         return ResponseEntity.ok(ResponseDto.ok());
     }
 
+    @GetMapping("/next-source-number")
+    public ResponseEntity<ResponseDto<?>> nextSourceNumber(@RequestParam(required = false) Long departmentId,
+                                                             @LoginUser AuthUser actor) {
+        return ResponseEntity.ok(ResponseDto.ok(problemService.nextSourceNumber(departmentId, actor)));
+    }
+
     @PostMapping("/excel-upload")
     public ResponseEntity<ResponseDto<?>> uploadExcel(@RequestParam("file") MultipartFile file,
                                                         @RequestParam(required = false) Long departmentId,

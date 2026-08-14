@@ -18,4 +18,6 @@ public interface ProblemService {
     com.daeryun.probank.dto.problem.ProblemDetailResponse getDetail(Long id, AuthUser actor);
 
     void changeDepartment(Long id, Long departmentId, AuthUser actor);
+
+    int nextSourceNumber(Long departmentId, AuthUser actor);
 }

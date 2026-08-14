@@ -46,4 +46,10 @@ public interface ProblemDao {
 
     /** 최근 등록 문제. departmentId 가 null 이면 전 부서. 스코프는 호출부가 계산해 넘긴다. */
     List<ProblemListItem> findRecent(@Param("departmentId") Long departmentId, @Param("limit") int limit);
+
+    /**
+     * 그 부서에서 가장 큰 문항 번호. 없으면 null.
+     * 보관(ARCHIVED)된 문제도 번호를 점유하므로 상태로 거르지 않는다(spec D5).
+     */
+    Integer findMaxSourceNumber(@Param("departmentId") Long departmentId);
 }

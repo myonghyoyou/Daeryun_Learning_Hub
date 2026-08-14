@@ -502,4 +502,18 @@ public class ProblemServiceImpl implements ProblemService {
         auditLogService.record(actor.getUserId(), "PROBLEM_DEPARTMENT_CHANGED", "PROBLEM", id,
                 "{\"from\":" + from + ",\"to\":" + departmentId + "}");
     }
+
+    /**
+     * 등록 폼이 번호 칸을 미리 채우는 데 쓴다. 서버가 저장 시점에 자동으로 채우지는
+     * 않는다 — 관리자가 종이 문서를 보고 다른 번호로 고칠 수 있어야 하기 때문이다.
+     *
+     * 두 명이 동시에 열면 같은 값을 받는다. 그건 UNIQUE 제약이 막고, 나중에 저장한
+     * 쪽이 "…12번은 이미 있습니다" 를 받는다(Task 1).
+     */
+    @Override
+    public int nextSourceNumber(Long departmentId, AuthUser actor) {
+        Long scope = owningDepartmentResolver.resolve(departmentId, actor);
+        Integer max = problemDao.findMaxSourceNumber(scope);
+        return max == null ? 1 : max + 1;
+    }
 }
