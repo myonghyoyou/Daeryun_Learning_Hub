@@ -25,6 +25,8 @@ const TEMPLATE_COLUMNS = [
   "정답",
   "해설",
   "태그",
+  // 13번째 컬럼. 서버의 COL_SOURCE_NUMBER(=12, 0부터) 와 같은 자리여야 한다.
+  "문항번호",
 ];
 const TEMPLATE_EXAMPLE_ROW = [
   "MCQ_SINGLE",
@@ -39,6 +41,7 @@ const TEMPLATE_EXAMPLE_ROW = [
   "1",
   "대한민국의 수도는 서울이다.",
   "지리,상식",
+  "1",
 ];
 
 export default function ProblemExcelUploadPage() {
@@ -128,6 +131,10 @@ export default function ProblemExcelUploadPage() {
         <p className="mt-1 text-body-small text-ink-muted">
           정답: 객관식(MCQ_SINGLE·MCQ_MULTI)과 OX는 보기 번호를 1부터 입력하며, 복수 정답은 콤마로 구분합니다.
           주관식(SHORT_ANSWER)은 콤마로 구분한 허용 정답 목록입니다.
+        </p>
+        <p className="mt-2 text-body-small font-semibold text-ink-strong">
+          문항번호(마지막 13번째 컬럼)는 필수입니다. 종이 문제은행에 적힌 번호를 그대로 입력하며, 같은 부서
+          안에서 번호가 겹치면 그 행은 저장되지 않습니다. 비워 두면 해당 행은 모두 실패합니다.
         </p>
         <p className="mt-2 text-body-small font-semibold text-danger-text">
           빈칸 채우기(FILL_BLANK)는 엑셀 업로드를 지원하지 않습니다. 개별 등록/수정 화면을 이용하세요.
