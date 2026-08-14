@@ -170,6 +170,38 @@ class ProblemSourceNumberDaoTest {
         assertNotEquals(first.getId(), second.getId());
     }
 
+    @Test
+    void updateDepartmentAndSourceNumber_writesBothColumnsToTheRow() {
+        // 이 SQL 은 서비스 단위 테스트의 Mockito.verify 로만 고정돼 있었다 — 목은 자바 호출만
+        // 확인할 뿐 SQL 은 한 글자도 실행하지 않는다. 두 컬럼을 서로 바꿔 써도 전 테스트가
+        // 초록이었다. 부서와 번호가 <b>둘 다</b> 바뀌었는지 실제 행에서 읽어 확인한다.
+        Problem problem = newProblem(departmentId, 3);
+        problemDao.insert(problem);
+        Department target = insertDepartment();
+
+        problemDao.updateDepartmentAndSourceNumber(problem.getId(), target.getId(), 41);
+
+        Problem reloaded = problemDao.findById(problem.getId());
+        assertEquals(target.getId(), reloaded.getDepartmentId(), "부서가 옮겨져야 한다");
+        assertEquals(Integer.valueOf(41), reloaded.getSourceNumber(), "번호가 새 부서 기준으로 다시 매겨져야 한다");
+    }
+
+    @Test
+    void update_persistsSourceNumber() {
+        // <update id="update"> 에 source_number = #{sourceNumber} 가 들어갔지만 그 값이 행까지
+        // 가는지 단언하는 테스트가 없었다. 이 절이 빠지면 수정 화면의 번호 변경이 조용히 사라진다.
+        Problem problem = newProblem(departmentId, 3);
+        problemDao.insert(problem);
+
+        problem.setContent("수정된 문제");
+        problem.setSourceNumber(44);
+        problemDao.update(problem);
+
+        Problem reloaded = problemDao.findById(problem.getId());
+        assertEquals(Integer.valueOf(44), reloaded.getSourceNumber());
+        assertEquals("수정된 문제", reloaded.getContent());
+    }
+
     private Department insertDepartment() {
         Department department = new Department();
         department.setName("테스트부서");

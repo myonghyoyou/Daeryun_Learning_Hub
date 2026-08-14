@@ -3,6 +3,7 @@ package com.daeryun.probank.service;
 import com.daeryun.probank.common.AuthUser;
 import com.daeryun.probank.common.ErrorCode;
 import com.daeryun.probank.dao.DepartmentDao;
+import com.daeryun.probank.dao.ProblemDao;
 import com.daeryun.probank.dao.UserDao;
 import com.daeryun.probank.domain.Department;
 import com.daeryun.probank.domain.ProblemType;
@@ -10,6 +11,7 @@ import com.daeryun.probank.domain.Status;
 import com.daeryun.probank.domain.User;
 import com.daeryun.probank.domain.UserRole;
 import com.daeryun.probank.dto.problem.ProblemCreateRequest;
+import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.exception.BizException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,9 @@ class ProblemServiceDuplicateSourceNumberIntegrationTest {
     @Autowired
     private UserDao userDao;
 
+    @Autowired
+    private ProblemDao problemDao;
+
     private Long departmentId;
     private AuthUser actor;
 
@@ -78,6 +83,33 @@ class ProblemServiceDuplicateSourceNumberIntegrationTest {
         assertEquals("테스트부서 5번은 이미 있습니다. 다른 번호를 입력하세요.", thrown.getMessage());
         assertTrue(thrown.getMessage().contains("테스트부서"),
                 "관리자가 어느 부서의 몇 번인지 알아야 고칠 수 있다: " + thrown.getMessage());
+    }
+
+    @Test
+    void update_duplicateSourceNumber_returnsKoreanMessageWithDepartmentName() {
+        // create() 와 update() 는 각자 쓰기 전에 부서명을 읽는다. QA-1 을 막으려고 쓴 테스트가
+        // create() 쪽만 고정하면 update() 의 같은 실수는 다시 브라우저까지 갈 수 있다.
+        // 5번과 6번을 만든 뒤 6번을 5번으로 고치면 UNIQUE 제약에 걸린다.
+        problemService.create(request(5), departmentId, actor);
+        problemService.create(request(6), departmentId, actor);
+        Long secondId = problemIdWithSourceNumber(6);
+
+        BizException thrown = assertThrows(BizException.class,
+                () -> problemService.update(secondId, request(5), actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertEquals("테스트부서 5번은 이미 있습니다. 다른 번호를 입력하세요.", thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("테스트부서"),
+                "관리자가 어느 부서의 몇 번인지 알아야 고칠 수 있다: " + thrown.getMessage());
+    }
+
+    /** 이 부서에 방금 만든 문제 중 해당 번호를 가진 행의 id. create() 가 id 를 돌려주지 않는다. */
+    private Long problemIdWithSourceNumber(Integer sourceNumber) {
+        return problemDao.findRecent(departmentId, 10).stream()
+                .map(ProblemListItem::getId)
+                .filter(id -> sourceNumber.equals(problemDao.findById(id).getSourceNumber()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(sourceNumber + "번 문제를 찾지 못했다"));
     }
 
     private ProblemCreateRequest request(Integer sourceNumber) {
