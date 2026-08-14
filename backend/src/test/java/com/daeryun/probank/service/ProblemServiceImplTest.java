@@ -23,10 +23,12 @@ import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.dto.problem.ProblemPageResponse;
 import com.daeryun.probank.exception.BizException;
+import com.daeryun.probank.common.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -87,6 +89,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.MCQ_SINGLE);
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("1", false), choice("2", true)));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -122,6 +125,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.OX);
         request.setContent("지구는 둥글다.");
         request.setChoices(Arrays.asList(choice("O", true), choice("X", false)));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -165,6 +169,7 @@ class ProblemServiceImplTest {
         blank2.setAnswerText("대한민국");
         request.setBlanks(Arrays.asList(blank1, blank2));
         request.setBlankRevealCount(1);
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -272,6 +277,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.singletonList("서울"));
+        request.setSourceNumber(1);
 
         service.create(request, null, otherDeptActor);
 
@@ -344,6 +350,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.MCQ_SINGLE);
         request.setContent("수정된 문제");
         request.setChoices(Arrays.asList(choice("1", false), choice("2", true)));
+        request.setSourceNumber(1);
 
         service.update(5L, request, actor);
 
@@ -406,6 +413,7 @@ class ProblemServiceImplTest {
         request.setContent("대한민국의 수도는?");
         request.setAnswers(Collections.singletonList("서울"));
         request.setImageUrl(imageUrl);
+        request.setSourceNumber(1);
         return request;
     }
 
@@ -485,6 +493,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("  대한민국의 수도는?  ");
         request.setAnswers(Collections.singletonList("  서울  "));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -503,6 +512,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.MCQ_SINGLE);
         request.setContent("1+1=?");
         request.setChoices(Arrays.asList(choice("  1  ", false), choice("  2  ", true)));
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -522,6 +532,7 @@ class ProblemServiceImplTest {
         blank.setAnswerText("  서울  ");
         request.setBlanks(Collections.singletonList(blank));
         request.setBlankRevealCount(1);
+        request.setSourceNumber(1);
 
         service.create(request, null, actor);
 
@@ -538,6 +549,7 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("  수정된 문제  ");
         request.setAnswers(Collections.singletonList("  부산  "));
+        request.setSourceNumber(1);
 
         service.update(5L, request, actor);
 
@@ -564,6 +576,7 @@ class ProblemServiceImplTest {
             request.setContent("대한민국의 수도는?");
             request.setAnswers(Collections.singletonList("서울"));
             request.setTags(Collections.singletonList("I"));
+            request.setSourceNumber(1);
 
             service.create(request, null, actor);
 
@@ -766,6 +779,77 @@ class ProblemServiceImplTest {
         request.setType(ProblemType.SHORT_ANSWER);
         request.setContent("수도는?");
         request.setAnswers(Collections.singletonList("서울"));
+        request.setSourceNumber(1);
         return request;
+    }
+
+    // --- 출처 문항 번호 (source_number) ---
+
+    @Test
+    void create_withoutSourceNumber_isRejected() {
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(null);
+
+        BizException thrown = assertThrows(BizException.class, () -> service.create(request, null, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        Mockito.verify(problemDao, Mockito.never()).insert(Mockito.any());
+    }
+
+    @Test
+    void create_withZeroOrNegativeSourceNumber_isRejected() {
+        for (int bad : new int[]{0, -1}) {
+            ProblemCreateRequest request = shortAnswerRequest();
+            request.setSourceNumber(bad);
+            assertThrows(BizException.class, () -> service.create(request, null, actor));
+        }
+    }
+
+    @Test
+    void update_withoutSourceNumber_isRejectedToo() {
+        // 등록과 수정에 같은 규칙을 적용한다. 예외를 기억하지 않아도 되도록.
+        Mockito.when(problemDao.findById(5L)).thenReturn(existingShortAnswer());
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(null);
+
+        assertThrows(BizException.class, () -> service.update(5L, request, actor));
+    }
+
+    @Test
+    void create_persistsSourceNumber() {
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(7);
+
+        service.create(request, null, actor);
+
+        ArgumentCaptor<Problem> captor = ArgumentCaptor.forClass(Problem.class);
+        Mockito.verify(problemDao).insert(captor.capture());
+        assertEquals(Integer.valueOf(7), captor.getValue().getSourceNumber());
+    }
+
+    @Test
+    void create_duplicateNumber_isReportedInKoreanNotAsGenericFailure() {
+        // DB UNIQUE 위반을 그대로 두면 GlobalExceptionHandler 의 마지막 그물에 걸려
+        // "처리 중 오류가 발생하였습니다"(-1) 가 나간다 — 무엇이 문제인지 알 수 없다.
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(12);
+        Mockito.doThrow(new DuplicateKeyException("uq_problems_department_source_number"))
+                .when(problemDao).insert(Mockito.any());
+
+        BizException thrown = assertThrows(BizException.class, () -> service.create(request, null, actor));
+
+        assertEquals(ErrorCode.INPUT_VALUE_INVALID, thrown.getErrorCode());
+        assertTrue(thrown.getMessage().contains("12"), "메시지가 어떤 번호가 겹쳤는지 알려야 한다: " + thrown.getMessage());
+    }
+
+    @Test
+    void create_duplicateFromAnotherConstraint_isNotBlamedOnTheNumber() {
+        // 이 테이블의 다른 UNIQUE 위반까지 "번호가 겹쳤다"고 말하면 엉뚱한 곳을 고치게 된다.
+        ProblemCreateRequest request = shortAnswerRequest();
+        request.setSourceNumber(12);
+        DuplicateKeyException other = new DuplicateKeyException("uq_some_other_constraint");
+        Mockito.doThrow(other).when(problemDao).insert(Mockito.any());
+
+        assertThrows(DuplicateKeyException.class, () -> service.create(request, null, actor));
     }
 }

@@ -40,21 +40,24 @@
 
     <insert id="insert" parameterType="Problem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO problems
-            (type, content, image_url, reference_text, explanation, blank_reveal_count, status, department_id, created_by)
+            (type, content, image_url, reference_text, explanation, blank_reveal_count, status,
+             department_id, source_number, created_by)
         VALUES
-            (#{type}, #{content}, #{imageUrl}, #{referenceText}, #{explanation}, #{blankRevealCount}, #{status}, #{departmentId}, #{createdBy})
+            (#{type}, #{content}, #{imageUrl}, #{referenceText}, #{explanation}, #{blankRevealCount}, #{status},
+             #{departmentId}, #{sourceNumber}, #{createdBy})
     </insert>
 
     <select id="findById" resultType="Problem">
         SELECT id, type, content, image_url, reference_text, explanation, blank_reveal_count,
-               status, department_id, created_by, created_at, updated_at
+               status, department_id, source_number, created_by, created_at, updated_at
         FROM problems WHERE id = #{id}
     </select>
 
     <update id="update" parameterType="Problem">
         UPDATE problems
         SET content = #{content}, image_url = #{imageUrl}, reference_text = #{referenceText},
-            explanation = #{explanation}, blank_reveal_count = #{blankRevealCount}, updated_at = now()
+            explanation = #{explanation}, blank_reveal_count = #{blankRevealCount},
+            source_number = #{sourceNumber}, updated_at = now()
         WHERE id = #{id}
     </update>
 

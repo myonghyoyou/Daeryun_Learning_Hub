@@ -17,6 +17,7 @@ import com.daeryun.probank.dto.problem.ProblemDetailResponse;
 import com.daeryun.probank.dto.problem.ProblemListItem;
 import com.daeryun.probank.dto.problem.ProblemPageResponse;
 import com.daeryun.probank.exception.BizException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,8 @@ public class ProblemServiceImpl implements ProblemService {
     private static final int MAX_ANSWER_TEXT_LENGTH = 500; // problem_answers/problem_blanks.answer_text VARCHAR(500)
     private static final int MAX_BLANK_KEY_LENGTH = 50;    // problem_blanks.blank_key VARCHAR(50)
 
+    private static final String SOURCE_NUMBER_UNIQUE_CONSTRAINT = "uq_problems_department_source_number";
+
     private final ProblemDao problemDao;
     private final ProblemChoiceDao problemChoiceDao;
     private final ProblemAnswerDao problemAnswerDao;
@@ -90,6 +93,7 @@ public class ProblemServiceImpl implements ProblemService {
     public void create(ProblemCreateRequest request, Long departmentId, AuthUser actor) {
         normalize(request);
         validate(request);
+        validateSourceNumber(request.getSourceNumber());
         // 부서 검증은 어떤 행도 쓰기 전에 끝낸다.
         Long owningDepartmentId = owningDepartmentResolver.resolve(departmentId, actor);
 
@@ -106,8 +110,13 @@ public class ProblemServiceImpl implements ProblemService {
         // 파라미터로 받는 이유: 이 DTO 는 update() 와 공유되므로, 필드를 넣으면 수정 경로에도
         // 부서 지정 표면이 생긴다 — 부서 이동을 전용 엔드포인트로 분리한 이유와 같다.
         problem.setDepartmentId(owningDepartmentId);
+        problem.setSourceNumber(request.getSourceNumber());
         problem.setCreatedBy(actor.getUserId());
-        problemDao.insert(problem);
+        try {
+            problemDao.insert(problem);
+        } catch (DuplicateKeyException e) {
+            throw duplicateSourceNumber(e, owningDepartmentId, request.getSourceNumber());
+        }
 
         saveTypeSpecificData(problem.getId(), request);
         problemTagDao.replaceTags(problem.getId(), tagDao.findOrCreateByNames(normalizeTags(request.getTags())));
@@ -128,13 +137,19 @@ public class ProblemServiceImpl implements ProblemService {
         }
         normalize(request);
         validate(request);
+        validateSourceNumber(request.getSourceNumber());
 
         existing.setContent(request.getContent());
         existing.setImageUrl(request.getImageUrl());
         existing.setReferenceText(request.getReferenceText());
         existing.setExplanation(request.getExplanation());
         existing.setBlankRevealCount(request.getType() == ProblemType.FILL_BLANK ? request.getBlankRevealCount() : null);
-        problemDao.update(existing);
+        existing.setSourceNumber(request.getSourceNumber());
+        try {
+            problemDao.update(existing);
+        } catch (DuplicateKeyException e) {
+            throw duplicateSourceNumber(e, existing.getDepartmentId(), request.getSourceNumber());
+        }
 
         problemChoiceDao.deleteByProblemId(id);
         problemAnswerDao.deleteByProblemId(id);
@@ -426,6 +441,35 @@ public class ProblemServiceImpl implements ProblemService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    /**
+     * 번호는 등록·수정 모두 필수다(spec D2). 규칙이 하나여서 예외를 기억할 필요가 없다.
+     * 0 과 음수는 종이 문제은행의 문항 번호가 될 수 없다.
+     */
+    private void validateSourceNumber(Integer sourceNumber) {
+        if (sourceNumber == null) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "문항 번호를 입력하세요.");
+        }
+        if (sourceNumber < 1) {
+            throw new BizException(ErrorCode.INPUT_VALUE_INVALID, "문항 번호는 1 이상이어야 합니다.");
+        }
+    }
+
+    /**
+     * UNIQUE(department_id, source_number) 위반을 사람이 읽는 메시지로 바꾼다.
+     * 그대로 두면 GlobalExceptionHandler 의 @ExceptionHandler(Exception.class) 에 걸려
+     * MSG_PROC_FAIL(-1) "처리 중 오류가 발생하였습니다" 로만 나간다.
+     */
+    private BizException duplicateSourceNumber(DuplicateKeyException cause, Long departmentId, Integer sourceNumber) {
+        if (cause.getMessage() != null && !cause.getMessage().contains(SOURCE_NUMBER_UNIQUE_CONSTRAINT)) {
+            // 이 테이블의 다른 UNIQUE 위반이면 번호 탓으로 돌리지 않는다.
+            throw cause;
+        }
+        Department department = departmentDao.findById(departmentId);
+        String departmentName = department == null ? "해당 부서" : department.getName();
+        return new BizException(ErrorCode.INPUT_VALUE_INVALID,
+                departmentName + " " + sourceNumber + "번은 이미 있습니다. 다른 번호를 입력하세요.");
     }
 
     /**

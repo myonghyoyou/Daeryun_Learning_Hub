@@ -17,4 +17,5 @@ public class ProblemCreateRequest {
     private List<BlankInput> blanks;
     private Integer blankRevealCount;
     private List<String> tags;
+    private Integer sourceNumber;
 }
