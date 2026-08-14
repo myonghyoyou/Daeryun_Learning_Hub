@@ -35,6 +35,12 @@ export function changeProblemDepartment(id, departmentId) {
   return apiPut(`/api/admin/problems/${id}/department`, { departmentId: Number(departmentId) });
 }
 
+/** 등록 폼이 번호 칸을 미리 채우는 데 쓴다. 부서 관리자는 서버가 자기 부서로 강제한다. */
+export function fetchNextSourceNumber(departmentId) {
+  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
+  return apiGet(`/api/admin/problems/next-source-number${query}`);
+}
+
 export function archiveProblem(id) {
   return apiDelete(`/api/admin/problems/${id}`);
 }

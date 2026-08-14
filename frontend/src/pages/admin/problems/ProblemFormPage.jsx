@@ -5,6 +5,7 @@ import { Plus, Trash } from "@phosphor-icons/react";
 import {
   changeProblemDepartment,
   createProblem,
+  fetchNextSourceNumber,
   getProblem,
   updateProblem,
   uploadProblemImage,
@@ -107,6 +108,7 @@ export default function ProblemFormPage() {
   const [blankMode, setBlankMode] = useState("write");
   const [blankRevealCount, setBlankRevealCount] = useState(1);
   const [tagsInput, setTagsInput] = useState("");
+  const [sourceNumber, setSourceNumber] = useState("");
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -126,6 +128,7 @@ export default function ProblemFormPage() {
       setReferenceText(problem.referenceText ?? "");
       setExplanation(problem.explanation ?? "");
       setTagsInput((problem.tags ?? []).join(", "));
+      setSourceNumber(problem.sourceNumber == null ? "" : String(problem.sourceNumber));
       if (problem.type === "SHORT_ANSWER") {
         setAnswers(problem.answers?.length ? problem.answers : [""]);
       } else if (problem.type === "FILL_BLANK") {
@@ -345,6 +348,23 @@ export default function ProblemFormPage() {
     }
   }, [createDepartmentField.disabled, createDepartmentField.value]);
 
+  useEffect(() => {
+    // 수정 모드에서는 기존 번호를 덮어쓰면 안 된다.
+    if (isEdit || !createDepartmentId) return;
+    let cancelled = false;
+    fetchNextSourceNumber(createDepartmentId)
+      .then((next) => {
+        if (!cancelled) setSourceNumber(String(next));
+      })
+      .catch(() => {
+        // 실패해도 등록을 막지 않는다 — 관리자가 직접 넣으면 된다.
+        if (!cancelled) setSourceNumber("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, createDepartmentId]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     const formState = { type, content, choices, answers, blanks, blankRevealCount, tagsInput };
@@ -359,7 +379,7 @@ export default function ProblemFormPage() {
       return;
     }
 
-    const payload = buildProblemPayload({ ...formState, imageUrl, referenceText, explanation });
+    const payload = buildProblemPayload({ ...formState, imageUrl, referenceText, explanation, sourceNumber });
     setSaving(true);
     try {
       if (isEdit) {
@@ -419,8 +439,9 @@ export default function ProblemFormPage() {
     }
     setMoving(true);
     try {
-      await changeProblemDepartment(id, moveDepartmentId);
-      toast.success("문제의 귀속 부서를 변경했습니다.");
+      const moved = await changeProblemDepartment(id, moveDepartmentId);
+      toast.success(`부서를 옮겼습니다. 문항 번호가 ${moved.sourceNumber}번으로 바뀌었습니다.`);
+      setSourceNumber(String(moved.sourceNumber));
     } catch (error) {
       toast.error(resolveErrorMessage(error, "부서를 변경하지 못했습니다."));
     } finally {
@@ -485,6 +506,17 @@ export default function ProblemFormPage() {
             <p className="mt-1 text-body-small text-ink-muted">{createDepartmentField.helpText}</p>
           </div>
         )}
+
+        <Input
+          id="problem-source-number"
+          type="number"
+          min="1"
+          label="문항 번호"
+          required
+          value={sourceNumber}
+          onChange={(event) => setSourceNumber(event.target.value)}
+          className="w-40"
+        />
 
         <Textarea
           id="problem-content"
