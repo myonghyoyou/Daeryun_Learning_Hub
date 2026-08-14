@@ -350,15 +350,20 @@ export default function ProblemFormPage() {
 
   useEffect(() => {
     // 수정 모드에서는 기존 번호를 덮어쓰면 안 된다.
-    if (isEdit || !createDepartmentId) return;
+    if (isEdit) return;
+    // 부서를 바꿀 때마다 먼저 비운다 — 이전 부서에서 받은 번호가 남아 있으면 안 되고,
+    // 부서 선택을 취소했을 때도 번호가 남으면 안 된다.
+    setSourceNumber("");
+    if (!createDepartmentId) return;
     let cancelled = false;
     fetchNextSourceNumber(createDepartmentId)
       .then((next) => {
-        if (!cancelled) setSourceNumber(String(next));
+        // 관리자가 응답이 오기 전에 이미 번호를 입력했다면 덮어쓰지 않는다.
+        if (!cancelled) setSourceNumber((current) => (current === "" ? String(next) : current));
       })
       .catch(() => {
-        // 실패해도 등록을 막지 않는다 — 관리자가 직접 넣으면 된다.
-        if (!cancelled) setSourceNumber("");
+        // 실패해도 등록을 막지 않는다 — 관리자가 직접 넣으면 된다. 위에서 이미 비워뒀고
+        // 그 사이 입력한 값이 있을 수 있으니 여기서는 아무것도 하지 않는다(덮어쓰지 않는다).
       });
     return () => {
       cancelled = true;
@@ -515,7 +520,7 @@ export default function ProblemFormPage() {
           required
           value={sourceNumber}
           onChange={(event) => setSourceNumber(event.target.value)}
-          className="w-40"
+          className="mt-4 w-40"
         />
 
         <Textarea
