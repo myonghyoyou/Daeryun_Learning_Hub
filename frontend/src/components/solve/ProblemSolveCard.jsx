@@ -4,6 +4,7 @@ import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
+import SourceBadge from "@/components/ui/SourceBadge.jsx";
 import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/components/solve/choiceLayout.js";
 import { submitAttempt } from "@/api/solve.js";
 import { resolveErrorMessage } from "@/api/client.js";
@@ -84,9 +85,12 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
   return (
     <>
       <Surface className="p-5 md:p-6">
-        <span className="mb-3 inline-block rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
-          {problemTypeLabel(problem.type)}
-        </span>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="inline-block rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
+            {problemTypeLabel(problem.type)}
+          </span>
+          <SourceBadge item={problem} />
+        </div>
 
         {problem.imageUrl && (
           <img src={problem.imageUrl} alt="문제 이미지" className="mb-4 max-h-60 rounded-md border border-line-default" />

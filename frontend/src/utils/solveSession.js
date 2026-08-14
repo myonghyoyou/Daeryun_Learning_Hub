@@ -9,7 +9,15 @@
 export const SESSION_STORAGE_KEY = "solve-random-session";
 
 export function createSession(problems) {
-  const list = problems.map((p) => ({ id: p.id, type: p.type, content: p.content }));
+  // 결과 요약 화면이 출처 배지를 그리려면 이 두 값이 세션에 남아야 한다.
+  // sessionStorage 에 들어가므로 필요한 것만 골라 담는다.
+  const list = problems.map((p) => ({
+    id: p.id,
+    type: p.type,
+    content: p.content,
+    departmentName: p.departmentName,
+    sourceNumber: p.sourceNumber,
+  }));
   return {
     problemIds: list.map((p) => p.id),
     problems: list,

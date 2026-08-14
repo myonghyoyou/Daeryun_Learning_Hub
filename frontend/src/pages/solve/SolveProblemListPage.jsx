@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button.jsx";
 import Input from "@/components/ui/Input.jsx";
 import Select from "@/components/ui/Select.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
+import SourceBadge from "@/components/ui/SourceBadge.jsx";
 import SolveShell from "@/pages/solve/SolveShell.jsx";
 import { listSolveProblems } from "@/api/solve.js";
 import { listTagsInUse } from "@/api/problems.js";
@@ -134,6 +135,7 @@ export default function SolveProblemListPage() {
                   <span className="shrink-0 rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
                     {problemTypeLabel(problem.type)}
                   </span>
+                  <SourceBadge item={problem} />
                   <span className="line-clamp-2 flex-1 text-body text-ink-strong">{previewContent(problem.content)}</span>
                   {problem.tags?.length > 0 && (
                     <span className="hidden shrink-0 gap-1 sm:flex">
