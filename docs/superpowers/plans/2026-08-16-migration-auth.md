@@ -22,6 +22,7 @@
 - **성공 응답 본문**: 로그인 → `data:{name, role, mustChangePassword}`; 세션 → `data:{isLoggedIn,...}`; 로그아웃·비번변경 → `ok()`(= `{resultCode:200,resultMsg:"정상 처리되었습니다."}`, data 없음).
 - **게이트(Foundation)**: `/api/auth/login`·`/api/auth/session`은 공개(세션 불필요). `/api/auth/logout`·`/api/auth/change-password`는 세션 필요, change-password는 `mustChangePassword` 중에도 통과(`/api/auth/` 접두사).
 - **JWT 쿠키**: 로그인·비번변경 성공 시 `setSessionCookie(authUser)`; 로그아웃 시 `clearSessionCookie()`. (Foundation 제공.)
+- **Zod 미사용(이 서브플랜 한정)**: 스펙의 "Zod는 메커니즘일 뿐, 규칙·문구는 Spring과 동일" 원칙에 따른다. auth 요청은 Spring에 빈 검증이 없고 규칙·한국어 문구가 전부 서비스에 있으므로, Zod를 끼우면 오류 형태(`errorList`)가 먼저 나가 파리티가 깨진다. 라우트는 본문을 관대하게 읽고(`readJson`) 서비스 검사가 현재 문구를 낸다.
 - 커밋 메시지는 `feat:`/`test:`/`docs:` 영문 Conventional Commits.
 
 ## Foundation에서 소비하는 인터페이스 (이미 존재)
@@ -41,7 +42,7 @@
 | `web/lib/db/users.test.ts` | 위 함수 통합 테스트(특히 원자 잠금) | 2 |
 | `web/lib/auth/authService.ts` | login·sessionStatus·changePassword 로직 | 3 |
 | `web/lib/auth/authService.test.ts` | 서비스 통합 테스트(에러코드·잠금 에스컬레이션·비번변경 규칙) | 3 |
-| `web/lib/auth/authSchemas.ts` | Zod 입력 스키마 + 서비스 입출력 타입 | 3 |
+| `web/lib/auth/authSchemas.ts` | 서비스 입출력 타입 (Zod 없음 — 검증 규칙·문구는 서비스에, Spring과 동일) | 3 |
 | `web/lib/http/envelope.ts` | (수정) `ok()`의 NON_NULL을 `data != null`로 강화 | 3 |
 | `web/app/api/auth/login/route.ts` | POST 로그인 | 4 |
 | `web/app/api/auth/logout/route.ts` | POST 로그아웃 | 4 |
@@ -270,7 +271,7 @@ git commit -m "feat: add user dao with atomic account-lockout increment"
   - `login(db, input: LoginInput)` → `{ authUser: AuthUser; response: LoginResult }` (throws `BizError`).
   - `sessionStatus(db, authUser: AuthUser | null)` → `SessionStatus`.
   - `changePassword(db, authUser: AuthUser | null, newPassword: string)` → `AuthUser` (갱신본, throws `BizError`).
-  - `LoginInput`·`LoginResult`·`SessionStatus` 타입 + Zod `loginSchema`·`changePasswordSchema`.
+  - `LoginInput`·`LoginResult`·`SessionStatus` 타입.
 
 **배경(파리티):** 현재 `AuthServiceImpl`을 그대로 옮긴다. 세션 대신 JWT라, `login`/`changePassword`는 **쿠키를 직접 만지지 않고** 갱신된 `AuthUser`를 반환한다 — 라우트(Task 4·5)가 `setSessionCookie`로 발급한다.
 
@@ -421,18 +422,12 @@ Expected: 모듈 없음으로 실패.
 
 `web/lib/auth/authSchemas.ts`:
 ```ts
-import { z } from "zod";
 import type { UserRole } from "./types";
 
-export const loginSchema = z.object({
-  employeeNo: z.string().optional(),
-  password: z.string().optional(),
-});
+// Zod 스키마를 두지 않는 것은 의도다: Spring 도 이 요청들에 빈(bean) 검증이 없고,
+// 검증 규칙·한국어 메시지가 전부 서비스 계층에 있다(파리티). Zod 를 끼우면
+// 다른 형태의 오류(errorList)가 먼저 나가 현재 동작과 갈라진다.
 export type LoginInput = { employeeNo?: string; password?: string };
-
-export const changePasswordSchema = z.object({
-  newPassword: z.string().optional(),
-});
 
 export interface LoginResult {
   name: string;
@@ -475,7 +470,9 @@ export async function login(db: Db, input: LoginInput): Promise<{ authUser: Auth
   if (isBlank(input.employeeNo) || isBlank(input.password)) {
     throw new BizError(ErrorCode.INPUT_VALUE_INVALID, "사번과 비밀번호를 입력하세요.");
   }
-  const user = await findByEmployeeNo(db, input.employeeNo!.trim());
+  // 파리티: Spring 은 사번을 trim 하지 않고 원본 그대로 조회한다(trim 은 빈 값 검사에만 쓴다).
+  // " 1001 " 처럼 공백이 붙으면 조회 실패 → 1011 이 현재 동작이다.
+  const user = await findByEmployeeNo(db, input.employeeNo!);
   if (!user || user.status === "INACTIVE") {
     throw new BizError(ErrorCode.LOGIN_FAILED);
   }
@@ -566,12 +563,21 @@ import bcrypt from "bcryptjs";
 import { migrateTestDb, testDb, truncateAll } from "../../../../test/db";
 import { departments, users } from "../../../../lib/db/schema";
 
+// vi.mock 은 파일 최상단으로 호이스팅된다. 팩토리가 최상위 const/import 를 직접 참조하면
+// "Cannot access before initialization" 이 나므로, 스파이는 vi.hoisted 로 만들고
+// 실제 모듈이 필요한 팩토리는 async + 동적 import 를 쓴다(vitest 문서의 안전 패턴).
+const spies = vi.hoisted(() => ({ setSessionCookie: vi.fn(), clearSessionCookie: vi.fn() }));
+
 // getDb 를 테스트 DB 로 대체
-vi.mock("../../../../lib/db/client", () => ({ getDb: () => testDb() }));
+vi.mock("../../../../lib/db/client", async () => {
+  const { testDb } = await import("../../../../test/db");
+  return { getDb: () => testDb() };
+});
 // 쿠키 설정은 next/headers 를 쓰므로 스파이로 대체(라우트가 호출하는지만 확인)
-const setSessionCookie = vi.fn();
-const clearSessionCookie = vi.fn();
-vi.mock("../../../../lib/auth/session", () => ({ setSessionCookie: (u: unknown) => setSessionCookie(u), clearSessionCookie: () => clearSessionCookie() }));
+vi.mock("../../../../lib/auth/session", () => ({
+  setSessionCookie: spies.setSessionCookie,
+  clearSessionCookie: spies.clearSessionCookie,
+}));
 
 const db = testDb();
 async function seedUser() {
@@ -583,7 +589,7 @@ async function seedUser() {
 }
 
 beforeAll(async () => { await migrateTestDb(); process.env.SESSION_JWT_SECRET = "test-secret-at-least-32-bytes-long-000"; });
-beforeEach(async () => { await truncateAll(db); setSessionCookie.mockClear(); clearSessionCookie.mockClear(); });
+beforeEach(async () => { await truncateAll(db); spies.setSessionCookie.mockClear(); spies.clearSessionCookie.mockClear(); });
 
 function post(body: unknown): Request {
   return new Request("http://localhost/api/auth/login", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
@@ -596,7 +602,7 @@ describe("POST /api/auth/login", () => {
     const res = await POST(post({ employeeNo: "1001", password: "password1" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ resultCode: 200, resultMsg: "정상 처리되었습니다.", data: { name: "홍길동", role: "EMPLOYEE", mustChangePassword: false } });
-    expect(setSessionCookie).toHaveBeenCalledOnce();
+    expect(spies.setSessionCookie).toHaveBeenCalledOnce();
   });
 
   it("rejects a wrong password with 1011 and sets no cookie", async () => {
@@ -605,7 +611,7 @@ describe("POST /api/auth/login", () => {
     const res = await POST(post({ employeeNo: "1001", password: "wrong" }));
     expect(res.status).toBe(400);
     expect((await res.json()).resultCode).toBe(1011);
-    expect(setSessionCookie).not.toHaveBeenCalled();
+    expect(spies.setSessionCookie).not.toHaveBeenCalled();
   });
 
   it("treats a missing body as blank credentials (1000)", async () => {
@@ -707,12 +713,18 @@ import { migrateTestDb, testDb, truncateAll } from "../../../../test/db";
 import { departments, users } from "../../../../lib/db/schema";
 import type { AuthUser } from "../../../../lib/auth/types";
 
-let currentUser: AuthUser | null = null;
-const setSessionCookie = vi.fn();
-vi.mock("../../../../lib/db/client", () => ({ getDb: () => testDb() }));
+// vi.mock 호이스팅 안전 패턴(Task 4 와 동일): 가변 상태·스파이는 vi.hoisted 로.
+const state = vi.hoisted(() => ({
+  currentUser: null as unknown, // AuthUser | null — hoisted 블록에선 타입 참조 불가라 unknown 으로 두고 사용처에서 좁힌다
+  setSessionCookie: vi.fn(),
+}));
+vi.mock("../../../../lib/db/client", async () => {
+  const { testDb } = await import("../../../../test/db");
+  return { getDb: () => testDb() };
+});
 vi.mock("../../../../lib/auth/session", () => ({
-  getAuthUser: async () => currentUser,
-  setSessionCookie: (u: unknown) => setSessionCookie(u),
+  getAuthUser: async () => state.currentUser,
+  setSessionCookie: state.setSessionCookie,
 }));
 
 const db = testDb();
@@ -726,7 +738,7 @@ async function seedUser(mustChange = false) {
 }
 
 beforeAll(async () => { await migrateTestDb(); process.env.SESSION_JWT_SECRET = "test-secret-at-least-32-bytes-long-000"; });
-beforeEach(async () => { await truncateAll(db); currentUser = null; setSessionCookie.mockClear(); });
+beforeEach(async () => { await truncateAll(db); state.currentUser = null; state.setSessionCookie.mockClear(); });
 
 describe("GET /api/auth/session", () => {
   it("returns not-logged-in when there is no session", async () => {
@@ -738,7 +750,7 @@ describe("GET /api/auth/session", () => {
   });
   it("returns the logged-in shape with department name", async () => {
     const { u, dept } = await seedUser();
-    currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: false };
+    state.currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: false } satisfies AuthUser;
     const { GET } = await import("./route");
     const data = (await (await GET()).json()).data;
     expect(data.isLoggedIn).toBe(true);
@@ -749,15 +761,15 @@ describe("GET /api/auth/session", () => {
 describe("POST /api/auth/change-password", () => {
   it("changes password and re-issues the cookie", async () => {
     const { u, dept } = await seedUser(true);
-    currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true };
+    state.currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true } satisfies AuthUser;
     const { POST } = await import("../change-password/route");
     const res = await POST(new Request("http://localhost/api/auth/change-password", { method: "POST", body: JSON.stringify({ newPassword: "brandnew123" }), headers: { "content-type": "application/json" } }));
     expect(res.status).toBe(200);
-    expect(setSessionCookie).toHaveBeenCalledOnce();
-    expect(setSessionCookie.mock.calls[0][0].mustChangePassword).toBe(false);
+    expect(state.setSessionCookie).toHaveBeenCalledOnce();
+    expect((state.setSessionCookie.mock.calls[0][0] as AuthUser).mustChangePassword).toBe(false);
   });
   it("rejects change-password without a session (980)", async () => {
-    currentUser = null;
+    state.currentUser = null;
     const { POST } = await import("../change-password/route");
     const res = await POST(new Request("http://localhost/api/auth/change-password", { method: "POST", body: JSON.stringify({ newPassword: "brandnew123" }), headers: { "content-type": "application/json" } }));
     expect(res.status).toBe(401);
