@@ -435,6 +435,10 @@ export async function handleRoute(fn: () => Promise<unknown>): Promise<Response>
 }
 ```
 
+> **파리티 주의 — 두 가지 발산(의도적, 이후 서브플랜에서 처리):**
+> 1. **타입 불일치 HTTP 상태.** 현재 Java는 쿼리/경로 파라미터 타입 오류(`MethodArgumentTypeMismatchException`, 예: `createdFrom=2026-13-99`)만 **HTTP 400**을 내고 나머지 검증은 200이다. 위 `handleRoute`는 Zod 오류를 일괄 200으로 낸다. **프론트는 HTTP 상태가 아니라 `resultCode`로 분기하므로 화면 동작은 동일**하다(현재 코드 주석도 그렇게 명시). 다만 프록시·모니터링 집계까지 맞추려면, 쿼리/경로 파라미터를 검증하는 서브플랜에서 **파라미터 전용 검증 헬퍼가 ZodError를 400으로** 매핑하도록 둔다(본문 필드 검증은 200 유지). 이 결정은 해당 서브플랜의 체크리스트에 기록한다.
+> 2. **멀티파트.** 현재 `MultipartException`은 HTTP 200 + `FILE_REQUIRED`(1009) "파일을 업로드할 수 없습니다."를 낸다. 파일 업로드가 없는 Foundation의 `handleRoute`는 이를 다루지 않는다 — **엑셀 서브플랜**에서 같은 봉투로 추가한다.
+
 - [ ] **Step 4: 통과 확인 (GREEN)**
 
 Run: `cd web && pnpm test lib/http/errors.test.ts`
@@ -885,6 +889,12 @@ export async function getAuthUser(): Promise<AuthUser | null> {
 }
 
 // 로그인 성공 시(서브플랜 2) 호출. secure 는 SESSION_COOKIE_SECURE env 로 전환.
+//
+// 파리티 주의: 현재 changePassword 는 세션을 rotate 하고 mustChangePassword=false 로 갱신한
+// AuthUser 를 다시 넣어 게이트를 푼다(AuthServiceImpl). JWT 는 불변이므로, 서브플랜 2의
+// change-password 는 이 함수를 갱신된 AuthUser(mustChangePassword=false)로 다시 호출해
+// 새 토큰을 재발급해야 한다 — 그러지 않으면 기존 토큰이 계속 1012 로 막는다. 로그인 시 재발급이
+// 곧 세션 rotate(고정 공격 방지)에 대응한다.
 export async function setSessionCookie(user: AuthUser): Promise<void> {
   const store = await cookies();
   store.set(SESSION_COOKIE.name, await signSession(user), {
