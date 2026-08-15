@@ -22,6 +22,12 @@
 - **bcrypt**: `bcryptjs`. 프로덕션은 빈 DB로 시작(D8)하므로 해시 이전 없음. 테스트 시드는 `bcryptjs`로 직접 해싱.
 - 커밋 메시지는 `feat:`/`test:`/`chore:` 영문 Conventional Commits.
 
+**필요한 환경변수** (런타임·배포 시 주입, 세부 주입 방법은 컷오버 서브플랜):
+- `DATABASE_URL` — Supabase 트랜잭션 풀러 URL(6543). 테스트는 `test/db.ts` 기본값(probank_test) 사용.
+- `SESSION_JWT_SECRET` — JWT 서명 비밀(신규, 32바이트 이상). 현재 세션엔 없던 값이다.
+- `SESSION_COOKIE_SECURE` — `"true"`면 secure 쿠키(현재 `application.yml`과 동일 의미).
+- `BOOTSTRAP_ADMIN_EMPLOYEE_NO` / `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` — 부트스트랩 총괄관리자.
+
 ## 데이터 모델 — 현재 계약 발췌
 
 응답 봉투(현재 `ResponseDto`/`ErrorResponse` 모두 `resultCode`/`resultMsg`로 직렬화):
@@ -107,26 +113,28 @@ describe("sanity", () => {
     "bootstrap": "tsx scripts/bootstrap.ts"
   },
   "dependencies": {
-    "next": "15.1.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "drizzle-orm": "0.36.4",
-    "postgres": "3.4.5",
-    "jose": "5.9.6",
-    "bcryptjs": "2.4.3",
-    "zod": "3.23.8"
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19",
+    "drizzle-orm": "^0.36",
+    "postgres": "^3.4",
+    "jose": "^5",
+    "bcryptjs": "^2.4",
+    "zod": "^3.23"
   },
   "devDependencies": {
-    "typescript": "5.6.3",
-    "@types/node": "22.9.0",
-    "@types/react": "19.0.0",
-    "@types/bcryptjs": "2.4.6",
-    "vitest": "2.1.5",
-    "drizzle-kit": "0.28.1",
-    "tsx": "4.19.2"
+    "typescript": "^5.6",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/bcryptjs": "^2.4",
+    "vitest": "^2.1",
+    "drizzle-kit": "^0.28",
+    "tsx": "^4.19"
   }
 }
 ```
+
+> **버전 주의:** 위는 지시 범위다. **`drizzle-orm`과 `drizzle-kit`은 마이너 버전이 서로 맞물려야 한다**(예: orm 0.36 ↔ kit 0.28 계열). `pnpm install` 후 `pnpm drizzle:generate`가 동작하는지 확인하고, 어긋나면 두 패키지의 호환 짝으로 맞춘 뒤 실제 해석된 버전을 lockfile로 고정한다. `next`/`react`는 Next 15 + React 19 조합을 유지한다.
 
 `web/tsconfig.json`:
 ```json
@@ -169,13 +177,21 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   resolve: { alias: { "@": resolve(__dirname, ".") } },
-  test: { environment: "node", include: ["**/*.test.ts"] },
+  test: {
+    environment: "node",
+    include: ["**/*.test.ts"],
+    // 통합 테스트가 하나의 probank_test DB를 공유한다. 파일을 병렬로 돌리면 한 파일의
+    // truncateAll 이 다른 파일의 insert 를 지워 플래키해진다. 파일은 직렬로 실행한다.
+    fileParallelism: false,
+  },
 });
 ```
 
 `web/app/layout.tsx`:
 ```tsx
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+import type { ReactNode } from "react";
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
       <body>{children}</body>
@@ -404,6 +420,8 @@ export async function handleRoute(fn: () => Promise<unknown>): Promise<Response>
       return json(okMessage(error.errorCode.code, error.message), bizStatus(error.errorCode));
     }
     if (error instanceof ZodError) {
+      // 파리티 미세 갭: 현재 Java FieldError.value 는 거부된 입력값을 담지만, Zod 이슈는 값을
+      // 직접 주지 않아 null 로 둔다. 프론트는 field/reason 과 resultCode 로 분기하므로 화면엔 영향이 없다.
       const errorList = error.errors.map((e) => ({
         field: e.path.join("."),
         value: null,
@@ -455,10 +473,7 @@ Run:
 ```bash
 docker exec probank-postgres psql -U probank -c "CREATE DATABASE probank_test" || true
 ```
-`web/.env.test`(git 무시)에:
-```
-DATABASE_URL=postgres://probank:probank_dev@localhost:5434/probank_test
-```
+테스트는 `web/test/db.ts`가 `DATABASE_URL` 기본값(`postgres://probank:probank_dev@localhost:5434/probank_test`)을 쓰므로 별도 env 파일이 필요 없다. drizzle-kit 명령(Step 5)만 `DATABASE_URL`을 인라인으로 넘긴다.
 
 - [ ] **Step 2: 실패하는 통합 테스트 작성**
 
@@ -517,9 +532,8 @@ Expected: 모듈 없음으로 실패.
 ```ts
 import {
   pgTable, bigserial, varchar, text, integer, boolean, timestamp, bigint, jsonb,
-  uniqueIndex, index, primaryKey, unique,
+  index, primaryKey, unique,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 
 export const departments = pgTable("departments", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -814,6 +828,10 @@ export interface AuthUser {
 import { SignJWT, jwtVerify } from "jose";
 import type { AuthUser } from "./types";
 
+// 쿠키 이름·수명은 여기(Edge-safe, jose 만 의존)에 둔다. middleware 가 next/headers 를 끌어오지
+// 않고 이 상수를 쓸 수 있어야 하기 때문이다(next/headers 는 Edge 미들웨어에서 사용 불가).
+export const SESSION_COOKIE = { name: "session", maxAge: 90 * 60 } as const;
+
 const DEFAULT_TTL_SECONDS = 90 * 60; // 현재 세션 타임아웃 90분
 
 function secret(): Uint8Array {
@@ -850,10 +868,10 @@ export async function verifySession(token: string): Promise<AuthUser | null> {
 `web/lib/auth/session.ts`:
 ```ts
 import { cookies } from "next/headers";
-import { signSession, verifySession } from "./jwt";
+import { signSession, verifySession, SESSION_COOKIE } from "./jwt";
 import type { AuthUser } from "./types";
 
-export const SESSION_COOKIE = { name: "session", maxAge: 90 * 60 } as const;
+export { SESSION_COOKIE };
 
 export async function readAuthUser(cookieValue: string | undefined): Promise<AuthUser | null> {
   if (!cookieValue) return null;
@@ -970,7 +988,7 @@ Expected: 모듈 없음으로 실패.
 `web/lib/auth/gate.ts`:
 ```ts
 import { ErrorCode } from "../http/errorCode";
-import type { AuthUser, UserRole } from "./types";
+import type { AuthUser } from "./types";
 
 const PUBLIC_PATHS = new Set(["/api/auth/login", "/api/auth/session"]);
 
@@ -1014,9 +1032,8 @@ export function requireRole(user: AuthUser, ...roles: UserRole[]): void {
 `web/middleware.ts` (얇은 배선 — 순수 로직은 `evaluateGate`가 검증됨):
 ```ts
 import { NextResponse, type NextRequest } from "next/server";
-import { verifySession } from "./lib/auth/jwt";
+import { verifySession, SESSION_COOKIE } from "./lib/auth/jwt";
 import { evaluateGate } from "./lib/auth/gate";
-import { SESSION_COOKIE } from "./lib/auth/session";
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE.name)?.value;
