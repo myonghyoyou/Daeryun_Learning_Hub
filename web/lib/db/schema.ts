@@ -1,7 +1,8 @@
 import {
   pgTable, bigserial, varchar, text, integer, boolean, timestamp, bigint, jsonb,
-  index, primaryKey, unique,
+  index, primaryKey, unique, check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const departments = pgTable("departments", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -9,7 +10,9 @@ export const departments = pgTable("departments", {
   code: varchar("code", { length: 50 }).notNull().unique(),
   status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  statusCheck: check("departments_status_check", sql`${t.status} IN ('ACTIVE', 'INACTIVE')`),
+}));
 
 export const users = pgTable("users", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -25,7 +28,10 @@ export const users = pgTable("users", {
   lockedUntil: timestamp("locked_until"),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  roleCheck: check("users_role_check", sql`${t.role} IN ('SUPER_ADMIN', 'DEPT_ADMIN', 'EMPLOYEE')`),
+  statusCheck: check("users_status_check", sql`${t.status} IN ('ACTIVE', 'INACTIVE')`),
+}));
 
 export const problems = pgTable("problems", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -43,6 +49,8 @@ export const problems = pgTable("problems", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
   uqDeptSource: unique("uq_problems_department_source_number").on(t.departmentId, t.sourceNumber),
+  typeCheck: check("problems_type_check", sql`${t.type} IN ('MCQ_SINGLE', 'MCQ_MULTI', 'OX', 'SHORT_ANSWER', 'FILL_BLANK')`),
+  statusCheck: check("problems_status_check", sql`${t.status} IN ('ACTIVE', 'ARCHIVED')`),
 }));
 
 export const problemChoices = pgTable("problem_choices", {
@@ -107,7 +115,9 @@ export const excelUploadLogs = pgTable("excel_upload_logs", {
   errorDetail: text("error_detail"),
   targetType: varchar("target_type", { length: 20 }).notNull().default("PROBLEM"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  targetTypeCheck: check("excel_upload_logs_target_type_check", sql`${t.targetType} IN ('ACCOUNT', 'PROBLEM')`),
+}));
 
 export const tags = pgTable("tags", {
   id: bigserial("id", { mode: "number" }).primaryKey(),

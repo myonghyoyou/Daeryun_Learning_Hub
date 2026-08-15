@@ -1,5 +1,5 @@
 {
-  "id": "4cb5c2de-2734-4553-875f-1e53401a7b7d",
+  "id": "058f7dbd-4f09-4f08-a356-5f3ec2cb8563",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -334,7 +334,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "departments_status_check": {
+          "name": "departments_status_check",
+          "value": "\"departments\".\"status\" IN ('ACTIVE', 'INACTIVE')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.excel_upload_logs": {
@@ -436,7 +441,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "excel_upload_logs_target_type_check": {
+          "name": "excel_upload_logs_target_type_check",
+          "value": "\"excel_upload_logs\".\"target_type\" IN ('ACCOUNT', 'PROBLEM')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.problem_answers": {
@@ -786,7 +796,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "problems_type_check": {
+          "name": "problems_type_check",
+          "value": "\"problems\".\"type\" IN ('MCQ_SINGLE', 'MCQ_MULTI', 'OX', 'SHORT_ANSWER', 'FILL_BLANK')"
+        },
+        "problems_status_check": {
+          "name": "problems_status_check",
+          "value": "\"problems\".\"status\" IN ('ACTIVE', 'ARCHIVED')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.tags": {
@@ -950,7 +969,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "users_role_check": {
+          "name": "users_role_check",
+          "value": "\"users\".\"role\" IN ('SUPER_ADMIN', 'DEPT_ADMIN', 'EMPLOYEE')"
+        },
+        "users_status_check": {
+          "name": "users_status_check",
+          "value": "\"users\".\"status\" IN ('ACTIVE', 'INACTIVE')"
+        }
+      },
       "isRLSEnabled": false
     }
   },
