@@ -1,0 +1,53 @@
+import { ZodError } from "zod";
+import { ErrorCode, type ErrorCodeEntry } from "./errorCode";
+import { ok, okMessage } from "./envelope";
+
+export class BizError extends Error {
+  constructor(public readonly errorCode: ErrorCodeEntry, message?: string) {
+    super(message ?? errorCode.message);
+  }
+}
+
+// 현재 GlobalExceptionHandler.handleBizException 미러.
+export function bizStatus(entry: ErrorCodeEntry): 401 | 403 | 400 {
+  if (entry.code === ErrorCode.EMPTY_SESSION.code) return 401;
+  if (entry.code === ErrorCode.ACCESS_AUTH_DENIED.code) return 403;
+  return 400;
+}
+
+function json(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json;charset=UTF-8" },
+  });
+}
+
+/**
+ * 라우트 핸들러를 감싸 예외를 현재 계약대로 봉투+상태로 바꾼다.
+ * - 성공: 200 + ok(data)
+ * - BizError: bizStatus + okMessage(code, message)
+ * - ZodError(필드검증): HTTP 200 + { resultCode:1000, errorList } (현재 handleValidationException 미러)
+ * - 기타: HTTP 200 + MSG_PROC_FAIL (현재 handleUnexpectedException 미러)
+ */
+export async function handleRoute(fn: () => Promise<unknown>): Promise<Response> {
+  try {
+    const data = await fn();
+    return json(ok(data), 200);
+  } catch (error) {
+    if (error instanceof BizError) {
+      return json(okMessage(error.errorCode.code, error.message), bizStatus(error.errorCode));
+    }
+    if (error instanceof ZodError) {
+      // 파리티 미세 갭: 현재 Java FieldError.value 는 거부된 입력값을 담지만, Zod 이슈는 값을
+      // 직접 주지 않아 null 로 둔다. 프론트는 field/reason 과 resultCode 로 분기하므로 화면엔 영향이 없다.
+      const errorList = error.errors.map((e) => ({
+        field: e.path.join("."),
+        value: null,
+        reason: e.message,
+      }));
+      return json({ resultCode: ErrorCode.INPUT_VALUE_INVALID.code, resultMsg: ErrorCode.INPUT_VALUE_INVALID.message, errorList }, 200);
+    }
+    console.error("처리되지 않은 예외가 발생했습니다.", error);
+    return json(okMessage(ErrorCode.MSG_PROC_FAIL.code, ErrorCode.MSG_PROC_FAIL.message), 200);
+  }
+}
