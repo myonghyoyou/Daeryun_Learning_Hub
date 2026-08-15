@@ -87,6 +87,14 @@ Daeryun_Learning_Hub/
 
 **핵심 파리티 앵커:** API JSON 봉투(`resultCode`/`resultMsg`/`data`)·에러코드·쿠키 동작을 바이트 단위로 동일하게 유지한다 — 그래야 포팅한 프론트가 그대로 붙는다.
 
+**추가 정합 사항 (코드 대조로 확정):**
+
+- **Drizzle 스키마 = DDL 계약.** Drizzle 스키마는 현재 `schema.sql` + `db/migration/`의 테이블·컬럼 타입·제약을 **정확히** 재현한다 — 특히 `uq_problems_department_source_number` 유니크, `attempt_choices` 테이블, FK `ON DELETE CASCADE`, 인덱스. 초기 마이그레이션을 생성한 뒤 현재 개발 DB와 diff해 어긋남이 없음을 확인한다.
+- **Zod는 메커니즘, 규칙·문구는 그대로.** 입력 검증은 Zod로 하되 **검증 규칙과 한국어 메시지·에러코드는 현재 Spring과 동일**해야 한다(파리티). Zod는 표현 수단일 뿐 새 규칙을 도입하지 않는다.
+- **JWT 쿠키 사양 = 현재 세션 쿠키 미러.** 만료 **90분**, `SameSite=Lax`, `secure`는 `SESSION_COOKIE_SECURE` 대응 env로 전환(현재 `application.yml`과 동일). 쿠키 이름·경로도 프론트 기대와 맞춘다.
+- **CORS 제거.** 단일 Next 앱은 동일 출처라 `CorsConfig`가 불필요하다(현재 `/api/**` allowCredentials 설정은 사라짐). 이는 파리티에 무해한 단순화다.
+- **bcrypt/해시.** 현재 `BCryptPasswordEncoder`(기본 강도, 표준 `$2a$`) → `bcryptjs`. 프로덕션 DB는 빈 상태에서 시작(D8)하므로 **해시 이전이 없다.** Vitest 통합 테스트가 사용자를 시드할 때는 Spring 해시를 재사용하지 말고 `bcryptjs`로 직접 해싱한다.
+
 ## 섹션 C — 테스트 · 파리티 체크리스트 전략
 
 **산출물 ① 서브시스템별 상세 QA 체크리스트(정답지).** 각 항목 = `시나리오 / 사전조건 / 입력 / 기대결과(상태·응답봉투·에러코드·부수효과)`. 31개 엔드포인트 + 까다로운 행동(5회 잠금, 엑셀 행별 복원, 23505 한국어 문구, 빈칸 무작위 노출, 통계 집계 경계값)까지 커버한다. **현재 Spring 앱으로 실측**해 정답을 고정한다 — 기존 301개 테스트가 이미 단언한 것은 인용하고, 빈 곳은 실행 중 서버에 대한 조작/`curl`로 확인해 채운다. **체크리스트는 서브시스템별 just-in-time으로 작성한다**(해당 서브플랜 착수 직전).
@@ -114,6 +122,18 @@ Daeryun_Learning_Hub/
 | 7 | **컷오버·배포** | Vercel(Root=`web/`, icn1)·Supabase Marketplace+Storage·마이그레이션·부트스트랩, `backend/`·`frontend/` 제거 커밋, 스모크 |
 
 Foundation(1)은 이후 모든 서브플랜의 선행 조건이다. 서브플랜 2~6은 서로 의존이 적어 순서를 조정할 수 있으나, 데이터 의존(계정→문제→풀이→통계) 때문에 위 순서를 권한다.
+
+**10개 컨트롤러(31 엔드포인트) → 서브플랜 배정** (누락 방지):
+
+| 컨트롤러 | 서브플랜 |
+|---|---|
+| `AuthController` | 2 Auth |
+| `DepartmentController` · `UserAdminController` | 3 부서·계정 |
+| `ProblemController` (문항번호·이미지·문제 엑셀 포함) | 4 문제은행 |
+| `TagController` (전체 태그=관리자, 활성 태그=풀이 필터) | 4(관리자 태그) + 5(풀이 활성 태그) |
+| `DepartmentOptionController` (로그인 사용자용 활성 부서 — 랜덤 세트 필터) | 5 풀이 |
+| `SolveController` · `AttemptController` | 5 풀이 |
+| `StatsController` · `DashboardController` | 6 통계·대시보드 |
 
 ## 이관 시 반드시 보존할 현재 동작 (파리티 앵커 목록)
 
