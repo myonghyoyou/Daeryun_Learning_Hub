@@ -19,6 +19,8 @@ UPDATE users SET failed_login_count = failed_login_count + 1,
 WHERE id = <id> RETURNING locked_until
 ```
 
+> **각주(L1/C1 관련):** "JWT 쿠키" 표현은 이관 타깃(Next) 모델 기준이며 Spring 현재 구현은 HttpSession 쿠키다(스펙 Q5의 1:1 미러 결정).
+
 ## 체크리스트
 
 | # | 시나리오 | 입력·사전조건 | 기대결과(HTTP·resultCode·메시지·부수효과) |
@@ -30,9 +32,12 @@ WHERE id = <id> RETURNING locked_until
 | L5 | 비번 불일치(임계 미만) | 틀린 비번, failed<4 | 400 / 1011; `failed_login_count`+1, `locked_until` 유지 |
 | L6 | 비번 불일치(이번에 잠김) | 틀린 비번, failed=4→5 | 400 / **1010** "계정이 잠겼습니다. 잠시 후 다시 시도하세요."; `locked_until`=now+15m |
 | L7 | 잠긴 계정 + 맞는 비번 | locked_until 미래, 올바른 비번 | 400 / 1010 (비번 검사 전에 차단) |
-| L8 | 로그아웃 | 세션 유무 무관 | 200 / 200 / ok(); 쿠키 삭제 |
+| L8 | 로그아웃 | 세션 없음 | 401 / 980 / "세션 정보가 없습니다." (Spring SessionCheckFilter 가 `/api/auth/logout` 를 예외 처리하지 않으므로 게이트에서 차단) |
+| L8' | 로그아웃 | 유효 세션 | 200 / 200 / ok(); 쿠키 삭제 |
+| M1 | 파싱 불가(malformed) 본문 | 로그인 요청 본문이 JSON 파싱 불가 | Spring: HTTP 200 + 1000("잘못된 파라미터를 입력했습니다."). 포트: HTTP 400 + 1000(도메인 문구, readJson 강등 경로). resultCode 동일·프론트는 상태코드로 분기하지 않음 → **수용된 이탈**로 기록 |
 | S1 | 세션 조회(로그인) | 유효 JWT | 200 / 200 / data{isLoggedIn:true, employeeNo,name,role,departmentId,departmentName(최신), mustChangePassword} |
 | S2 | 세션 조회(미로그인) | 쿠키 없음/위조 | 200 / 200 / data{isLoggedIn:false, 나머지 null/false} |
+| S3 | 세션 만료 방식 | 요청 반복 | 세션 만료 = 무활동 90분(요청마다 갱신, sliding); 쿠키는 브라우저 세션 쿠키(Max-Age 없음); 서버측 강제 무효화(로그아웃 외 세션 kill 등) 불가(JWT는 자체 검증이라 서버에 상태를 두지 않음)만 **수용된 이탈**로 기록 |
 | C1 | 비번변경 성공 | 세션, 8자+ 새 비번(현재와 다름) | 200 / 200 / ok(); `password_hash` 갱신, `must_change_password=FALSE`, JWT 재발급(mustChangePassword=false) |
 | C2 | 비번변경 짧음 | 8자 미만 | 400 / 1000 / "비밀번호는 8자 이상이어야 합니다." |
 | C3 | 비번변경 세션없음 | 세션 없음 | 401 / 980 / "세션 정보가 없습니다." |
