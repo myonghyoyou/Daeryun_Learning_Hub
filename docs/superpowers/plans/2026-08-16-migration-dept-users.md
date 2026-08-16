@@ -20,11 +20,11 @@
 - **계정 수정**: 검증 = 이름·이메일·역할·status 필수("계정 상태를 선택하세요.") → 계정 존재("존재하지 않는 계정입니다.") → 부서 존재 → 이메일 변경 시에만 중복 검사(`equalsIgnoreCase` 비교) → **관리자 접근 보호**: ① 본인 SUPER_ADMIN 해제 금지("본인의 총괄 관리자 역할은 스스로 해제할 수 없습니다.") ② 본인 비활성화 금지("본인 계정은 스스로 비활성화할 수 없습니다.") ③ 마지막 활성 SUPER_ADMIN의 역할해제·비활성화 금지("마지막 활성 총괄 관리자입니다. 다른 총괄 관리자를 먼저 지정한 뒤 역할 변경 또는 비활성화하세요.", `countActiveSuperAdminsExcluding(id)==0` 기준). 갱신 필드 = name/email/departmentId/role/status. 감사(`USER_UPDATED`, detail `{employeeNo,name,email,departmentId,role,status}`).
 - **감사 로그(fail-closed)**: `record(actorId, action, targetType, targetId, detail)` — detail(객체)에 **키 이름에 "password"가 포함된 키가 재귀적으로 하나라도 있으면 거부(throw)**. null detail은 통과. `audit_logs.detail`은 jsonb.
 - **엑셀 일괄 등록(행별 격리 + D7)**: 컬럼 순서 고정 = ①사번 ②이름 ③이메일 ④부서코드 ⑤역할(Enum명). 헤더 1행. **최대 데이터 500행**(초과 시 처리 전 전체 거부: "한 번에 업로드할 수 있는 데이터 행은 최대 500건입니다. 파일을 나눠 업로드하세요."). 행 검증 순서/문구 = 필수값("필수값이 누락되었습니다.") → 이메일 형식("유효한 회사 이메일 형식이 아닙니다.") → 사번 중복(파일 내+DB, "이미 존재하는 사번입니다: <no>") → 이메일 중복(파일 내 소문자화+DB, "이미 사용 중인 회사 이메일입니다: <email>") → 부서코드("존재하지 않는 부서코드입니다: <code>") → 역할("유효하지 않은 역할입니다: <text>"). 각 성공 행은 **독립 트랜잭션**(insert+감사)으로 커밋 — 뒤 행이 실패해도 유지. 행 저장 실패 → "계정 저장에 실패했습니다."(D6로 메일 문구 제거 — 이탈 기록). 종료 후 `excel_upload_logs` 기록(+감사 `ACCOUNT_EXCEL_UPLOADED`, detail `{fileName,totalRows,successRows,failRows}`). **응답: `{totalRows,successRows,failRows,errorDetail}` + D7 추가 필드 `successAccounts:[{rowNumber,employeeNo,name,email,temporaryPassword}]`** (프론트가 표시·다운로드용 — 서버는 파일을 만들지 않는다). errorDetail 형식 = `"행 N: <사유>"` 줄바꿈 연결(없으면 null→생략).
-- **파일 오류 계약**: 멀티파트 자체 실패/file 필드 부재 → **HTTP 200** + 1009 "파일을 업로드할 수 없습니다."(Spring `handleMultipartException` 미러). 열 수 없는 파일(손상·암호·비엑셀) → 400 + **1013** "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요." 시트 없음 → 400 + 1013 "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요." **크기 상한 4MB**(Q6 승인: 플랫폼 안전값, Spring 20MB에서 하향) 초과 → 400 + **1015**(기본 문구).
+- **파일 오류 계약**: 멀티파트 파싱 실패 → **HTTP 200** + 1009 "파일을 업로드할 수 없습니다."(Spring `handleMultipartException` 미러). **file 필드 부재도 같은 200/1009로 통일**(Spring은 MissingServletRequestPart가 catch-all로 떨어져 200/−1 — 의도적 개선, 이탈 ⑥). 열 수 없는 파일(손상·암호·비엑셀) → 400 + **1013** "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요." 시트 없음 → 400 + 1013 "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요." **크기 상한 4MB**(Q6 승인: 플랫폼 안전값, Spring 20MB에서 하향) 초과 → 400 + **1015**(기본 문구).
 - **트랜잭션 경계**: 부서 생성/수정·계정 생성/수정 = 본체+감사 한 트랜잭션(감사 실패 시 본체 롤백 — Spring 미러). 엑셀 = 업로드 로그+그 감사 한 트랜잭션, 행별 provision은 각각 독립.
 - 커밋 메시지는 `feat:`/`fix:`/`docs:`/`refactor:` 영문 Conventional Commits.
 
-**승인된 이탈(체크리스트에 기록할 것):** ① D6 — 메일 제거, 단건 응답에 `temporaryPassword`(감사·서버로그에는 절대 미기록) ② D7 — 일괄 응답에 `successAccounts` 추가 ③ 행 실패 문구에서 메일 언급 제거 ④ 파일 상한 20MB→4MB(1015) ⑤ SheetJS `blankrows:false`는 중간 빈 행을 건너뛰어, 빈 행이 섞인 파일에선 오류 행 번호가 엑셀 표기와 어긋날 수 있다(POI는 null 행만 스킵·번호 유지 — 실사용 파일엔 빈 행이 없어 실질 무영향, 미세 이탈로만 기록).
+**승인된 이탈(체크리스트에 기록할 것):** ① D6 — 메일 제거, 단건 응답에 `temporaryPassword`(감사·서버로그에는 절대 미기록) ② D7 — 일괄 응답에 `successAccounts` 추가 ③ 행 실패 문구에서 메일 언급 제거 ④ 파일 상한 20MB→4MB(1015) ⑤ SheetJS `blankrows:false`는 중간 빈 행을 건너뛰어, 빈 행이 섞인 파일에선 오류 행 번호가 엑셀 표기와 어긋날 수 있다(POI는 null 행만 스킵·번호 유지 — 실사용 파일엔 빈 행이 없어 실질 무영향, 미세 이탈로만 기록) ⑥ file 필드 부재 → 200/1009로 통일(Spring은 catch-all 200/−1 — 더 나은 안내로의 의도적 개선).
 
 ## Foundation·Auth에서 소비하는 인터페이스 (이미 존재)
 
@@ -44,6 +44,7 @@
 | `web/lib/db/users.ts` | (수정) `Db` import 전환 + raw 헬퍼 사용, Task 5에서 DAO 함수 추가 | 2·5 |
 | `web/lib/db/departments.ts` | **신규.** 부서 DAO(findAll/findById/findByCode/insert/update) | 2 |
 | `web/lib/auth/currentUser.ts` | **신규.** `requireActor(...roles)` — 세션+역할 검사 원스톱 | 2 |
+| `web/lib/http/params.ts` | **신규.** `parseNumericParam` — Spring 타입불일치 핸들러(400+1000) 미러 | 2 |
 | `web/lib/auth/authService.ts` | (수정) departments 직접 select → DAO 사용(M4) | 2 |
 | `web/lib/audit/auditLog.ts` | **신규.** fail-closed 감사 기록 | 3 |
 | `web/lib/audit/auditLog.test.ts` | 감사 로그 테스트 | 3 |
@@ -60,6 +61,7 @@
 | `web/lib/admin/accountExcel.ts` | SheetJS 파싱 + 행별 처리 + 업로드 로그(D7) | 6 |
 | `web/lib/admin/accountExcel.test.ts` | 엑셀 통합 테스트(픽스처는 SheetJS로 생성) | 6 |
 | `web/app/api/admin/users/excel-upload/route.ts` | POST 멀티파트(1009/1015 처리) | 6 |
+| `web/app/api/admin/users/excel-upload/route.test.ts` | 멀티파트 라우트 테스트(성공·1009·1015) | 6 |
 | `docs/qa/2026-08-16-dept-users-e2e-verification.md` | E2E 실측 기록 | 7 |
 
 ---
@@ -108,6 +110,7 @@ git commit -m "docs: author the department/account parity checklist measured fro
   - `raw.ts`: `executeRows<T>(db: DbConn, query: SQL): Promise<T[]>`, `parseUtcTimestamp(value: string | null): Date | null`
   - `departments.ts`: `findAllDepartments(db)`(ORDER BY name), `findDepartmentById(db, id)`, `findDepartmentByCode(db, code)`, `insertDepartment(db, {name,code})`(returning), `updateDepartment(db, {id,name,status})`
   - `currentUser.ts`: `requireActor(...roles: UserRole[]): Promise<AuthUser>` — 세션 없으면 `BizError(EMPTY_SESSION)`, 역할 불일치면 `requireRole`이 throw. roles 생략 시 세션만 검사.
+  - `params.ts`: `parseNumericParam(value: string | null | undefined, name: string): number | null` — 빈 값이면 null, 숫자가 아니면 `BizError(1000, "요청 값의 형식이 올바르지 않습니다: <name>")`(→400). Spring `handleTypeMismatchException` 미러 — Foundation이 이월한 "파라미터 타입 불일치는 400" 발산을 여기서 해소한다.
 
 - [ ] **Step 1: 실패하는 테스트 작성** — `web/lib/db/departments.test.ts`:
 
@@ -122,11 +125,12 @@ beforeEach(async () => { await truncateAll(db); });
 
 describe("departments dao", () => {
   it("inserts, finds by id/code, lists ordered by name", async () => {
-    const b = await insertDepartment(db, { name: "베타", code: "B1" });
-    await insertDepartment(db, { name: "알파", code: "A1" });
+    // 정렬 단언은 ASCII 이름으로 — 한글 정렬은 DB 콜레이션(C vs en_US.utf8)에 따라 달라 플래키하다.
+    const b = await insertDepartment(db, { name: "beta", code: "B1" });
+    await insertDepartment(db, { name: "alpha", code: "A1" });
     expect((await findDepartmentById(db, b.id))?.code).toBe("B1");
-    expect((await findDepartmentByCode(db, "A1"))?.name).toBe("알파");
-    expect((await findAllDepartments(db)).map((d) => d.name)).toEqual(["베타", "알파"].sort());
+    expect((await findDepartmentByCode(db, "A1"))?.name).toBe("alpha");
+    expect((await findAllDepartments(db)).map((d) => d.name)).toEqual(["alpha", "beta"]);
   });
   it("updates only name and status", async () => {
     const d = await insertDepartment(db, { name: "이전", code: "C1" });
@@ -193,6 +197,23 @@ export async function updateDepartment(db: DbConn, input: { id: number; name: st
 }
 ```
 
+`web/lib/http/params.ts`:
+```ts
+import { BizError } from "./errors";
+import { ErrorCode } from "./errorCode";
+
+// Spring MethodArgumentTypeMismatchException 핸들러 미러: 잘못된 쿼리/경로 숫자 파라미터는
+// 400 + 1000 + "요청 값의 형식이 올바르지 않습니다: <이름>" 으로 나간다(BizError → bizStatus 400).
+export function parseNumericParam(value: string | null | undefined, name: string): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw new BizError(ErrorCode.INPUT_VALUE_INVALID, "요청 값의 형식이 올바르지 않습니다: " + name);
+  }
+  return n;
+}
+```
+
 `web/lib/auth/currentUser.ts`:
 ```ts
 import { ErrorCode } from "../http/errorCode";
@@ -218,8 +239,8 @@ export async function requireActor(...roles: UserRole[]): Promise<AuthUser> {
 - [ ] **Step 5: Commit**
 
 ```bash
-git add web/lib/db/client.ts web/lib/db/raw.ts web/lib/db/users.ts web/lib/db/departments.ts web/lib/auth/currentUser.ts web/lib/auth/authService.ts web/lib/db/departments.test.ts
-git commit -m "refactor: settle parked cleanups (DbConn, departments dao, raw helpers, requireActor)"
+git add web/lib/db/client.ts web/lib/db/raw.ts web/lib/db/users.ts web/lib/db/departments.ts web/lib/auth/currentUser.ts web/lib/http/params.ts web/lib/auth/authService.ts web/lib/db/departments.test.ts
+git commit -m "refactor: settle parked cleanups (DbConn, departments dao, raw helpers, requireActor, parseNumericParam)"
 ```
 
 ---
@@ -541,6 +562,7 @@ export async function POST(request: Request): Promise<Response> {
 import { getDb } from "@/lib/db/client";
 import { handleRoute } from "@/lib/http/errors";
 import { readJson, asStringField } from "@/lib/http/body";
+import { parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { updateDepartmentInfo } from "@/lib/admin/departmentService";
 
@@ -550,8 +572,9 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   return handleRoute(async () => {
     const actor = await requireActor("SUPER_ADMIN");
     const { id } = await context.params;
+    const idNum = parseNumericParam(id, "id")!; // Spring 타입불일치 미러(400+1000)
     const body = await readJson(request);
-    await updateDepartmentInfo(getDb(), Number(id), { name: asStringField(body.name), status: asStringField(body.status) }, actor.userId);
+    await updateDepartmentInfo(getDb(), idNum, { name: asStringField(body.name), status: asStringField(body.status) }, actor.userId);
     return undefined;
   });
 }
@@ -824,6 +847,7 @@ export async function updateAccount(db: Db, id: number, input: { name?: string; 
 import { getDb } from "@/lib/db/client";
 import { handleRoute } from "@/lib/http/errors";
 import { readJson, asStringField } from "@/lib/http/body";
+import { parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { createAccount, listAccounts } from "@/lib/admin/userAdminService";
 
@@ -833,7 +857,7 @@ export async function GET(request: Request): Promise<Response> {
   return handleRoute(async () => {
     await requireActor("SUPER_ADMIN");
     const raw = new URL(request.url).searchParams.get("departmentId");
-    return listAccounts(getDb(), raw == null || raw === "" ? null : Number(raw));
+    return listAccounts(getDb(), parseNumericParam(raw, "departmentId")); // 잘못된 값 → 400+1000(Spring 미러)
   });
 }
 
@@ -850,7 +874,96 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-`web/app/api/admin/users/[id]/route.ts`는 부서 [id] 라우트와 동형(PUT → `updateAccount(getDb(), Number(id), {...}, actor)`; actor 전체를 넘긴다). `web/app/api/admin/users/route.test.ts`는 부서 라우트 테스트와 동형 3케이스(목록·생성→`data.temporaryPassword` 존재·DEPT_ADMIN 403)로 작성한다.
+`web/app/api/admin/users/[id]/route.ts`:
+```ts
+import { getDb } from "@/lib/db/client";
+import { handleRoute } from "@/lib/http/errors";
+import { readJson, asStringField } from "@/lib/http/body";
+import { parseNumericParam } from "@/lib/http/params";
+import { requireActor } from "@/lib/auth/currentUser";
+import { updateAccount } from "@/lib/admin/userAdminService";
+
+export const runtime = "nodejs";
+
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
+  return handleRoute(async () => {
+    const actor = await requireActor("SUPER_ADMIN");
+    const { id } = await context.params;
+    const idNum = parseNumericParam(id, "id")!;
+    const body = await readJson(request);
+    await updateAccount(getDb(), idNum, {
+      name: asStringField(body.name), email: asStringField(body.email),
+      departmentId: typeof body.departmentId === "number" ? body.departmentId : Number(asStringField(body.departmentId)) || undefined,
+      role: asStringField(body.role), status: asStringField(body.status),
+    }, actor); // 보호 규칙이 actor 본인 여부를 봐야 하므로 actor 전체를 넘긴다
+    return undefined;
+  });
+}
+```
+
+`web/app/api/admin/users/route.test.ts` (부서 라우트 테스트와 같은 mock 구성):
+```ts
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { migrateTestDb, testDb, truncateAll } from "../../../../test/db";
+import { departments, users } from "../../../../lib/db/schema";
+import type { AuthUser } from "../../../../lib/auth/types";
+
+const state = vi.hoisted(() => ({ currentUser: null as unknown }));
+vi.mock("../../../../lib/db/client", async () => {
+  const { testDb } = await import("../../../../test/db");
+  const actual = await vi.importActual<object>("../../../../lib/db/client");
+  return { ...actual, getDb: () => testDb() };
+});
+vi.mock("../../../../lib/auth/session", () => ({ getAuthUser: async () => state.currentUser }));
+
+const db = testDb();
+let hqId: number;
+async function seedAdmin(role: AuthUser["role"] = "SUPER_ADMIN") {
+  const [d] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
+  hqId = d.id;
+  const [u] = await db.insert(users).values({
+    employeeNo: "admin", name: "총괄", email: "admin@x.local", passwordHash: "h", departmentId: d.id, role,
+  }).returning();
+  state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role, departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
+  return u.id;
+}
+beforeAll(async () => { await migrateTestDb(); });
+beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+
+describe("users routes", () => {
+  it("GET lists accounts", async () => {
+    await seedAdmin();
+    const { GET } = await import("./route");
+    const body = await (await GET(new Request("http://localhost/api/admin/users"))).json();
+    expect(body.resultCode).toBe(200);
+    expect(body.data[0].employeeNo).toBe("admin");
+  });
+  it("GET rejects a malformed departmentId with 400/1000 (Spring type-mismatch parity)", async () => {
+    await seedAdmin();
+    const { GET } = await import("./route");
+    const res = await GET(new Request("http://localhost/api/admin/users?departmentId=abc"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.resultCode).toBe(1000);
+    expect(body.resultMsg).toBe("요청 값의 형식이 올바르지 않습니다: departmentId");
+  });
+  it("POST creates and returns the temporary password (D6)", async () => {
+    await seedAdmin();
+    const { POST } = await import("./route");
+    const res = await POST(new Request("http://localhost/api/admin/users", { method: "POST", body: JSON.stringify({ employeeNo: "1001", name: "홍길동", email: "hong@x.local", departmentId: hqId, role: "EMPLOYEE" }), headers: { "content-type": "application/json" } }));
+    const body = await res.json();
+    expect(body.resultCode).toBe(200);
+    expect(body.data.temporaryPassword).toHaveLength(10);
+  });
+  it("rejects a DEPT_ADMIN with 403/990", async () => {
+    await seedAdmin("DEPT_ADMIN");
+    const { GET } = await import("./route");
+    const res = await GET(new Request("http://localhost/api/admin/users"));
+    expect(res.status).toBe(403);
+    expect((await res.json()).resultCode).toBe(990);
+  });
+});
+```
 
 - [ ] **Step 6: GREEN + 전체** — 서비스 8 + 라우트 3 통과, `pnpm test` 전체 green, `pnpm build`.
 
@@ -997,7 +1110,7 @@ interface RowOutcome { rowNumber: number; success: boolean; reason: string | nul
 export async function uploadAccountsExcel(db: Db, file: { buffer: ArrayBuffer; fileName: string }, actorId: number) {
   let rows: string[][];
   try {
-    const workbook = XLSX.read(file.buffer, { type: "array" });
+    const workbook = XLSX.read(new Uint8Array(file.buffer), { type: "array" });
     if (workbook.SheetNames.length === 0) {
       throw new BizError(ErrorCode.FILE_UNREADABLE, "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요.");
     }
@@ -1113,9 +1226,73 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-- [ ] **Step 5: GREEN + 전체** — 엑셀 5건 통과, `pnpm test` 전체 green, `pnpm build`(라우트 등록 확인).
+- [ ] **Step 5: 라우트 테스트 작성** — `web/app/api/admin/users/excel-upload/route.test.ts` (1009·1015 분기를 단위로 고정):
 
-- [ ] **Step 6: Commit**
+```ts
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import * as XLSX from "xlsx";
+import { migrateTestDb, testDb, truncateAll } from "../../../../../test/db";
+import { departments, users } from "../../../../../lib/db/schema";
+import type { AuthUser } from "../../../../../lib/auth/types";
+
+const state = vi.hoisted(() => ({ currentUser: null as unknown }));
+vi.mock("../../../../../lib/db/client", async () => {
+  const { testDb } = await import("../../../../../test/db");
+  const actual = await vi.importActual<object>("../../../../../lib/db/client");
+  return { ...actual, getDb: () => testDb() };
+});
+vi.mock("../../../../../lib/auth/session", () => ({ getAuthUser: async () => state.currentUser }));
+
+const db = testDb();
+async function seedAdmin() {
+  const [d] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
+  const [u] = await db.insert(users).values({ employeeNo: "admin", name: "총괄", email: "admin@x.local", passwordHash: "h", departmentId: d.id, role: "SUPER_ADMIN" }).returning();
+  state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
+}
+function xlsxFile(): File {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["사번", "이름", "이메일", "부서코드", "역할"], ["r1", "가", "r1@x.local", "HQ", "EMPLOYEE"]]));
+  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  return new File([buf], "ok.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+function post(form: FormData): Request {
+  return new Request("http://localhost/api/admin/users/excel-upload", { method: "POST", body: form });
+}
+beforeAll(async () => { await migrateTestDb(); });
+beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+
+describe("excel-upload route", () => {
+  it("uploads and returns D7 successAccounts", async () => {
+    await seedAdmin();
+    const form = new FormData();
+    form.set("file", xlsxFile());
+    const { POST } = await import("./route");
+    const body = await (await POST(post(form))).json();
+    expect(body.resultCode).toBe(200);
+    expect(body.data.successAccounts[0].employeeNo).toBe("r1");
+  });
+  it("returns HTTP 200 + 1009 when the file field is missing", async () => {
+    await seedAdmin();
+    const { POST } = await import("./route");
+    const res = await POST(post(new FormData()));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "파일을 업로드할 수 없습니다." });
+  });
+  it("rejects a >4MB file with 400/1015", async () => {
+    await seedAdmin();
+    const form = new FormData();
+    form.set("file", new File([new Uint8Array(4 * 1024 * 1024 + 1)], "big.xlsx"));
+    const { POST } = await import("./route");
+    const res = await POST(post(form));
+    expect(res.status).toBe(400);
+    expect((await res.json()).resultCode).toBe(1015);
+  });
+});
+```
+
+- [ ] **Step 6: GREEN + 전체** — 서비스 5건 + 라우트 3건 통과, `pnpm test` 전체 green, `pnpm build`(라우트 등록 확인).
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add web/package.json web/pnpm-lock.yaml web/lib/admin/accountExcel.ts web/lib/admin/accountExcel.test.ts web/app/api/admin/users/excel-upload
@@ -1151,7 +1328,7 @@ git commit -m "docs: record the department/account end-to-end verification resul
 ## Self-Review 결과
 
 - **스펙 커버리지:** 스펙 서브플랜 3("부서/계정 CRUD, D6/D7, 계정 엑셀 행별 복원") → Task 4·5·6. JIT 체크리스트 → Task 1. Auth 최종 리뷰 파킹(M3·M4·M5) → Task 2. 감사 로그(파리티 앵커) → Task 3. E2E(스펙 ④) → Task 7. **화면(UI)은 이 서브플랜 범위 밖** — 스펙 A의 "React 화면 흡수"는 별도 단계(컷오버 전)로 남는다. D7의 다운로드 UI도 그 단계 몫이며, 서버는 `successAccounts`로 값만 공급한다.
-- **플레이스홀더 스캔:** 없음. Task 5 Step 5의 "[id] 라우트는 부서와 동형"·"라우트 테스트 3케이스"는 참조가 아니라 동일 패턴 반복 지시이며 차이점(actor 전체 전달, `temporaryPassword` 단언)을 명시했다.
+- **플레이스홀더 스캔:** 없음. 모든 라우트·테스트가 전문 코드로 수록됨(users/[id] 라우트·계정 라우트 테스트·엑셀 라우트 테스트 포함). `parseNumericParam`(Task 2)이 Foundation이 이월한 "파라미터 타입 불일치 → 400" 발산을 이 서브플랜에서 해소한다(Spring `handleTypeMismatchException` 문구까지 미러).
 - **타입 일관성:** `DbConn`(Task 2)을 DAO 전부가 사용, 서비스는 `Db`. `recordAudit` 시그니처를 Task 4·5·6이 동일하게 소비. `generateTempPassword`를 Task 6이 Task 5에서 import. `requireActor` 반환 `AuthUser`를 라우트가 `actor.userId`/`actor`로 사용. 응답 형태(부서 `{id,name,code,status}`, 계정 목록 9필드, 생성 `{...,temporaryPassword}`, 엑셀 `{...,successAccounts}`)가 테스트 기대값과 일치.
 
 ## Execution Handoff
