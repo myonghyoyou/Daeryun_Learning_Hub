@@ -13,3 +13,7 @@ export function getDb() {
   }
   return drizzle(client, { schema });
 }
+
+export type Db = ReturnType<typeof getDb>;
+// 트랜잭션 콜백 인자 타입. DAO 가 이 타입을 받으면 db.transaction 안팎 어디서든 재사용된다.
+export type DbConn = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];

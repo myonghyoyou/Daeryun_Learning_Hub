@@ -1,10 +1,9 @@
 import { eq, sql } from "drizzle-orm";
-import type { getDb } from "./client";
+import type { DbConn } from "./client";
+import { executeRows, parseUtcTimestamp } from "./raw";
 import { users } from "./schema";
 
-export type Db = ReturnType<typeof getDb>;
-
-export async function findByEmployeeNo(db: Db, employeeNo: string) {
+export async function findByEmployeeNo(db: DbConn, employeeNo: string) {
   const rows = await db.select().from(users).where(eq(users.employeeNo, employeeNo)).limit(1);
   return rows[0];
 }
@@ -14,9 +13,9 @@ export async function findByEmployeeNo(db: Db, employeeNo: string) {
  * JS 에서 카운트를 읽어 계산하면 동시 요청이 잠금을 우회한다.
  */
 export async function incrementFailedLogin(
-  db: Db, userId: number, maxFailedAttempts: number, lockedUntil: Date,
+  db: DbConn, userId: number, maxFailedAttempts: number, lockedUntil: Date,
 ): Promise<Date | null> {
-  const rows = await db.execute(sql`
+  const rows = await executeRows<{ locked_until: string | null }>(db, sql`
     UPDATE users
     SET failed_login_count = failed_login_count + 1,
         locked_until = CASE
@@ -26,18 +25,18 @@ export async function incrementFailedLogin(
     WHERE id = ${userId}
     RETURNING locked_until::text
   `);
-  const raw = (rows as unknown as Array<{ locked_until: string | null }>)[0]?.locked_until ?? null;
-  return raw === null ? null : new Date(raw.replace(" ", "T") + "+0000");
+  const raw = rows[0]?.locked_until ?? null;
+  return parseUtcTimestamp(raw);
 }
 
-export async function resetFailedLogin(db: Db, userId: number): Promise<void> {
+export async function resetFailedLogin(db: DbConn, userId: number): Promise<void> {
   await db.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, userId));
 }
 
-export async function updateLastLoginAt(db: Db, userId: number, at: Date): Promise<void> {
+export async function updateLastLoginAt(db: DbConn, userId: number, at: Date): Promise<void> {
   await db.update(users).set({ lastLoginAt: at }).where(eq(users.id, userId));
 }
 
-export async function updatePassword(db: Db, userId: number, passwordHash: string): Promise<void> {
+export async function updatePassword(db: DbConn, userId: number, passwordHash: string): Promise<void> {
   await db.update(users).set({ passwordHash, mustChangePassword: false }).where(eq(users.id, userId));
 }
