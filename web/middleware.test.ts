@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
-import { signSession, SESSION_COOKIE } from "./lib/auth/jwt";
+import { signSession, verifySession, SESSION_COOKIE } from "./lib/auth/jwt";
 import type { AuthUser } from "./lib/auth/types";
 
 // 통합 테스트: evaluateGate 순수 로직이 아니라 middleware.ts 배선(쿠키 읽기·verifySession·
@@ -55,5 +55,41 @@ describe("middleware wiring", () => {
     const token = await signSession(employee);
     const res = await middleware(request("/api/problems", { token: token + "x" }));
     expect(res.status).toBe(401);
+  });
+
+  it("re-issues a fresh session cookie on an authenticated pass-through (sliding expiry)", async () => {
+    const token = await signSession(employee);
+    const res = await middleware(request("/api/problems", { token }));
+    expect(isPassThrough(res)).toBe(true);
+    const fresh = res.cookies.get(SESSION_COOKIE.name)?.value;
+    expect(fresh).toBeTruthy();
+    expect(await verifySession(fresh!)).toEqual(employee);
+  });
+
+  it("does not re-issue a session cookie on a logout pass-through (route manages its own Set-Cookie)", async () => {
+    const token = await signSession(employee);
+    const res = await middleware(request("/api/auth/logout", { method: "POST", token }));
+    expect(isPassThrough(res)).toBe(true);
+    expect(res.cookies.get(SESSION_COOKIE.name)).toBeUndefined();
+  });
+
+  it("does not re-issue a session cookie on a change-password pass-through (route manages its own Set-Cookie)", async () => {
+    const token = await signSession(employee);
+    const res = await middleware(request("/api/auth/change-password", { method: "POST", token }));
+    expect(isPassThrough(res)).toBe(true);
+    expect(res.cookies.get(SESSION_COOKIE.name)).toBeUndefined();
+  });
+
+  it("sets no cookie on the 401 EMPTY_SESSION reject path", async () => {
+    const res = await middleware(request("/api/problems"));
+    expect(res.status).toBe(401);
+    expect(res.cookies.get(SESSION_COOKIE.name)).toBeUndefined();
+  });
+
+  it("sets no cookie on the 200/1012 mustChangePassword reject path", async () => {
+    const token = await signSession({ ...employee, mustChangePassword: true });
+    const res = await middleware(request("/api/problems", { token }));
+    expect(res.status).toBe(200);
+    expect(res.cookies.get(SESSION_COOKIE.name)).toBeUndefined();
   });
 });
