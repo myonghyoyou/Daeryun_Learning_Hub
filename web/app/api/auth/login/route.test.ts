@@ -60,4 +60,23 @@ describe("POST /api/auth/login", () => {
     const res = await POST(new Request("http://localhost/api/auth/login", { method: "POST" }));
     expect((await res.json()).resultCode).toBe(1000);
   });
+
+  it("coerces a numeric employeeNo like Jackson would (logs in)", async () => {
+    await seedUser();
+    const { POST } = await import("./route");
+    const res = await POST(post({ employeeNo: 1001, password: "password1" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ resultCode: 200, resultMsg: "정상 처리되었습니다.", data: { name: "홍길동", role: "EMPLOYEE", mustChangePassword: false } });
+    expect(spies.setSessionCookie).toHaveBeenCalledOnce();
+  });
+});
+
+describe("POST /api/auth/logout", () => {
+  it("clears the session cookie and returns ok() with no data", async () => {
+    const { POST } = await import("../logout/route");
+    const res = await POST();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ resultCode: 200, resultMsg: "정상 처리되었습니다." });
+    expect(spies.clearSessionCookie).toHaveBeenCalledOnce();
+  });
 });

@@ -9,8 +9,16 @@ import type { AuthUser, UserRole } from "./types";
 import type { LoginInput, LoginResult, SessionStatus } from "./authSchemas";
 
 const MIN_PASSWORD_LENGTH = 8;
-const MAX_FAILED_ATTEMPTS = Number(process.env.AUTH_MAX_FAILED_ATTEMPTS ?? 5);
-const LOCKOUT_MINUTES = Number(process.env.AUTH_LOCKOUT_MINUTES ?? 15);
+
+// 잘못 설정된 값(빈 문자열/문자 등)이 Number()를 거치면 NaN이 되고, `count >= NaN`은 항상
+// false라 잠금이 조용히 비활성화된다. 유효하지 않으면 기본값으로 되돌린다.
+function envInt(name: string, fallback: number): number {
+  const n = Number(process.env[name] ?? fallback);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+const MAX_FAILED_ATTEMPTS = envInt("AUTH_MAX_FAILED_ATTEMPTS", 5);
+const LOCKOUT_MINUTES = envInt("AUTH_LOCKOUT_MINUTES", 15);
 
 function isBlank(value: string | undefined | null): boolean {
   return value == null || value.trim() === "";
