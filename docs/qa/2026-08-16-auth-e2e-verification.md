@@ -19,10 +19,13 @@ curl -i -c cookie.txt -X POST http://localhost:3100/api/auth/login \
   -H 'content-type: application/json' -d '{"employeeNo":"admin","password":"changeme1234"}'
 ```
 
-실측:
+실측 (raw, 그대로):
 ```
 HTTP/1.1 200 OK
-set-cookie: session=eyJ...; Path=/; Expires=...; Max-Age=5400; HttpOnly; SameSite=lax
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json;charset=UTF-8
+set-cookie: session=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjEsImVtcGxveWVlTm8iOiJhZG1pbiIsIm5hbWUiOiLstJ3qtITqtIDrpqzsnpAiLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJkZXBhcnRtZW50SWQiOjEsIm11c3RDaGFuZ2VQYXNzd29yZCI6dHJ1ZSwiaWF0IjoxNzg2ODQ1NzEwLCJleHAiOjE3ODY4NTExMTB9.B48hUc8pLbo7Y3HP-iHEpfUI65xkh49jFUYCre-2cwk; Path=/; Expires=Sun, 16 Aug 2026 03:31:50 GMT; Max-Age=5400; HttpOnly; SameSite=lax
+Date: Sun, 16 Aug 2026 02:01:50 GMT
 
 {"resultCode":200,"resultMsg":"정상 처리되었습니다.","data":{"name":"총괄관리자","role":"SUPER_ADMIN","mustChangePassword":true}}
 ```
@@ -44,16 +47,33 @@ curl -s -b cookie.txt http://localhost:3100/api/auth/session
 
 ### 3. 게이트 확인 — `/api/problems` (checklist G1)
 
+> **주의(follow-up 재측정):** 최초 실행에서는 `curl -s`만 사용해 HTTP 상태 코드 라인을 남기지 않았다. G1의 핵심은 "미들웨어 게이트가 일반 400 BizError가 아니라 HTTP 200 + 비즈니스 코드로 단락(short-circuit)한다"는 것이므로, 아래는 리뷰 피드백에 따라 **재실행하여 `-i`로 상태 라인을 포함해 재측정**한 원본 캡처다. 재측정을 위해 `must_change_password`를 DB에서 다시 `true`로 세팅하고(원래 값은 시나리오 4c에서 `false`로 바뀐 상태였음), `newpass1234`로 재로그인해 새 쿠키를 받았다.
+
 ```
-curl -s -b cookie.txt http://localhost:3100/api/problems
+docker exec probank-postgres psql -U probank -d probank_test -c "UPDATE users SET must_change_password=true WHERE employee_no='admin'"
+curl -i -c cookie.txt -X POST http://localhost:3100/api/auth/login -H 'content-type: application/json' -d '{"employeeNo":"admin","password":"newpass1234"}'
+curl -i -b cookie.txt http://localhost:3100/api/problems
 ```
 
-실측:
+실측 (재로그인, `mustChangePassword:true` 재확인):
 ```
+HTTP/1.1 200 OK
+set-cookie: session=eyJhbGciOiJIUzI1NiJ9...; Path=/; Expires=Sun, 16 Aug 2026 03:51:17 GMT; Max-Age=5400; HttpOnly; SameSite=lax
+
+{"resultCode":200,"resultMsg":"정상 처리되었습니다.","data":{"name":"총괄관리자","role":"SUPER_ADMIN","mustChangePassword":true}}
+```
+
+실측 (`/api/problems`, 상태 라인 포함):
+```
+HTTP/1.1 200 OK
+content-type: application/json
+Vary: Accept-Encoding
+Date: Sun, 16 Aug 2026 02:21:22 GMT
+
 {"resultCode":1012,"resultMsg":"비밀번호 변경이 필요합니다."}
 ```
 
-**PASS** — 라우트가 존재하지 않음에도 미들웨어가 라우팅보다 먼저 걸려 1012를 반환 (mustChangePassword 게이트가 실경로에서 동작함을 증명).
+**PASS** — 라우트가 존재하지 않음에도 미들웨어가 라우팅보다 먼저 걸려 **HTTP 200**(400 BizError가 아님) + `resultCode:1012`를 반환. mustChangePassword 게이트가 실경로에서 "HTTP 200 + 비즈니스 코드로 단락"하는 방식으로 동작함을 상태 라인까지 포함해 증명.
 
 ### 4. 비밀번호 변경 (checklist C1, C2, C3, C4)
 
@@ -71,22 +91,26 @@ curl -s -b cookie.txt -X POST .../api/auth/change-password -d '{"newPassword":"c
 ```
 **PASS**
 
-**4c. 성공 (C1)**
+**4c. 성공 (C1) — 이 요청은 세션이 `mustChangePassword:true`인 채로 `/api/auth/change-password`를 통과하므로 checklist G2(게이트가 change-password 자체는 막지 않고 통과시킴)의 실측이기도 하다.**
 ```
 curl -i -c cookie.txt -b cookie.txt -X POST .../api/auth/change-password -d '{"newPassword":"newpass1234"}'
 ```
-실측:
+실측 (raw, 그대로):
 ```
 HTTP/1.1 200 OK
-set-cookie: session=eyJ...mustChangePassword...false...; HttpOnly; SameSite=lax
+set-cookie: session=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjEsImVtcGxveWVlTm8iOiJhZG1pbiIsIm5hbWUiOiLstJ3qtITqtIDrpqzsnpAiLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJkZXBhcnRtZW50SWQiOjEsIm11c3RDaGFuZ2VQYXNzd29yZCI6ZmFsc2UsImlhdCI6MTc4Njg0NTcyNywiZXhwIjoxNzg2ODUxMTI3fQ.shBlcZwwdwOUWaesRIeXxCRS4zEKa1potpGyAfXEx9Q; Path=/; Expires=Sun, 16 Aug 2026 03:32:07 GMT; Max-Age=5400; HttpOnly; SameSite=lax
 
 {"resultCode":200,"resultMsg":"정상 처리되었습니다."}
 ```
-이후 세션 조회:
+위 쿠키의 JWT payload를 `base64 -d`로 디코딩한 결과(참고용, curl 원본 출력이 아니라 별도로 디코딩한 것):
 ```
-{"resultCode":200,"resultMsg":"정상 처리되었습니다.","data":{"isLoggedIn":true,...,"mustChangePassword":false}}
+{"userId":1,"employeeNo":"admin","name":"총괄관리자","role":"SUPER_ADMIN","departmentId":1,"mustChangePassword":false,"iat":1786845727,"exp":1786851127}
 ```
-**PASS** — bare ok(), 새 JWT 쿠키 재발급, 이후 세션에서 `mustChangePassword:false` 확인.
+이후 세션 조회 (raw):
+```
+{"resultCode":200,"resultMsg":"정상 처리되었습니다.","data":{"isLoggedIn":true,"employeeNo":"admin","name":"총괄관리자","role":"SUPER_ADMIN","departmentId":1,"departmentName":"본사","mustChangePassword":false}}
+```
+**PASS** — bare ok(), 새 JWT 쿠키 재발급(디코딩 결과 `mustChangePassword:false` 확인), 이후 세션에서도 `mustChangePassword:false` 확인. 동시에 G2(게이트가 mustChangePassword=true 상태에서도 change-password 라우트 자체는 통과시킴)도 실측됨 — 이 요청이 `1012`로 막히지 않고 정상적으로 처리되었다는 사실 자체가 증거.
 
 **4d. 세션 없음 (C3, 브리프 외 추가 확인)**
 ```
@@ -144,7 +168,20 @@ set-cookie: session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT
 
 ### 부가 확인 (checklist S2, 게이트 무인증)
 
-- 쿠키 없이 세션 조회 → `200 / {"isLoggedIn":false, ...}` (401이 아님) — **PASS** (S2)
+**S2 — 쿠키 없이 세션 조회 (follow-up 재측정, `-i`로 상태 라인 포함):**
+```
+curl -i http://localhost:3100/api/auth/session
+```
+실측:
+```
+HTTP/1.1 200 OK
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json;charset=UTF-8
+
+{"resultCode":200,"resultMsg":"정상 처리되었습니다.","data":{"isLoggedIn":false,"employeeNo":null,"name":null,"role":null,"departmentId":null,"departmentName":null,"mustChangePassword":false}}
+```
+**PASS** — HTTP 200(401 아님) + `isLoggedIn:false`.
+
 - 쿠키 없이 `/api/problems` → `401 / {"resultCode":980,"resultMsg":"세션 정보가 없습니다."}` — **PASS**
 
 ## 체크리스트 매핑 요약
@@ -165,10 +202,12 @@ set-cookie: session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT
 | C2 | E2E (시나리오 4a) | PASS |
 | C3 | E2E (시나리오 4d) | PASS |
 | C4 | E2E (시나리오 4b) | PASS |
-| G1 | E2E (시나리오 3) | PASS |
-| G2 | Task 2~5 Vitest (로직은 C1~C4에서 검증됨; change-password 라우트 자체가 게이트 우회 대상이라 E2E에서 별도 미실행) | — |
+| G1 | E2E (시나리오 3, follow-up 재측정 — `-i`로 HTTP 200 상태 라인 포함 확인) | PASS |
+| G2 | E2E (시나리오 4c — `mustChangePassword:true`인 세션으로 `/api/auth/change-password` 요청이 1012로 막히지 않고 정상 처리됨) | PASS |
 
-L2/L3/L4/G2는 브리프의 curl 시나리오 범위 밖(입력값을 만들려면 미존재 사번/비활성 계정 등 추가 픽스처가 필요)이라 이번 E2E에서는 실행하지 않았고, 이미 Task 2~5의 Vitest 통합 테스트가 기계 검증했다. 브리프에 명시된 모든 시나리오(로그인/세션/게이트/비번변경/잠금/로그아웃)는 실행 중인 서버로 모두 실측했고 전부 PASS.
+L2/L3/L4는 브리프의 curl 시나리오 범위 밖(입력값을 만들려면 미존재 사번/비활성 계정 등 추가 픽스처가 필요)이라 이번 E2E에서는 실행하지 않았고, 이미 Task 2~5의 Vitest 통합 테스트가 기계 검증했다. 브리프에 명시된 모든 시나리오(로그인/세션/게이트/비번변경/잠금/로그아웃)는 실행 중인 서버로 모두 실측했고 전부 PASS.
+
+**Follow-up 재측정 provenance:** 최초 작성본은 G1/S2를 `curl -s`(상태 라인 없음)로만 캡처했고, 4c의 Set-Cookie 스니펫이 "실측"이라는 라벨 아래 base64가 아닌 서술형 문자열(`eyJ...mustChangePassword...false...`)로 잘못 표기되어 있었다. 코드 리뷰 피드백(Important 1건 + Minor 2건)을 받아 dev 서버를 재기동하고 G1·S2를 `-i`로 재캡처했으며, 4c는 최초 실행 때 실제로 받은 raw 헤더 전체와 그 JWT payload를 별도로 디코딩한 값을 구분해 표기하도록 수정했다. G2는 표에서 "미실행"으로 되어 있었으나 시나리오 4c 자체가 이미 G2의 라이브 실측이라 표를 정정했다.
 
 ## 최종 DB 상태 (probank_test, users 테이블 admin 행)
 
@@ -177,14 +216,14 @@ employee_no | status | failed_login_count | locked_until | must_change_password
 admin       | ACTIVE | 0                   | (null)       | f
 ```
 
-비밀번호는 검증 과정에서 `changeme1234` → `newpass1234` 로 변경된 상태로 남아있음 (scratch DB이므로 원복하지 않음).
+비밀번호는 검증 과정에서 `changeme1234` → `newpass1234` 로 변경된 상태로 남아있음 (scratch DB이므로 원복하지 않음). `must_change_password`는 G1 follow-up 재측정을 위해 잠시 `true`로 세팅했다가, 재측정 완료 후 `false`로 복원해 위 표의 상태와 일치시켰다.
 
 ## 정리 (Cleanup)
 
-- 이번 검증을 위해 기동한 dev 서버 프로세스(PID 8452, `next dev -p 3100`)를 종료함 (`taskkill /PID 8452 /F`). 무관한 사용자 프로세스 PID 34676(port 3000)은 건드리지 않음.
-- `web/cookie.txt` 삭제.
-- `web/.env.local`(검증용으로 임시 생성, gitignored) 삭제.
-- `probank_test` DB는 그대로 둠(스크래치 DB) — 최종 상태는 위 표 참고.
+- (최초 실행) dev 서버 프로세스(PID 8452, `next dev -p 3100`)를 종료함. (follow-up 재측정) 재기동한 dev 서버 프로세스(PID 11832, `next dev -p 3100`)도 `taskkill /PID 11832 /F`로 종료 확인 (port 3100 free 확인). 무관한 사용자 프로세스 PID 34676(port 3000)은 두 차례 모두 건드리지 않음.
+- `web/cookie.txt` 삭제 (최초·follow-up 각 실행 후).
+- `web/.env.local`(검증용으로 임시 생성, gitignored) 삭제 (최초·follow-up 각 실행 후).
+- `probank_test` DB: follow-up에서 `must_change_password`를 `true`로 세팅했던 것을 재측정 후 `false`로 원복 완료 — 최종 상태는 위 표와 일치.
 
 ## 결론
 
