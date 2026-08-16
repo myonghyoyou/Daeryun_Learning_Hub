@@ -24,10 +24,10 @@ export async function incrementFailedLogin(
           ELSE locked_until
         END
     WHERE id = ${userId}
-    RETURNING locked_until
+    RETURNING locked_until::text
   `);
-  const raw = (rows as unknown as Array<{ locked_until: Date | string | null }>)[0]?.locked_until ?? null;
-  return raw === null ? null : raw instanceof Date ? raw : new Date(raw);
+  const raw = (rows as unknown as Array<{ locked_until: string | null }>)[0]?.locked_until ?? null;
+  return raw === null ? null : new Date(raw.replace(" ", "T") + "+0000");
 }
 
 export async function resetFailedLogin(db: Db, userId: number): Promise<void> {

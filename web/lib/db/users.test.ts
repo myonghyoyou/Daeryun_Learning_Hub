@@ -40,9 +40,12 @@ describe("users dao", () => {
     const until = new Date(Date.now() + 15 * 60000);
     const lockedUntil = await incrementFailedLogin(db, u.id, 5, until);
     expect(lockedUntil).not.toBeNull(); // 5 >= 5
+    expect(lockedUntil!.getTime()).toBe(until.getTime());
+    expect(lockedUntil!.getTime()).toBeGreaterThan(Date.now());
     const [after] = await db.select().from(users).where(eq(users.id, u.id));
     expect(after.failedLoginCount).toBe(5);
     expect(after.lockedUntil).not.toBeNull();
+    expect(after.lockedUntil!.getTime()).toBe(until.getTime());
   });
 
   it("resets the failed count and clears the lock", async () => {
