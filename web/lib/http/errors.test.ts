@@ -11,6 +11,9 @@ describe("envelope", () => {
   it("ok omits data when undefined (NON_NULL)", () => {
     expect(ok()).toEqual({ resultCode: 200, resultMsg: "정상 처리되었습니다." });
   });
+  it("ok omits data when it is null (NON_NULL parity)", () => {
+    expect(ok(null)).toEqual({ resultCode: 200, resultMsg: "정상 처리되었습니다." });
+  });
   it("okMessage carries code and message only", () => {
     expect(okMessage(1012, "비밀번호 변경이 필요합니다.")).toEqual({ resultCode: 1012, resultMsg: "비밀번호 변경이 필요합니다." });
   });
