@@ -89,4 +89,14 @@ describe("uploadAccountsExcel", () => {
       "행 4: 이미 사용 중인 회사 이메일입니다: DUP@x.local",
     ]);
   });
+
+  it("accepts a legacy .xls (OLE2/CFB) file like POI's WorkbookFactory", async () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["사번", "이름", "이메일", "부서코드", "역할"], ["x1", "가", "x1@x.local", "HQ", "EMPLOYEE"]]));
+    const buffer = XLSX.write(wb, { type: "array", bookType: "xls" }) as ArrayBuffer;
+    const result = await uploadAccountsExcel(db, { buffer, fileName: "legacy.xls" }, actorId);
+    expect(result.successRows).toBe(1);
+    expect(result.successAccounts.map((a) => a.employeeNo)).toEqual(["x1"]);
+    expect((await db.select().from(users)).map((u) => u.employeeNo)).toEqual(expect.arrayContaining(["x1"]));
+  });
 });

@@ -83,7 +83,7 @@
 | X9 | 업로드 로그·감사 기록 | 엑셀 일괄 등록 완료 (성공·실패 혼합) | `excel_upload_logs` 테이블 INSERT(fileName, totalRows, successRows, failRows), 감사(`ACCOUNT_EXCEL_UPLOADED`, targetType: EXCEL_UPLOAD_LOG, detail: `{fileName, totalRows, successRows, failRows}`) — 업로드 로그+감사 한 트랜잭션 |
 | X10 | 응답 형태 (successAccounts 추가) [D7] | 성공한 행들의 상세 정보 필요 | HTTP 200, resultCode 200, 응답: `{totalRows, successRows, failRows, errorDetail, successAccounts: [{rowNumber, employeeNo, name, email, temporaryPassword}]}` (프론트 표시·다운로드용, 서버는 파일 생성 안 함) |
 | X11 | 파일 필드 부재 또는 멀티파트 파싱 실패 | file 필드 미제공 또는 멀티파트 바디 손상 | HTTP 200, resultCode 1009, 메시지: "파일을 업로드할 수 없습니다." [⑥ 이탈: Spring 200/-1에서 더 나은 1009로 통일] |
-| X12 | 손상·암호·비엑셀 파일 또는 시트 없음 | .xlsx 아닌 파일, 파일 손상, 시트 없음 등 | HTTP 400, resultCode 1013, 메시지: "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요." 또는 "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요." |
+| X12 | 열 수 없는 파일 또는 시트 없음 | 손상·암호가 설정된 파일, 엑셀(xlsx/xls) 서명이 아닌 바이트, 시트 없음 등 — POI(WorkbookFactory)는 xlsx(zip)와 레거시 xls(OLE2/CFB) 를 모두 열므로 두 서명 모두 허용 대상 | HTTP 400, resultCode 1013, 메시지: "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요." 또는 "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요." |
 | X13 | 파일 크기 초과 (4MB) [④ 이탈] | 파일 크기 4MB 초과 | HTTP 400, resultCode 1015, 메시지: "파일 크기가 허용 범위를 초과했습니다." |
 | X14 | 행 저장 실패 메시지 [③ 이탈: 메일 문구 제거] | 행별 처리 중 DB INSERT 실패 또는 예기치 않은 오류 | HTTP 200, resultCode 200, errorDetail: "행 N: 계정 저장에 실패했습니다." (메일 자동 발송 언급 제거) |
 

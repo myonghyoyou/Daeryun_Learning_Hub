@@ -21,9 +21,13 @@ export async function uploadAccountsExcel(db: Db, file: { buffer: ArrayBuffer; f
   let rows: string[][];
   try {
     const bytes = new Uint8Array(file.buffer);
-    // xlsx 는 zip 컨테이너("PK" 서명)다. SheetJS 는 비엑셀 텍스트도 CSV 로 관대하게 파싱해
-    // 예외를 던지지 않으므로, 서명으로 먼저 걸러낸다.
-    if (bytes.length < 2 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    // SheetJS 는 비엑셀 텍스트도 CSV 로 관대하게 파싱해 예외를 던지지 않으므로, 서명으로 먼저
+    // 걸러낸다. POI(WorkbookFactory)와의 파리티를 위해 xlsx(zip, "PK") 와 레거시 xls(OLE2/CFB,
+    // D0 CF 11 E0 A1 B1 1A E1) 두 서명을 모두 허용한다 — 손상된 파일은 아래 XLSX.read 의 catch 로 떨어진다.
+    const isZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+    const OLE2_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+    const isOle2 = bytes.length >= 8 && OLE2_SIGNATURE.every((b, i) => bytes[i] === b);
+    if (!isZip && !isOle2) {
       throw new BizError(ErrorCode.FILE_UNREADABLE, UNREADABLE);
     }
     const workbook = XLSX.read(bytes, { type: "array" });
