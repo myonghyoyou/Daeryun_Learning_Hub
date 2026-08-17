@@ -25,11 +25,11 @@
 | ID | 시나리오 | 입력·사전조건 | 기대결과 |
 |---|---|---|---|
 | D1 | 부서 목록 조회 | SUPER_ADMIN이 부서 목록 조회 | HTTP 200, resultCode 200, 응답 필드: `[{id, name, code, status}]`, 정렬: `ORDER BY name` |
-| D2 | 부서 생성 성공 | name: "개발팀", code: "DEV001", 모두 필수값 충족, 중복 없음 | HTTP 200, resultCode 200, 응답: `{id, name, code, status}`, INSERT(status=ACTIVE), 감사(`DEPARTMENT_CREATED`, detail: `{code: "DEV001"}`) |
+| D2 | 부서 생성 성공 | name: "개발팀", code: "DEV001", 모두 필수값 충족, 중복 없음 | HTTP 200, resultCode 200, 응답 본문은 bare ok() — data 키 없음, INSERT(status=ACTIVE), 감사(`DEPARTMENT_CREATED`, detail: `{code: "DEV001"}`) |
 | D3 | 부서명 검증 실패 | name 미입력 또는 name > 100자 | HTTP 400, resultCode 1000, 메시지: "부서명을 입력하세요." (미입력) 또는 "부서명은 100자를 넘을 수 없습니다." (초과) |
 | D4 | 부서 코드 검증 실패 | code 미입력 또는 code > 50자 | HTTP 400, resultCode 1000, 메시지: "부서 코드를 입력하세요." (미입력) 또는 "부서 코드는 50자를 넘을 수 없습니다." (초과) |
 | D5 | 부서 코드 중복 | 기존 코드와 동일한 code 입력 | HTTP 400, resultCode 1000, 메시지: "이미 존재하는 부서 코드입니다: {code}" |
-| D6 | 부서 수정 성공 | name: "개발팀 수정", status: "ACTIVE", 기존 부서 ID 존재 | HTTP 200, resultCode 200, 응답: `{id, name, code, status}`, 갱신: name/status만, 감사(`DEPARTMENT_UPDATED`, detail: `{code: "DEV001", name: "개발팀 수정", status: "ACTIVE"}`) |
+| D6 | 부서 수정 성공 | name: "개발팀 수정", status: "ACTIVE", 기존 부서 ID 존재 | HTTP 200, resultCode 200, 응답 본문은 bare ok() — data 키 없음, 갱신: name/status만, 감사(`DEPARTMENT_UPDATED`, detail: `{code: "DEV001", name: "개발팀 수정", status: "ACTIVE"}`) |
 | D7 | 부서 수정 시 status 누락 | name만 입력, status 미제공 | HTTP 400, resultCode 1000, 메시지: "부서 상태를 선택하세요." |
 | D8 | 부서 조회/수정 시 존재하지 않는 ID | 존재하지 않는 departmentId로 조회 또는 수정 시도 | HTTP 400, resultCode 1000, 메시지: "존재하지 않는 부서입니다." |
 | D9 | 부서 엔드포인트 역할 제한 | DEPT_ADMIN 또는 EMPLOYEE가 부서 조작 시도 | HTTP 403, resultCode 990, 메시지: "접근 권한이 없습니다." |
@@ -49,11 +49,11 @@
 | U7 | 사번 중복 | 기존 사번과 동일한 employeeNo 입력 | HTTP 400, resultCode 1000, 메시지: "이미 존재하는 사번입니다: {employeeNo}" |
 | U8 | 이메일 중복 (대소문자 무시) | 기존 이메일과 동일 (대소문자 무시 비교) | HTTP 400, resultCode 1000, 메시지: "이미 사용 중인 회사 이메일입니다: {email}" |
 | U9 | 부서 미존재 | 존재하지 않는 departmentId 입력 | HTTP 400, resultCode 1000, 메시지: "존재하지 않는 부서입니다." |
-| U10 | 계정 수정 성공 | name/email/departmentId/role/status 모두 필수, 유효, 이메일 변경 시만 중복 검사, 계정 존재 | HTTP 200, resultCode 200, 응답: `{id, employeeNo, name, email, departmentId, role, status}`, 갱신: name/email/departmentId/role/status, 감사(`USER_UPDATED`, detail: `{employeeNo, name, email, departmentId, role, status}`) |
+| U10 | 계정 수정 성공 | name/email/departmentId/role/status 모두 필수, 유효, 이메일 변경 시만 중복 검사, 계정 존재 | HTTP 200, resultCode 200, 응답 본문은 bare ok() — data 키 없음, 갱신: name/email/departmentId/role/status, 감사(`USER_UPDATED`, detail: `{employeeNo, name, email, departmentId, role, status}`) |
 | U11 | 본인 SUPER_ADMIN 역할 해제 금지 | SUPER_ADMIN이 자신의 role을 SUPER_ADMIN에서 다른 역할로 변경 시도 | HTTP 400, resultCode 1000, 메시지: "본인의 총괄 관리자 역할은 스스로 해제할 수 없습니다." |
 | U12 | 본인 계정 비활성화 금지 | SUPER_ADMIN이 자신의 status를 INACTIVE로 변경 시도 | HTTP 400, resultCode 1000, 메시지: "본인 계정은 스스로 비활성화할 수 없습니다." |
 | U13 | 마지막 활성 SUPER_ADMIN 보호 | 마지막 남은 활성 SUPER_ADMIN이 자신의 역할을 해제하거나 비활성화 시도 | HTTP 400, resultCode 1000, 메시지: "마지막 활성 총괄 관리자입니다. 다른 총괄 관리자를 먼저 지정한 뒤 역할 변경 또는 비활성화하세요." |
-| U14 | 이메일 미변경 시 중복 검사 생략 | 수정 요청에서 기존 이메일과 동일한 이메일 제공 (equalsIgnoreCase) | HTTP 200, resultCode 200, 응답: 정상 수정, 이메일 중복 검사 스킵 |
+| U14 | 이메일 미변경 시 중복 검사 생략 | 수정 요청에서 기존 이메일과 동일한 이메일 제공 (equalsIgnoreCase) | HTTP 200, resultCode 200, 응답 본문은 bare ok() — data 키 없음, 이메일 중복 검사 스킵 |
 | U15 | 계정 수정 시 존재하지 않는 계정 | 존재하지 않는 사용자 ID로 수정 시도 | HTTP 400, resultCode 1000, 메시지: "존재하지 않는 계정입니다." |
 
 ---
