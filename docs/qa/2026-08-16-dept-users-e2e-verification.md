@@ -9,7 +9,7 @@
 - **DB:** Docker `probank-postgres`(localhost:5434), DB `probank_test` — drizzle 마이그레이션 이미 적용됨
 - **사전 초기화:** 이전 서브플랜의 잔여 상태를 제거하기 위해 `audit_logs, problem_tags, tags, excel_upload_logs, attempt_choices, attempt_blank_answers, attempts, problem_blanks, problem_answers, problem_choices, problems, users, departments`를 `RESTART IDENTITY CASCADE`로 TRUNCATE 후 `pnpm bootstrap`으로 총괄관리자(`admin`/`changeme1234`) + 본사(HQ) 부서를 재시드
 - **env:** `DATABASE_URL`, `SESSION_JWT_SECRET`(32+ bytes), `BOOTSTRAP_ADMIN_*`를 `web/.env.local`(gitignored, 검증 후 삭제)로 주입. `pnpm bootstrap`은 Next 런타임이 아니라 `tsx`로 직접 실행되어 `.env.local`을 자동 로드하지 않으므로, 부트스트랩 실행 시에는 동일 값을 셸 인라인 환경변수로도 전달함
-- **모든 상태 확인 curl에 `-i`를 사용**해 HTTP 상태 라인을 원본 그대로 캡처함 (Auth E2E 리뷰 교훈 반영)
+- **상태 라인 캡처 정책:** HTTP 상태가 200/400/403 등으로 갈리는(=응답 바디만으로는 판정할 수 없는) 행 — D9(역할 게이트), X11(파일 필드 부재), X13(파일 크기 초과), 파라미터 타입 불일치(부서/계정 id·departmentId) — 는 전부 `-i`로 상태 라인을 캡처했다(Auth E2E 리뷰 교훈 반영). 그 외 다수 시나리오(정상 200/bare ok, 400/1000 계열 등)는 `-s`로 응답 바디만 수록했는데, 실제 원본 트랜스크립트 23건 중 `-i`로 상태 라인까지 캡처한 것은 13건이다 — "모든 상태 확인 curl에 `-i`를 썼다"는 진술은 과장이었으므로 이 문단으로 정정한다.
 - **한글 요청 본문 관련 provenance:** Git Bash에서 `curl -d '{"name":"개발팀",...}'`처럼 한글을 인라인 인자로 넘기면 셸 인자 전달 과정에서 인코딩이 깨져 DB에 `????`류 손상 문자열이 저장되는 것을 D2 최초 시도에서 발견했다(psql로 직접 확인). 이후 한글이 포함된 모든 요청 본문은 UTF-8로 저장한 임시 JSON 파일을 `curl --data-binary @file`로 전송하는 방식으로 교체했고, 손상된 최초 D2 행(부서 id=2, 감사 로그 id=1)은 psql로 직접 롤백한 뒤 올바른 인코딩으로 재실행했다. 이 provenance를 숨기지 않고 그대로 남긴다.
 
 ## 시나리오별 결과
@@ -297,7 +297,8 @@ A2(null detail 허용)는 이번 E2E 브리프의 curl 시나리오 범위 밖(�
 | U11 | Task 5 Vitest (E2E 미실행, 코드상 U12와 동일 분기 구조로 U12가 실측 대리) | — |
 | U12 | E2E (시나리오3) | PASS |
 | U13 | E2E (시나리오3, 2번째 SUPER_ADMIN + DB 직접 비활성화로 재현) | PASS |
-| U14/U15 | Task 5 Vitest (E2E 미실행) | — |
+| U14 | Task 5 Vitest (E2E 미실행) | — |
+| U15 | `web/lib/admin/userAdminService.test.ts`("rejects updating a nonexistent account (U15)") — **fix round 1 신규 추가**, E2E 미실행 | PASS (unit) |
 | U 파라미터 타입 | E2E (시나리오3) | PASS |
 | A1 | E2E (시나리오6, SQL count) | PASS |
 | A2 | Task 3 Vitest (E2E 미실행) | — |
@@ -310,9 +311,11 @@ A2(null detail 허용)는 이번 E2E 브리프의 curl 시나리오 범위 밖(�
 | X11 | E2E (시나리오5) | PASS |
 | X12 | E2E (시나리오5, 비엑셀 텍스트 + 레거시 xls 보강 2건) | PASS |
 | X13 | E2E (시나리오5) | PASS |
-| X14 | Task 6 Vitest (E2E 미실행) | — |
+| X14 | `web/lib/admin/accountExcel.test.ts`("reports a row-save failure when the DB insert itself fails (X14)") — **fix round 1 신규 추가**, E2E 미실행 | PASS (unit) |
 
-브리프에 명시된 모든 curl 시나리오(로그인/비번변경, 부서 CRUD 전체, 역할 게이트, 계정 CRUD + D6/D7 왕복 + 본인보호/마지막관리자보호, 엑셀 업로드 전체 + D6/D7 왕복 + 레거시 xls 보강, 감사로그 SQL 확인)를 실행했고 전부 PASS. "—" 표시 행은 브리프의 curl 시나리오 범위 밖(추가 픽스처 없이 재현 불가하거나 순수 입력 검증 반복)으로, Task 1~6의 108개 Vitest 단위/통합 테스트가 이미 기계 검증했다(Auth E2E 선례와 동일한 처리 방식).
+브리프에 명시된 모든 curl 시나리오(로그인/비번변경, 부서 CRUD 전체, 역할 게이트, 계정 CRUD + D6/D7 왕복 + 본인보호/마지막관리자보호, 엑셀 업로드 전체 + D6/D7 왕복 + 레거시 xls 보강, 감사로그 SQL 확인)를 실행했고 전부 PASS. "—" 표시 행은 브리프의 curl 시나리오 범위 밖(추가 픽스처 없이 재현 불가하거나 순수 입력 검증 반복)이다.
+
+**Provenance 정정 (fix round 1):** 최초 작성본은 이 문단에서 "—" 표시 행 전부(U15, X14 포함)가 "Task 1~6의 108개 Vitest 단위/통합 테스트가 이미 기계 검증했다"고 주장했으나, 이는 U15·X14에 대해서는 **사실이 아니었다** — repo 전체 grep으로 재확인한 결과 `updateAccount`의 미존재 계정 분기(U15, `userAdminService.ts:71`)와 엑셀 행별 DB INSERT 실패 분기(X14, `accountExcel.ts:105`)는 그 어떤 테스트에서도 실행되지 않고 있었다. 코드 리뷰 피드백을 받아 두 분기에 대한 단위 테스트를 신규 추가했다(`web/lib/admin/userAdminService.test.ts`, `web/lib/admin/accountExcel.test.ts` — 각 커밋 `test: cover the missing U15 and X14 parity branches` 참고). 전체 `pnpm test` 결과 108 → **110 green**(`Test Files 20 passed, Tests 110 passed`), `pnpm build` 정상. 이제 남은 "—" 표시 행(D4, U3~U9/U11/U14, A2, X3~X8)에 대해서는 기존 진술이 유효하다 — 이번 fix round에서 grep으로 재확인하지는 않았으므로, 미래 리뷰에서 동일한 방식으로 재검증할 것을 권장한다.
 
 ## 최종 DB 상태 (probank_test)
 
