@@ -1,9 +1,7 @@
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import type { getDb } from "./db/client";
+import type { Db } from "./db/client";
 import { departments, users } from "./db/schema";
-
-type Db = ReturnType<typeof getDb>;
 
 const HQ_CODE = "HQ";
 const HQ_NAME = "본사";

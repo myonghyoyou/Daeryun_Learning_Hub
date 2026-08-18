@@ -1,9 +1,8 @@
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
 import { ErrorCode } from "../http/errorCode";
 import { BizError } from "../http/errors";
-import { departments } from "../db/schema";
-import type { Db } from "../db/users";
+import type { Db } from "../db/client";
+import { findDepartmentById } from "../db/departments";
 import { findByEmployeeNo, incrementFailedLogin, resetFailedLogin, updateLastLoginAt, updatePassword } from "../db/users";
 import type { AuthUser, UserRole } from "./types";
 import type { LoginInput, LoginResult, SessionStatus } from "./authSchemas";
@@ -62,7 +61,7 @@ export async function sessionStatus(db: Db, authUser: AuthUser | null): Promise<
     return { isLoggedIn: false, employeeNo: null, name: null, role: null, departmentId: null, departmentName: null, mustChangePassword: false };
   }
   const dept = authUser.departmentId == null ? undefined
-    : (await db.select().from(departments).where(eq(departments.id, authUser.departmentId)).limit(1))[0];
+    : await findDepartmentById(db, authUser.departmentId);
   return {
     isLoggedIn: true, employeeNo: authUser.employeeNo, name: authUser.name, role: authUser.role,
     departmentId: authUser.departmentId, departmentName: dept?.name ?? null, mustChangePassword: authUser.mustChangePassword,
