@@ -6,7 +6,7 @@ import { ErrorCode } from "./errorCode";
 export function parseNumericParam(value: string | null | undefined, name: string): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
-  if (!Number.isFinite(n)) {
+  if (!Number.isSafeInteger(n)) {
     throw new BizError(ErrorCode.INPUT_VALUE_INVALID, "요청 값의 형식이 올바르지 않습니다: " + name);
   }
   return n;
