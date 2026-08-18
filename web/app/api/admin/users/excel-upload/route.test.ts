@@ -47,6 +47,15 @@ describe("excel-upload route", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "파일을 업로드할 수 없습니다." });
   });
+  it("returns 403/990 for a DEPT_ADMIN with no file (role gate precedes the file-absent branch)", async () => {
+    const [d] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
+    const [u] = await db.insert(users).values({ employeeNo: "dept1", name: "부서장", email: "dept1@x.local", passwordHash: "h", departmentId: d.id, role: "DEPT_ADMIN" }).returning();
+    state.currentUser = { userId: u.id, employeeNo: "dept1", name: "부서장", role: "DEPT_ADMIN", departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
+    const { POST } = await import("./route");
+    const res = await POST(post(new FormData()));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ resultCode: 990, resultMsg: "접근 권한이 없습니다." });
+  });
   it("rejects a >4MB file with 400/1015", async () => {
     await seedAdmin();
     const form = new FormData();
