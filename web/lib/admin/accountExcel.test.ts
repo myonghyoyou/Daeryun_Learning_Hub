@@ -90,6 +90,17 @@ describe("uploadAccountsExcel", () => {
     ]);
   });
 
+  it("reports a row-save failure when the DB insert itself fails (X14)", async () => {
+    // employeeNo 는 엑셀 행 검증에 길이 제한이 없어(단건 생성과 달리) 그대로 insertUser 까지
+    // 도달하고, users.employee_no varchar(50) 제약 위반으로 DB INSERT 가 실패한다 — catch 경로 실측.
+    const overlong = "E".repeat(60);
+    const buffer = sheetBuffer([[overlong, "가", "over@x.local", "HQ", "EMPLOYEE"]]);
+    const result = await uploadAccountsExcel(db, { buffer, fileName: "toolong.xlsx" }, actorId);
+    expect(result.failRows).toBe(1);
+    expect(result.errorDetail).toBe("행 2: 계정 저장에 실패했습니다.");
+    expect(await db.select().from(users)).toHaveLength(1); // admin 뿐 — 실패 행은 커밋 안 됨
+  });
+
   it("accepts a legacy .xls (OLE2/CFB) file like POI's WorkbookFactory", async () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["사번", "이름", "이메일", "부서코드", "역할"], ["x1", "가", "x1@x.local", "HQ", "EMPLOYEE"]]));

@@ -74,6 +74,10 @@ describe("updateAccount admin-access protection", () => {
     const [u] = await db.select().from(users).where(eq(users.id, admin.id));
     expect(u.email).toBe("ADMIN@x.local");
   });
+  it("rejects updating a nonexistent account (U15)", async () => {
+    expect(await msg(() => updateAccount(db, 999999, { name: "x", email: "n@x.local", departmentId: hq.id, role: "EMPLOYEE", status: "ACTIVE" }, actor)))
+      .toBe("존재하지 않는 계정입니다.");
+  });
 });
 
 describe("listAccounts", () => {
