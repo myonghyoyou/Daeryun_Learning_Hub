@@ -7,16 +7,17 @@
 
 ---
 
-## 승인된 이탈(6건)
+## 승인된 이탈(7건)
 
 | 번호 | 유형 | 설명 | 근거 문서 |
 |------|------|------|----------|
 | ① | D6 메일 제거 | 단건 생성 응답에 `temporaryPassword` 포함 (감사에는 비밀번호 절대 미기록) | deployment.md D6, 이관 스펙 Q6 |
 | ② | D7 일괄 추가 필드 | 엑셀 일괄 업로드 응답에 `successAccounts` 배열 추가 | deployment.md D7, 이관 스펙 Q7 |
 | ③ | 행 실패 문구 정화 | 엑셀 행별 실패 문구에서 메일 언급 제거 | 이관 스펙 Q6 |
-| ④ | 파일 상한 하향 | 파일 크기 상한 20MB → 4MB, resultCode 1015 | 이관 스펙 Q7 플랫폼 안전값 |
-| ⑤ | SheetJS 행 번호 어긋남 | SheetJS `blankrows:false`로 인해 빈 행 많은 파일에서 오류 행 번호가 엑셀과 어긋날 수 있음 | 실사용 파일엔 빈 행 없음, 미세 이탈로 기록 |
+| ④ | 파일 상한 하향 | 파일 크기 상한 20MB → 4MB, resultCode 1015. Spring 실측: 20MB 초과는 `MaxUploadSizeExceeded`(Multipart)로 잡혀 HTTP 200, resultCode 1009였다; 포트는 4MB 초과 시 HTTP 400, resultCode 1015로 응답한다(상한값·상태코드·resultCode 모두 이탈) | 이관 스펙 Q7 플랫폼 안전값 |
+| ⑤ | SheetJS 행 번호 어긋남 | SheetJS `blankrows:false`로 인해 빈 행 많은 파일에서 오류 행 번호가 엑셀과 어긋날 수 있음. 동일한 이유로 `totalRows` 집계와 500행 상한 판정에서도 빈 행이 제외된다(Spring `lastRowNum`은 빈 행을 포함해 센다) | 실사용 파일엔 빈 행 없음, 미세 이탈로 기록 |
 | ⑥ | file 필드 부재 통일 | 멀티파트 file 필드 부재 → HTTP 200, resultCode 1009로 통일 (Spring은 catch-all 200/-1) | 의도적 개선 |
+| ⑦ | API 타임스탬프 UTC 직렬화 | API 응답의 타임스탬프는 UTC ISO("Z" 접미사)로 직렬화한다(Spring은 존 정보 없는 KST 벽시계 문자열). 표시층에서 현지화하므로 화면에는 동일하게 노출된다. Plan 5·6에서 타임스탬프가 대량 노출되기 전에 컨벤션으로 고정해 둔다 | 컷오버 전 확정 필요 |
 
 ---
 
@@ -48,7 +49,7 @@
 | U6 | 역할 검증 실패 | role 미입력 또는 유효하지 않은 역할값 | 역할 누락 → HTTP 400, resultCode 1000, 메시지: "역할을 선택하세요." / 역할 값이 유효 enum이 아님 → Spring은 Jackson 강제변환 실패로 HTTP 200, resultCode 1000(일반 문구 "잘못된 파라미터를 입력했습니다."·errorList), 포트는 HTTP 400, resultCode 1000 "역할을 선택하세요."로 수렴 — 수용된 미세 이탈(본문 파싱 계열, resultCode 1000은 동일·프론트는 resultCode로만 분기). "유효하지 않은 역할입니다: {text}"는 X6(엑셀 행별 검증) 전용이며 U6에는 적용되지 않는다 |
 | U7 | 사번 중복 | 기존 사번과 동일한 employeeNo 입력 | HTTP 400, resultCode 1000, 메시지: "이미 존재하는 사번입니다: {employeeNo}" |
 | U8 | 이메일 중복 (대소문자 무시) | 기존 이메일과 동일 (대소문자 무시 비교) | HTTP 400, resultCode 1000, 메시지: "이미 사용 중인 회사 이메일입니다: {email}" |
-| U9 | 부서 미존재 | 존재하지 않는 departmentId 입력 | HTTP 400, resultCode 1000, 메시지: "존재하지 않는 부서입니다." |
+| U9 | 부서 미존재 | 존재하지 않는 departmentId 입력 | HTTP 400, resultCode 1000, 메시지: "존재하지 않는 부서입니다." departmentId가 오형식(비숫자)인 경우: Spring은 Jackson 강제변환 실패로 HTTP 200, resultCode 1000(일반 문구)이고, 포트는 "존재하지 않는 부서입니다."로 HTTP 400, resultCode 1000 — U6와 같은 수용 계열의 본문 파싱 미세 이탈(resultCode 1000은 동일) |
 | U10 | 계정 수정 성공 | name/email/departmentId/role/status 모두 필수, 유효, 이메일 변경 시만 중복 검사, 계정 존재 | HTTP 200, resultCode 200, 응답 본문은 bare ok() — data 키 없음, 갱신: name/email/departmentId/role/status, 감사(`USER_UPDATED`, detail: `{employeeNo, name, email, departmentId, role, status}`) |
 | U11 | 본인 SUPER_ADMIN 역할 해제 금지 | SUPER_ADMIN이 자신의 role을 SUPER_ADMIN에서 다른 역할로 변경 시도 | HTTP 400, resultCode 1000, 메시지: "본인의 총괄 관리자 역할은 스스로 해제할 수 없습니다." |
 | U12 | 본인 계정 비활성화 금지 | SUPER_ADMIN이 자신의 status를 INACTIVE로 변경 시도 | HTTP 400, resultCode 1000, 메시지: "본인 계정은 스스로 비활성화할 수 없습니다." |
@@ -86,6 +87,8 @@
 | X12 | 열 수 없는 파일 또는 시트 없음 | 손상·암호가 설정된 파일, 엑셀(xlsx/xls) 서명이 아닌 바이트, 시트 없음 등 — POI(WorkbookFactory)는 xlsx(zip)와 레거시 xls(OLE2/CFB) 를 모두 열므로 두 서명 모두 허용 대상 | HTTP 400, resultCode 1013, 메시지: "엑셀 파일을 읽을 수 없습니다. 손상되었거나 암호가 설정된 파일인지 확인한 뒤 다시 올려 주세요." 또는 "엑셀 파일에 시트가 없습니다. 첫 번째 시트에 계정 목록을 담아 다시 올려 주세요." |
 | X13 | 파일 크기 초과 (4MB) [④ 이탈] | 파일 크기 4MB 초과 | HTTP 400, resultCode 1015, 메시지: "파일 크기가 허용 범위를 초과했습니다." |
 | X14 | 행 저장 실패 메시지 [③ 이탈: 메일 문구 제거] | 행별 처리 중 DB INSERT 실패 또는 예기치 않은 오류 | HTTP 200, resultCode 200, errorDetail: "행 N: 계정 저장에 실패했습니다." (메일 자동 발송 언급 제거) |
+
+**운영 리스크:** 대량 업로드 타임아웃/업로드 로그 트랜잭션 실패 시 successAccounts 유실 리스크 — 컷오버에서 다룸.
 
 ---
 

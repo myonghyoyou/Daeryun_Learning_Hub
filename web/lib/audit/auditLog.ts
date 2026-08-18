@@ -3,6 +3,7 @@ import { auditLogs } from "../db/schema";
 
 // Spring AuditLogServiceImpl 미러: detail 에 "password" 를 포함한 키가 재귀적으로 존재하면
 // fail-closed 로 거부한다. 임시 비밀번호가 감사 로그로 새는 사고를 구조적으로 막는다.
+// Spring의 "파싱 불가 JSON fail-closed" 분기는 TS 포트에선 객체를 직접 받아 구조적으로 비해당(파싱 단계 자체가 없음).
 function findPasswordKey(value: unknown): string | null {
   if (Array.isArray(value)) {
     for (const item of value) { const hit = findPasswordKey(item); if (hit) return hit; }
