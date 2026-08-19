@@ -21,7 +21,7 @@ master 는 항상 초록이고, 다음 세션은 이 표와 SDD 원장만 보고
 | 구간 | Task | 스텝 | 끝났을 때 동작하는 것 | 상태 |
 |---|---|--:|---|---|
 | **M1 기반** | 1 + 4 | 12 | 정답지 131행 + 검증 모듈. 테스트 116 → 159 | ☑ 2026-08-19 |
-| **M2 데이터 계층** | 2 + 3 | 15 | 태그 목록 1개 | ☐ |
+| **M2 데이터 계층** | 2 + 3 | 15 | 태그 목록 1개(`/api/tags`). 테스트 159 → 185 | ☑ 2026-08-19 |
 | **M3 CRUD** | 5 | 10 | 생성·수정·보관·상세 4개 | ☐ |
 | **M4 조회·이동** | 6 + 7 | 9 | 목록·부서이동·다음번호 3개 | ☐ |
 | **M5 엑셀** | 9 | 4 | 일괄 등록 1개 — **722문항 적재 경로가 열린다** | ☐ |
@@ -218,7 +218,7 @@ Spring 은 로컬 디스크(`./uploads/images`)에 쓰고 정적 리소스로 �
 | `web/lib/db/problems.ts` | **신규.** 문제 DAO — insert/update/findById/updateStatus/updateDepartmentAndSourceNumber/findMaxSourceNumber | 2 |
 | `web/lib/db/problemParts.ts` | **신규.** 보기·정답·빈칸 DAO — insertAll/deleteByProblemId/findByProblemId | 2 |
 | `web/lib/db/tags.ts` | **신규.** 태그 DAO — findAll/findInUse/findOrCreateByNames/replaceTags/findNamesByProblemId | 3 |
-| `web/app/api/admin/tags/route.ts` | **신규.** 관리자 태그 목록 | 3 |
+| `web/app/api/tags/route.ts` | **신규.** 태그 목록. **경로는 `/api/admin/tags` 가 아니라 `/api/tags` 다** — `TagController` 가 `@RequestMapping("/api/tags")` 이고 기존 클라이언트가 `apiGet("/api/tags")` 로 부른다(`frontend/src/api/problems.js:11`). rewrite 도 없다(`next.config.mjs` 는 `{}`). 404 는 `ProblemListPage` 의 `.catch(() => setTags([]))` 가 삼켜서 태그 필터가 조용히 비어 보인다. 형제 엔드포인트 `/api/tags/in-use`(`findInUseTags` 소비처)는 직원 풀이 화면 서브플랜에서 붙는다 — 그래서 M2 시점의 `findInUseTags` 에는 아직 호출부가 없다 | 3 |
 | `web/lib/problem/problemValidation.ts` | **신규.** 순수 검증·정규화 — DB 없이 테스트 가능한 파리티 표면 전부 | 4 |
 | `web/lib/problem/imageUrl.ts` | **신규.** `ImageUrlValidator` 이식(JSON·엑셀 공유) | 4 |
 | `web/lib/problem/owningDepartment.ts` | **신규.** `OwningDepartmentResolver` 이식 | 5 |
@@ -453,13 +453,13 @@ git commit -m "feat: add problem and problem-part DAOs with round-trip tests"
 
 **Files:**
 - Create: `web/lib/db/tags.ts`, `web/lib/db/tags.test.ts`
-- Create: `web/app/api/admin/tags/route.ts`, `web/app/api/admin/tags/route.test.ts`
+- Create: `web/app/api/tags/route.ts`, `web/app/api/tags/route.test.ts` (`/api/admin/tags` 가 아니다 — `TagController` 는 `@RequestMapping("/api/tags")`)
 
 **Interfaces:**
 - Consumes: Task 2 의 `insertProblem`
 - Produces:
-  - `findAllTags(conn: DbConn): Promise<{id:number;name:string}[]>`
-  - `findInUseTags(conn: DbConn): Promise<{id:number;name:string}[]>`
+  - `findAllTags(conn: DbConn): Promise<{id:number;name:string;createdAt:Date}[]>` — `TagMapper.xml findAll` 이 `id, name, created_at` 을 고른다(`Tag.java` 필드 3개)
+  - `findInUseTags(conn: DbConn): Promise<{id:number;name:string;createdAt:Date}[]>` — 소비처 `/api/tags/in-use` 는 직원 풀이 화면 서브플랜에서 붙는다
   - `findOrCreateTagsByNames(conn: DbConn, names: string[]): Promise<number[]>`
   - `replaceProblemTags(conn: DbConn, problemId: number, tagIds: number[]): Promise<void>`
   - `findTagNamesByProblemId(conn: DbConn, problemId: number): Promise<string[]>`
@@ -508,7 +508,7 @@ Expected: PASS
 
 - [ ] **Step 5: 라우트 테스트 작성**
 
-`web/app/api/admin/tags/route.test.ts`:
+`web/app/api/tags/route.test.ts`:
 
 ```typescript
 it("인증된 사용자면 역할과 무관하게 태그 목록을 돌려준다", async () => {
@@ -530,7 +530,7 @@ it("세션이 없으면 980 이다", async () => {
 - [ ] **Step 6: 실패 확인 → 라우트 구현 → 통과 확인**
 
 ```typescript
-// web/app/api/admin/tags/route.ts
+// web/app/api/tags/route.ts
 import { getDb } from "@/lib/db/client";
 import { handleRoute } from "@/lib/http/errors";
 import { requireActor } from "@/lib/auth/currentUser";
@@ -550,7 +550,7 @@ export async function GET(): Promise<Response> {
 - [ ] **Step 7: Commit**
 
 ```bash
-git add web/lib/db/tags.ts web/lib/db/tags.test.ts web/app/api/admin/tags
+git add web/lib/db/tags.ts web/lib/db/tags.test.ts web/app/api/tags
 git commit -m "feat: add tag DAO and the admin tag list endpoint"
 ```
 
@@ -969,12 +969,16 @@ git commit -m "feat: add problem create/update/archive/detail with duplicate-num
 
 **Files:**
 - Create: `web/lib/problem/problemListService.ts`, `web/lib/problem/problemListService.test.ts`
+- Modify: `web/lib/db/problems.ts` (목록 SQL 은 DAO 에 둔다 — `ProblemMapper.xml findAll`(:91)·`countAll`(:110) 이식처. 선례: `web/lib/db/users.ts` 의 `listUsers` 가 같은 조인+필터+정렬 모양을 DAO 에서 한다. 서비스에 SQL 을 두면 Architecture 문단이 정한 층이 갈라진다. Task 2 가 만든 파일이지만 이 두 함수는 Task 6 의 필터 타입과 `parseDateParam` 에 의존하므로 여기서 추가한다)
+- Modify: `web/lib/db/problems.test.ts` (위 두 함수의 DAO 테스트)
 - Modify: `web/app/api/admin/problems/route.ts` (GET 추가)
 
 **Interfaces:**
 - Consumes: Task 2·5
 - Produces:
-  - `listProblems(conn: DbConn, actor: AuthUser, filters): Promise<ProblemPageResponse>`
+  - `listProblems(conn: DbConn, filters): Promise<ProblemListItem[]>` — `web/lib/db/problems.ts`. `ProblemMapper.xml findAll`(:91) 이식: `LEFT JOIN problem_tags/tags` + `GROUP BY p.id, d.name` + `array_agg`, `ORDER BY p.created_at DESC, p.id DESC`, `LIMIT/OFFSET`
+  - `countProblems(conn: DbConn, filters): Promise<number>` — `web/lib/db/problems.ts`. `ProblemMapper.xml countAll`(:110) 이식: **태그 조인 없이** `count(*)` — 조인을 두면 총건수가 태그 수만큼 부푼다. `listProblems` 와 반드시 같은 필터 조각을 쓴다
+  - `listProblems(conn: DbConn, actor: AuthUser, filters): Promise<ProblemPageResponse>` — `web/lib/problem/problemListService.ts`. 역할 스코프·클램프·페이지 조립만 하고 SQL 은 위 두 DAO 에 위임한다. DAO 와 이름이 겹치므로 서비스에서는 `import { listProblems as selectProblemRows, countProblems } from "@/lib/db/problems"` 처럼 별칭으로 받는다
     - `filters = {departmentId: number|null, type: string|null, status: string|null, createdFrom: Date|null, createdTo: Date|null, tag: string|null, keyword: string|null, page: number, size: number}`
     - 반환 `{items, totalCount, page, size}`
   - **`parseDateParam(value: string|null|undefined, name: string): Date|null`** — `web/lib/http/params.ts` 에 추가한다. `parseNumericParam` 옆에 두어 두 파서가 같은 오류 형식을 쓰는 것이 눈에 보이게 한다.
@@ -1048,7 +1052,7 @@ Run: `cd web && pnpm test`
 - [ ] **Step 4: Commit**
 
 ```bash
-git add web/lib/problem/problemListService.ts web/lib/problem/problemListService.test.ts web/app/api/admin/problems/route.ts
+git add web/lib/db/problems.ts web/lib/db/problems.test.ts web/lib/problem/problemListService.ts web/lib/problem/problemListService.test.ts web/app/api/admin/problems/route.ts
 git commit -m "feat: add the problem list endpoint with nine filters and paging"
 ```
 

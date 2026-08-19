@@ -62,7 +62,7 @@ function trimToNull(value: string | null | undefined): string | null {
  *
  * tags 는 여기서 건드리지 않는다. Java `normalize()`(ProblemServiceImpl.java:230-249)는 tags 를
  * 전혀 만지지 않는다 — `normalizeTags`는 저장 시점, `validate()`·`validateSourceNumber()`·부서
- * 해석기 뒤에만 호출된다(:117,:159). 여기서 태그를 정규화하면 태그 위반(21개 등)이 문항 번호
+ * 해석기 뒤에만 호출된다(:124,:162). 여기서 태그를 정규화하면 태그 위반(21개 등)이 문항 번호
  * 누락 같은 다른 위반보다 먼저 던져져 Java 와 오류 메시지 순서가 뒤바뀐다.
  */
 export function normalizeProblemRequest(req: ProblemCreateInput): ProblemCreateInput {
@@ -199,12 +199,6 @@ function validateFillBlank(content: string | null, blanks: BlankInput[], blankRe
   const keys = blanks.map((b) => b.blankKey ?? "");
   if (new Set(keys).size !== keys.length) invalid("빈칸 키가 중복되었습니다.");
 
-  // Java 는 이 방향(선언된 키가 본문에 있는가)을 리터럴 부분 문자열로 검사한다
-  // (`content.contains("{{" + key + "}}")`, ProblemServiceImpl.java:425-429) — 정규식이 아니다.
-  // 정규식(BLANK_MARKER_PATTERN)은 반대 방향(본문의 마커가 선언돼 있는가, :433-440)에만 쓰인다.
-  // 두 방향에 같은 정규식 charset([A-Za-z0-9_-]+)을 쓰면, 그 charset 밖의 키(한글, "b.1" 처럼
-  // "."을 포함하는 키 등)가 본문에 실제로 있어도 이 방향에서 false 로 거부된다 —
-  // frontend/src/utils/blankSegments.js 가 명시하듯 "서버는 키 형식을 강제하지 않는다".
   // Java 는 이 방향(선언된 키가 본문에 있는가)을 리터럴 부분 문자열로 검사한다
   // (`content.contains("{{" + key + "}}")`, ProblemServiceImpl.java:425-429) — 정규식이 아니다.
   // 정규식(BLANK_MARKER_PATTERN)은 반대 방향(본문의 마커가 선언돼 있는가, :433-440)에만 쓰인다.
