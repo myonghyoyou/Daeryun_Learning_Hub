@@ -108,6 +108,18 @@ describe("validateProblem — multiple choice", () => {
       "OX 문제는 보기 2개(O/X)가 필요합니다.",
     );
   });
+  it("prioritizes the OX choice-count violation over the answer-count violation", () => {
+    // 3 choices AND 2 correct at once — the count check must win, not the answer-count check.
+    expectMessage(
+      () =>
+        validateProblem({
+          ...base,
+          type: "OX",
+          choices: [choice("O", true), choice("X", true), choice("?")],
+        }),
+      "OX 문제는 보기 2개(O/X)가 필요합니다.",
+    );
+  });
 });
 
 describe("validateProblem — short answer", () => {
@@ -159,6 +171,25 @@ describe("validateProblem — fill in the blank", () => {
     expectMessage(
       () => validateProblem(fb({ blanks: [{ blankKey: "b1", answerText: "가".repeat(501) }] })),
       "빈칸 정답은 500자 이하여야 합니다.",
+    );
+  });
+  it("checks all three per-blank rules on one blank before moving to the next (matches Java's single-pass loop)", () => {
+    // The first blank violates only the key-length rule; the second violates only the
+    // blank-answer rule. Java inspects blank #1 fully before ever looking at #2, so the
+    // key-length message must win — a per-rule full-list scan would report the second
+    // blank's violation instead, because it would find it while scanning for blank answers
+    // across every blank first.
+    expectMessage(
+      () =>
+        validateProblem(
+          fb({
+            blanks: [
+              { blankKey: "b".repeat(51), answerText: "정상" },
+              { blankKey: "b2", answerText: "  " },
+            ],
+          }),
+        ),
+      "빈칸 키는 50자 이하여야 합니다.",
     );
   });
   it("rejects duplicate blank keys", () => {

@@ -180,17 +180,19 @@ function extractMarkers(content: string | null): string[] {
 function validateFillBlank(content: string | null, blanks: BlankInput[], blankRevealCount: number | null | undefined): void {
   if (blanks.length === 0) invalid("빈칸을 최소 1개 정의하세요.");
 
+  // Java 는 blanks 를 한 번만 순회하며 각 빈칸에 세 검사를 모두 적용한 뒤 다음 빈칸으로
+  // 넘어간다(ProblemServiceImpl.java:407-420) — 규칙별 전체 스캔이 아니다. 두 개의 다른 빈칸이
+  // 서로 다른 규칙을 위반할 때 어느 문구가 먼저 뜨는지가 이 순서에 달려 있다.
   for (const b of blanks) {
     if (isBlank(b.blankKey) || isBlank(b.answerText)) invalid("빈칸 키와 정답을 모두 입력하세요.");
-  }
-  for (const b of blanks) {
     if ((b.blankKey ?? "").length > MAX_BLANK_KEY_LENGTH) invalid("빈칸 키는 50자 이하여야 합니다.");
-  }
-  for (const b of blanks) {
     if ((b.answerText ?? "").length > MAX_BLANK_ANSWER_LENGTH) invalid("빈칸 정답은 500자 이하여야 합니다.");
   }
 
-  const keys = blanks.map((b) => (b.blankKey ?? "").trim());
+  // Java 는 trim 하지 않은 원본 키를 그대로 쓴다(keys.add(blank.getBlankKey())) — 중복 검사와
+  // 마커 매칭 모두 이 값을 기준으로 한다. normalizeProblemRequest 가 먼저 실행된다는 관례에
+  // 기대지 않고, validateProblem 단독 호출에서도 Java 와 같은 결과가 나오도록 원본값을 쓴다.
+  const keys = blanks.map((b) => b.blankKey ?? "");
   if (new Set(keys).size !== keys.length) invalid("빈칸 키가 중복되었습니다.");
 
   const markers = extractMarkers(content);
