@@ -34,6 +34,8 @@
 | R8 | SUPER_ADMIN 분기 — 부서 미지정 | `OwningDepartmentResolver.resolve`, actor가 `SUPER_ADMIN`, `requested == null` | "문제가 귀속될 부서를 선택하세요." | `OwningDepartmentResolver.java:40-42` |
 | R9 | SUPER_ADMIN 분기 — 부서 없음 | `OwningDepartmentResolver.resolve`, actor가 `SUPER_ADMIN`, `requested`에 해당하는 부서가 존재하지 않음 | "존재하지 않는 부서입니다." | `OwningDepartmentResolver.java:43-46` |
 | R10 | SUPER_ADMIN 분기 — 부서 비활성 | `OwningDepartmentResolver.resolve`, actor가 `SUPER_ADMIN`, 대상 부서가 `ACTIVE`가 아님 | "비활성 부서에는 문제를 등록할 수 없습니다: \<부서명\>" — C5의 "비활성 부서로는 옮길 수 없습니다: \<부서명\>"(`ProblemServiceImpl.changeDepartment`)과는 다른 메서드·다른 문구이므로 혼동 금지 | `OwningDepartmentResolver.java:47-50` |
+| R11 | 대상 문제 없음(수정·보관·상세조회 공통) | `update()`·`archive()`·`getDetail()` 각각에서 대상 id가 존재하지 않음 | "존재하지 않는 문제입니다." — `assertOwnership` 호출보다 먼저, 세 메서드 모두에서 던져진다. C2(`changeDepartment`)와 같은 문구를 재사용한다 | `ProblemServiceImpl.java:132-134(update),170-172(archive),198-200(getDetail)`; C2(`:508-511`)와 동일 문구 |
+| R12 | 문항번호 검증이 부서 해석보다 먼저(create) | `create()`, actor가 `SUPER_ADMIN`, `departmentId == null`이고 `sourceNumber`도 `null` | `validateSourceNumber`가 `OwningDepartmentResolver.resolve`보다 먼저 실행되므로 "문항 번호를 입력하세요."(N1)가 뜬다 — R8의 "문제가 귀속될 부서를 선택하세요."는 이 경우 도달하지 않는다. 순서를 바꾸면 Task 5(V·N 구획)에서 fill-blank 순서 버그와 같은 종류의 결함이 재발한다 | `ProblemServiceImpl.java:94-98`(순서: `normalize→validate→validateSourceNumber→resolve`); R8과 대조 |
 
 ---
 
@@ -48,7 +50,7 @@
 | V5 | 유형 누락(최우선 검사) | `type == null` | "문제 유형을 선택하세요." — switch가 어떤 분기도 타지 않아 검증을 건너뛰는 것을 막기 위해 가장 먼저 검사 | `ProblemServiceImpl.java:322-324` |
 | V6 | 내용 공백 | `content` trim 결과 공백 | "문제 내용을 입력하세요." | `ProblemServiceImpl.java:325-327` |
 | V7 | imageUrl 비어있음 | `imageUrl`이 null 또는 빈 문자열 | 통과(검증 없음) | `ImageUrlValidator.java:38-41` |
-| V8 | imageUrl 접두어/경로 탈출 | 접두어가 `/uploads/images/`가 아니거나 `..` 포함 | "이미지는 이미지 업로드 API로 등록한 경로(/uploads/images/...)만 사용할 수 있습니다." | `ImageUrlValidator.java:42-45`; 문구 조립 `ProblemServiceImpl.java:359-362` |
+| V8 | imageUrl 접두어/경로 탈출 | 접두어가 `/uploads/images/`가 아니거나 `..` 포함 | "이미지는 이미지 업로드 API로 등록한 경로(/uploads/images/...)만 사용할 수 있습니다." — **주의:** 여기 인용된 `/uploads/images/`는 현재 값의 스냅샷이다. 승인된 이탈 ②(M6, Supabase Storage 이관)에서 접두어 자체가 바뀐다 — M6 구현자는 이 문구를 고정 문자열로 읽지 말 것 | `ImageUrlValidator.java:42-45`; 문구 조립 `ProblemServiceImpl.java:359-362` |
 | V9 | imageUrl 길이 초과 | 500자 초과 | "이미지 경로는 500자 이하여야 합니다." | `ImageUrlValidator.java:20,46-48`; 문구 조립 `ProblemServiceImpl.java:363-366` |
 | V10 | MCQ_SINGLE 규칙 | 보기 개수·정답 개수 | 보기 2~5개, 정답 정확히 1개 | `ProblemServiceImpl.java:330-332` |
 | V11 | MCQ_MULTI 규칙 | 보기 개수·정답 개수 | 보기 2~5개, 정답 1개 이상 | `ProblemServiceImpl.java:333-335` |
@@ -71,6 +73,8 @@
 | V28 | FILL_BLANK 공개 개수 검증 | `blankRevealCount`가 null·1 미만·`blanks.length` 초과 | "출제할 빈칸 개수가 유효하지 않습니다." | `ProblemServiceImpl.java:441-443` |
 | V29 | 태그 정규화 | trim → 빈 것 제거 → `toLowerCase(Locale.ROOT)` → 중복 제거, 20개 초과 또는 100자 초과 | "태그는 문제당 20개, 태그명은 100자 이하여야 합니다." (JS는 `toLowerCase()`가 로케일 독립이므로 `toLocaleLowerCase()` 사용 금지) | `ProblemServiceImpl.java:259-270` |
 | V30 | 수정 시 재삽입 | `update()` 저장 단계 | 기존 보기/정답/빈칸을 전량 삭제(`deleteByProblemId` ×3) 후 `saveTypeSpecificData`로 재삽입 | `ProblemServiceImpl.java:158-161` |
+| V31 | FILL_BLANK 아닌 유형의 blankRevealCount 저장 | 생성·수정, `type != FILL_BLANK` | 저장되는 `blankRevealCount`는 요청 값과 무관하게 항상 `null` — V28(검증)과 별개인 **영속 규칙**이다 | `ProblemServiceImpl.java:108(create),148(update)` |
+| V32 | 보기·빈칸 displayOrder는 1-based | 생성·수정 시 `saveTypeSpecificData` | 보기·빈칸 모두 배열 인덱스가 아니라 `i + 1`을 `displayOrder`로 저장(1부터 시작) | `ProblemServiceImpl.java:305-316`(보기, `toChoiceEntities`),`289-301`(빈칸, 특히 `:297`) |
 
 ---
 
@@ -83,8 +87,9 @@
 | N3 | 등록·수정 모두 필수 | `create`·`update` 양쪽 경로 | `validateSourceNumber`가 두 경로에서 모두 호출됨(예외 없음) | `ProblemServiceImpl.java:96,142` |
 | N4 | 중복 문항번호 | `UNIQUE(department_id, source_number)` 위반, SQLState 23505, 제약명 `uq_problems_department_source_number` | "\<부서명\> \<번호\>번은 이미 있습니다. 다른 번호를 입력하세요." | `ProblemServiceImpl.java:63,490-496` |
 | N5 | 부서명 조회 시점(QA-1 재발 금지) | 쓰기(INSERT/UPDATE) 직전 | 부서명은 쓰기 **전에** 읽어 둔다 — catch 안에서 SELECT하면 PostgreSQL이 25P02로 트랜잭션 전체를 abort시켜 안내 문구가 만들어지지 못하고 `-1 처리 중 오류가 발생하였습니다`로 샌다 | `ProblemServiceImpl.java:99-100(create),150-151(update),479-488(duplicateSourceNumber 주석)` |
-| N6 | 다른 제약의 UNIQUE 위반 | 제약 이름이 `uq_problems_department_source_number`가 아님 | 번호 탓으로 돌리지 않고 원래 예외를 그대로 던진다 | `ProblemServiceImpl.java:491-494` |
+| N6 | 다른 제약의 UNIQUE 위반 | 제약 이름이 `uq_problems_department_source_number`가 아님 | 번호 탓으로 돌리지 않고 원래 예외를 그대로 던진다. **단, `cause.getMessage()`가 `null`이면** `cause.getMessage() != null && ...` 판정 자체가 단락평가로 거짓이 되어 이 재던짐 분기를 타지 않고 그대로 통과해 N4의 중복 안내 문구를 만든다 — "제약 이름이 다르면 무조건 재던짐"이 아니다 | `ProblemServiceImpl.java:490-494` |
 | N7 | postgres.js 오류 객체 속성명 | 동일 `code`로 두 번 insert했을 때 실측 | `code:"23505"`, **`constraint_name`**은 있음, **`constraint`는 undefined**(pg 드라이버와 이름이 다름) | Spring 소스 아님 — postgres.js 런타임 실측(plan Global Constraints 원문, `docs/superpowers/plans/2026-08-19-migration-problem-bank.md:115-121`) |
+| N8 | 부서명 조회 실패 시 폴백 | `lookupDepartmentName`에 넘긴 `departmentId`가 `null`이거나 해당 부서 행이 없음 | 리터럴 `"해당 부서"`를 부서명으로 사용한다 — N4의 중복 안내 문구가 `해당 부서 <번호>번은 이미 있습니다...`처럼 폴백 문자열로 렌더될 수 있다 | `ProblemServiceImpl.java:471-476` |
 
 ---
 
@@ -130,6 +135,14 @@
 
 ---
 
+## D. 문제 상세조회
+
+| ID | 시나리오 | 입력·사전조건 | 기대결과 | Spring 출처 |
+|---|---|---|---|---|
+| D1 | 상세조회 응답 형태 | `getDetail` 성공 | `{id,type,content,imageUrl,referenceText,explanation,blankRevealCount,status,departmentId,sourceNumber,choices,answers,blanks,tags}` — L14(목록)와 필드 구성이 다르다(목록은 `departmentName`·`createdAt`을 갖고 `choices`/`answers`/`blanks`/`imageUrl`/`referenceText`/`explanation`/`blankRevealCount`가 없다) | `ProblemDetailResponse.java:14-37`(필드·`of` 조립); 호출 `ProblemServiceImpl.java:196-210` |
+
+---
+
 ## I. 이미지
 
 | ID | 시나리오 | 입력·사전조건 | 기대결과 | Spring 출처 |
@@ -143,7 +156,7 @@
 | I7 | 경로 이탈 방어 | 저장 대상 경로 계산 | `target.getParent()`가 `uploadDir`과 다르면 거부(벨트 앤 브레이스, UUID+정규식 확장자만으로 이미 차단됨) | `ProblemImageServiceImpl.java:76-85` |
 | I8 | 감사 로그 fail-closed | 감사 기록 실패 | 이미 저장된 파일을 지우고 업로드 전체를 `MSG_PROC_FAIL`, "이미지 업로드에 실패했습니다."로 실패시킨다(감사 없이 파일만 남는 상태 금지) | `ProblemImageServiceImpl.java:96-107` |
 | I9 | 감사 로그 형태 | 업로드 성공 | action `PROBLEM_IMAGE_UPLOADED`, targetType `PROBLEM_IMAGE`, targetId **null**, detail `{"fileName":"<uuid.ext>"}` | `ProblemImageServiceImpl.java:101-107` |
-| I10 | 반환 URL | 업로드 성공 응답 | `PREFIX("/uploads/images/") + fileName` | `ProblemImageServiceImpl.java:109`; `ImageUrlValidator.java:17` |
+| I10 | 반환 URL | 업로드 성공 응답 | `PREFIX("/uploads/images/") + fileName` — **주의:** 승인된 이탈 ②(M6)에서 `PREFIX` 값이 바뀐다. M6 구현자는 이 문구를 고정 문자열로 읽지 말 것(V8과 동일 근거) | `ProblemImageServiceImpl.java:109`; `ImageUrlValidator.java:17` |
 | I11 | 파일 필드 부재 | `file`이 없거나 빈 파일 | resultCode 1009(`FILE_REQUIRED`) | `ProblemImageServiceImpl.java:60-62`; `ErrorCode.java:10` |
 | I12 | 기존 데이터 영향 | 이관 시점 `problems.image_url` 현황 | NULL이 아닌 행 0건(26건 중 0) — 접두어 변경(승인된 이탈②)이 기존 데이터를 깨지 않는 근거 | Spring 코드 출처 아님 — DB 실측(2026-08-19), plan Global Constraints 원문에 기록 |
 
@@ -165,7 +178,7 @@
 | X8 | 파일 안 중복 | 동일 파일 내 동일 번호 재등장 | "파일 안에서 문항 번호가 중복됩니다: \<번호\>" | `ExcelProblemUploadServiceImpl.java:224-228` |
 | X9 | 태그 초과 | 태그 20개 초과 또는 100자 초과 | "태그는 문제당 20개, 태그명은 100자 이하여야 합니다." | `ExcelProblemUploadServiceImpl.java:230-233,380-388` |
 | X10 | 정답 없음 | 정답 셀 공백 | "정답은 필수입니다." | `ExcelProblemUploadServiceImpl.java:234-236` |
-| X11 | 이미지 열 미허용 | 이미지 열이 비어있지 않음 | "이미지는 엑셀로 등록할 수 없습니다. 이미지 열은 비워 두고, 문제 개별 등록/수정 화면에서 이미지를 첨부하세요." | `ExcelProblemUploadServiceImpl.java:238-246` |
+| X11 | 이미지 열 검증(비어있음 강제 아님) | 이미지 열 값에 `ImageUrlValidator.check(imageUrl)`을 적용한 결과가 `VALID`가 아님(빈 값이 아니면서 접두어가 `/uploads/images/`가 아니거나 `..` 포함, 또는 500자 초과) | "이미지는 엑셀로 등록할 수 없습니다. 이미지 열은 비워 두고, 문제 개별 등록/수정 화면에서 이미지를 첨부하세요." — 단, 값이 이미 `/uploads/images/...` 형식의 **유효한 경로**면 거부되지 않고 그대로 저장된다(`:251`). "이미지 열은 반드시 비어 있어야 한다"가 아니다 | `ExcelProblemUploadServiceImpl.java:238-246,251` |
 | X12 | 보기 개수 위반 | 보기 < 2 또는 > 5 | "보기는 2개 이상 5개 이하이어야 합니다." | `ExcelProblemUploadServiceImpl.java:312-314` |
 | X13 | 빈 보기(열 정렬 보존) | 앞선 보기 열이 비고 뒤 열에 값 존재 | "빈 보기는 입력할 수 없습니다."(값을 앞으로 당겨 채우지 않는다 — 정답 번호가 엉뚱한 보기를 가리키는 조용한 오답 버그 방지) | `ExcelProblemUploadServiceImpl.java:316-327` |
 | X14 | OX 보기 개수 | OX인데 보기 2개 아님 | "OX 문제는 보기 2개(O/X)가 필요합니다." | `ExcelProblemUploadServiceImpl.java:328-330` |
@@ -177,6 +190,8 @@
 | X20 | 저장 시 중복(23505) | DB에 이미 같은 부서·번호 존재 | "문항 번호 \<번호\>번은 이 부서에 이미 있습니다." — 일반 문구에 묻히면 안 된다 | `ExcelProblemUploadServiceImpl.java:286-289(단답형),364-367(선택형)` |
 | X21 | 그 밖의 저장 실패 | DB insert 실패(중복 외) | "문제 저장 중 오류가 발생했습니다." | `ExcelProblemUploadServiceImpl.java:290-293,368-371` |
 | X22 | 행별 격리 | 다수 행 업로드 중 일부 실패 | 각 성공 행은 `REQUIRES_NEW` 독립 트랜잭션(문제 insert + 보기/정답 insert + 태그 연결 + 감사)으로 커밋되며, 한 행의 실패가 다른 행을 롤백하지 않는다 | `ProblemProvisioningServiceImpl.java:43-54,60-71` |
+| X23 | `cellValue` 헬퍼 계약(위 X 행 전체가 전제) | 셀이 없음(`row.getCell(cellIndex) == null`) 또는 값이 있음 | 없으면 `""`(예외 아님) 반환, 있으면 `DataFormatter.formatCellValue(cell).trim()` — 위 X1~X22의 모든 셀 읽기가 이 트림·빈값 규칙을 전제로 한다 | `ExcelProblemUploadServiceImpl.java:390-396` |
+| X24 | 엑셀 태그 헬퍼는 Task 2 버전과 다름(Task 9 참고) | 태그 셀 값이 20개 초과 또는 100자 초과 위반 | Java 엑셀 경로는 `ProblemServiceImpl.normalizeTags(List)`(Task 2가 이식한 `problemValidation.ts`의 `normalizeTags`)와 **다른** 헬퍼를 쓴다: 콤마로 구분된 **문자열 하나**를 받고, 위반 시 예외 대신 **`null`**을 반환해 그 행만 실패 처리한다(배치 전체를 막지 않기 위해서라고 Java javadoc이 명시). **`problemValidation.ts`에는 아직 이 non-throwing 변형을 추가하지 않았다** — 지금 소비하는 곳이 없기 때문이며, Task 9(M5) 구현 시 이 차이를 참고해 별도로 만들 것 | `ExcelProblemUploadServiceImpl.java:380-388` |
 
 ---
 
@@ -216,6 +231,6 @@
 - **Task 2~9:** Vitest 단위·통합 테스트(각 시나리오별 assert)
 - **Task 10:** E2E 테스트(런타임 HTTP 경로 실측, 정확한 메시지·상태코드·응답 필드 확인) + 이 정답지와의 대조
 
-**실행 구간(M1~M7) 매핑:** M1(Task 1+4)이 이 정답지와 검증 모듈을 만든다. M3(Task 5)가 V·N 구획, M4(Task 6+7)가 L·C 구획, M5(Task 9)가 X·F 구획, M6(Task 8)이 I 구획, M7(Task 10)이 전체 E2E 대조를 담당한다. 자세한 근거는 `docs/superpowers/plans/2026-08-19-migration-problem-bank.md`의 `## 실행 구간 (7구간)` 표를 참고.
+**실행 구간(M1~M7) 매핑:** M1(Task 1+4)이 이 정답지와 검증 모듈을 만든다. M3(Task 5)가 V·N·D 구획, M4(Task 6+7)가 L·C 구획, M5(Task 9)가 X·F 구획, M6(Task 8)이 I 구획, M7(Task 10)이 전체 E2E 대조를 담당한다. 자세한 근거는 `docs/superpowers/plans/2026-08-19-migration-problem-bank.md`의 `## 실행 구간 (7구간)` 표를 참고.
 
 **응답 봉투 공통 규칙:** `{resultCode,resultMsg,data}`. `create`·`update`·`archive`는 `data` 없이 `ok()`. `changeDepartment` 응답은 `{sourceNumber: n}`. `nextSourceNumber` 응답은 숫자 그대로.
