@@ -2,15 +2,20 @@ import { asc, eq, inArray } from "drizzle-orm";
 import type { DbConn } from "./client";
 import { tags, problems, problemTags } from "./schema";
 
-export async function findAllTags(db: DbConn): Promise<{ id: number; name: string }[]> {
-  return db.select({ id: tags.id, name: tags.name }).from(tags).orderBy(asc(tags.name));
+export type TagRow = { id: number; name: string; createdAt: Date };
+
+// TagMapper.xml findAll 미러: `SELECT id, name, created_at ... ORDER BY name`.
+// created_at 을 빼면 Tag 도메인(Tag.java) 을 그대로 내보내는 Spring 응답과 필드가 어긋난다.
+export async function findAllTags(db: DbConn): Promise<TagRow[]> {
+  return db.select({ id: tags.id, name: tags.name, createdAt: tags.createdAt })
+    .from(tags).orderBy(asc(tags.name));
 }
 
 // 활성(ACTIVE) 문제에 하나 이상 붙어 있는 태그만 — 직원 풀이 화면의 필터 선택지용.
 // TagMapper.xml findInUse 미러: tags JOIN problem_tags JOIN problems WHERE status='ACTIVE'.
-export async function findInUseTags(db: DbConn): Promise<{ id: number; name: string }[]> {
+export async function findInUseTags(db: DbConn): Promise<TagRow[]> {
   return db
-    .selectDistinct({ id: tags.id, name: tags.name })
+    .selectDistinct({ id: tags.id, name: tags.name, createdAt: tags.createdAt })
     .from(tags)
     .innerJoin(problemTags, eq(problemTags.tagId, tags.id))
     .innerJoin(problems, eq(problems.id, problemTags.problemId))

@@ -24,7 +24,12 @@ describe("tags DAO", () => {
   it("findOrCreateTagsByNames 는 있는 태그를 다시 만들지 않는다", async () => {
     const first = await findOrCreateTagsByNames(db, ["회계", "자금"]);
     const second = await findOrCreateTagsByNames(db, ["회계", "예산"]);
-    expect(second[0]).toBe(first[0]); // 회계는 같은 id
+    // 반환 순서로 단정하지 않는다 — TagMapper.findIdsByNames 도 이 DAO 도 `WHERE name IN (...)`
+    // 에 ORDER BY 가 없어서, 플래너가 unique 인덱스를 타면 결과가 이름순으로 나온다.
+    // 인덱스 스캔으로 계획이 바뀌는 순간 second[0]===first[0] 같은 단정은 무너진다.
+    expect(first).toHaveLength(2);
+    expect(second).toHaveLength(2);
+    // 겹치는 "회계" 가 재생성되면 합집합이 4가 된다 — 순서와 무관하게 id 재사용을 증명한다.
     expect(new Set([...first, ...second]).size).toBe(3); // 회계·자금·예산
   });
 
@@ -39,6 +44,24 @@ describe("tags DAO", () => {
     const only = await findOrCreateTagsByNames(db, ["다"]);
     await replaceProblemTags(db, problemId, only);
     expect(await findTagNamesByProblemId(db, problemId)).toEqual(["다"]);
+  });
+
+  it("replaceProblemTags 는 빈 배열을 받으면 연결을 전부 지운다", async () => {
+    // 엑셀 업로드에서 태그 칸이 빈 행이 흔하다 — tagIds.length > 0 가드가 delete 까지
+    // 건너뛰면 수정 시 예전 태그가 그대로 남는다.
+    const ids = await findOrCreateTagsByNames(db, ["가", "나"]);
+    await replaceProblemTags(db, problemId, ids);
+    await replaceProblemTags(db, problemId, []);
+    expect(await findTagNamesByProblemId(db, problemId)).toEqual([]);
+    // 태그 마스터는 지우지 않는다 — 연결만 끊는다(ProblemTagMapper.deleteByProblemId).
+    expect((await findAllTags(db)).map((t) => t.name)).toEqual(["가", "나"]);
+  });
+
+  it("findAllTags 는 created_at 까지 돌려준다", async () => {
+    // TagMapper.xml findAll 은 id, name, created_at 을 고른다(Tag.java 필드 3개).
+    await findOrCreateTagsByNames(db, ["가"]);
+    const [row] = await findAllTags(db);
+    expect(row.createdAt).toBeInstanceOf(Date);
   });
 
   it("findInUseTags 는 문제에 연결된 태그만 돌려준다", async () => {
