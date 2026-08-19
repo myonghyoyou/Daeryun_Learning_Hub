@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { BizError } from "../http/errors";
+import { ErrorCode } from "../http/errorCode";
 import { IMAGE_URL_PREFIX } from "./imageUrl";
 import {
   normalizeProblemRequest,
@@ -17,7 +19,11 @@ const expectMessage = (fn: () => void, message: string) => {
   } catch (e) {
     error = e;
   }
-  expect(error).toBeInstanceOf(Error);
+  // 이 모듈의 모든 메시지는 계약상 ErrorCode.INPUT_VALUE_INVALID(resultCode 1000 → HTTP 400)다.
+  // 메시지만 확인하면 invalid()의 코드가 바뀌어도 여기서는 통과하고, M3의 라우트 테스트에서야
+  // 드러난다.
+  expect(error).toBeInstanceOf(BizError);
+  expect((error as BizError).errorCode.code).toBe(ErrorCode.INPUT_VALUE_INVALID.code);
   expect((error as Error).message).toBe(message);
 };
 
@@ -227,6 +233,21 @@ describe("validateProblem — fill in the blank", () => {
   it("rejects a reveal count of 0", () => {
     expectMessage(() => validateProblem(fb({ blankRevealCount: 0 })), "출제할 빈칸 개수가 유효하지 않습니다.");
   });
+
+  it("accepts a blank key outside the marker regex charset when it is a literal substring of the content (A2)", () => {
+    // Java's forward check is content.contains("{{" + key + "}}") — a literal substring test
+    // (ProblemServiceImpl.java:425-429), not the [A-Za-z0-9_-]+ regex. A Korean key like "빈칸1"
+    // is outside that charset but must still pass, exactly as it does in Spring.
+    expect(() =>
+      validateProblem(fb({ content: "수도는 {{빈칸1}}이다", blanks: [{ blankKey: "빈칸1", answerText: "서울" }] })),
+    ).not.toThrow();
+  });
+
+  it("accepts a blank key containing '.' when it is a literal substring of the content (A2)", () => {
+    expect(() =>
+      validateProblem(fb({ content: "a {{b.1}} c", blanks: [{ blankKey: "b.1", answerText: "x" }] })),
+    ).not.toThrow();
+  });
 });
 
 describe("validateSourceNumber", () => {
@@ -262,12 +283,39 @@ describe("normalizeTags", () => {
 describe("normalizeProblemRequest", () => {
   it("turns whitespace-only values into null and trims the rest, without mutating the input", () => {
     // Leftover padding in stored values flips short-answer grading.
-    const input: ProblemCreateInput = { ...base, content: "  본문  ", explanation: "   ", answers: ["  서울  "] };
-    const snapshot = { ...input };
+    const input: ProblemCreateInput = {
+      ...base,
+      content: "  본문  ",
+      imageUrl: "  " + IMAGE_URL_PREFIX + "x.png  ",
+      referenceText: "  참조  ",
+      explanation: "   ",
+      choices: [{ text: "  가  ", correct: true }],
+      answers: ["  서울  "],
+      blanks: [{ blankKey: "  b1  ", answerText: "  서울  " }],
+    };
+    const snapshot = JSON.parse(JSON.stringify(input));
     const out = normalizeProblemRequest(input);
     expect(out.content).toBe("본문");
+    expect(out.imageUrl).toBe(IMAGE_URL_PREFIX + "x.png");
+    expect(out.referenceText).toBe("참조");
     expect(out.explanation).toBeNull();
+    expect(out.choices).toEqual([{ text: "가", correct: true }]);
     expect(out.answers).toEqual(["서울"]);
+    expect(out.blanks).toEqual([{ blankKey: "b1", answerText: "서울" }]);
     expect(input).toEqual(snapshot);
+  });
+
+  it("does not touch tags — normalizeTags runs only at save time in Java, after validate/validateSourceNumber (A1)", () => {
+    // Java's normalize() (ProblemServiceImpl.java:230-249) never calls normalizeTags; it is
+    // called at save time only (:117,:159), after validate() and validateSourceNumber(). If
+    // normalizeProblemRequest normalized tags, a request with 21 tags AND a missing type would
+    // report the tag-count message instead of Java's "문제 유형을 선택하세요." because tag
+    // normalization would throw first, before validateProblem ever runs.
+    const manyTags = Array.from({ length: 21 }, (_, i) => `t${i}`);
+    const input: ProblemCreateInput = { type: null as never, content: null as never, tags: manyTags };
+    expect(() => normalizeProblemRequest(input)).not.toThrow();
+    const normalized = normalizeProblemRequest(input);
+    expect(normalized.tags).toEqual(manyTags);
+    expectMessage(() => validateProblem(normalized), "문제 유형을 선택하세요.");
   });
 });
