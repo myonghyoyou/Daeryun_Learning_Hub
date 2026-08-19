@@ -28,9 +28,12 @@
 | R2 | 메서드 레벨 역할 좁힘 | `changeDepartment`(`PUT /{id}/department`) | `SUPER_ADMIN` 전용 — `RoleCheckInterceptor`가 메서드 애너테이션을 클래스 애너테이션보다 먼저 본다 | `ProblemController.java:90-99` |
 | R3 | 태그 컨트롤러 역할 없음 | `TagController`의 `list`·`listInUse` | 인증(로그인)만 요구, `@RequireRole` 없음 | `TagController.java:11-17,25-34` |
 | R4 | 역할 불일치 응답 | 역할이 맞지 않는 사용자가 접근 | HTTP 403, resultCode 990 | `ErrorCode.java:20`(`ACCESS_AUTH_DENIED`) |
-| R5 | 쓰기 경로 부서 관문 | 생성·엑셀 업로드·다음 문항번호 조회 | `OwningDepartmentResolver.resolve`가 단일 관문 — `SUPER_ADMIN` 아니면 요청값 무시, `actor.departmentId` 강제 | `OwningDepartmentResolver.java:36-39`; 호출부 `ProblemServiceImpl.java:98,561-562`, `ExcelProblemUploadServiceImpl.java:101` |
+| R5 | 쓰기 경로 부서 관문(non-SUPER_ADMIN 분기) | 생성·엑셀 업로드·다음 문항번호 조회, actor가 `SUPER_ADMIN`이 아님 | `OwningDepartmentResolver.resolve`가 단일 관문 — 요청값 무시, `actor.departmentId` 강제(SUPER_ADMIN 분기의 세 가지 검증은 R8~R10 참고) | `OwningDepartmentResolver.java:36-39`; 호출부 `ProblemServiceImpl.java:98,561-562`, `ExcelProblemUploadServiceImpl.java:101` |
 | R6 | 읽기·수정·보관 부서 관문 | 상세 조회·수정·보관 | `assertOwnership`이 단일 관문 — `SUPER_ADMIN` 아니고 `problem.departmentId !== actor.departmentId` → `ACCESS_AUTH_DENIED`(990) | `ProblemServiceImpl.java:214-218`; 호출부 `136,174,202` |
 | R7 | 목록 조회 부서 관문(세 번째 형태) | 부서 관리자가 목록 조회 시 임의의 `departmentId` 전달 | `effectiveDepartmentId = actor.role===SUPER_ADMIN ? departmentId : actor.departmentId` — 부서 관리자는 요청 파라미터가 무시된다(전체 조회 불가) | `ProblemServiceImpl.java:183-185` |
+| R8 | SUPER_ADMIN 분기 — 부서 미지정 | `OwningDepartmentResolver.resolve`, actor가 `SUPER_ADMIN`, `requested == null` | "문제가 귀속될 부서를 선택하세요." | `OwningDepartmentResolver.java:40-42` |
+| R9 | SUPER_ADMIN 분기 — 부서 없음 | `OwningDepartmentResolver.resolve`, actor가 `SUPER_ADMIN`, `requested`에 해당하는 부서가 존재하지 않음 | "존재하지 않는 부서입니다." | `OwningDepartmentResolver.java:43-46` |
+| R10 | SUPER_ADMIN 분기 — 부서 비활성 | `OwningDepartmentResolver.resolve`, actor가 `SUPER_ADMIN`, 대상 부서가 `ACTIVE`가 아님 | "비활성 부서에는 문제를 등록할 수 없습니다: \<부서명\>" — C5의 "비활성 부서로는 옮길 수 없습니다: \<부서명\>"(`ProblemServiceImpl.changeDepartment`)과는 다른 메서드·다른 문구이므로 혼동 금지 | `OwningDepartmentResolver.java:47-50` |
 
 ---
 
@@ -79,7 +82,7 @@
 | N2 | 번호 범위 위반 | `sourceNumber < 1` | "문항 번호는 1 이상이어야 합니다." | `ProblemServiceImpl.java:458-460` |
 | N3 | 등록·수정 모두 필수 | `create`·`update` 양쪽 경로 | `validateSourceNumber`가 두 경로에서 모두 호출됨(예외 없음) | `ProblemServiceImpl.java:96,142` |
 | N4 | 중복 문항번호 | `UNIQUE(department_id, source_number)` 위반, SQLState 23505, 제약명 `uq_problems_department_source_number` | "\<부서명\> \<번호\>번은 이미 있습니다. 다른 번호를 입력하세요." | `ProblemServiceImpl.java:63,490-496` |
-| N5 | 부서명 조회 시점(QA-1 재발 금지) | 쓰기(INSERT/UPDATE) 직전 | 부서명은 쓰기 **전에** 읽어 둔다 — catch 안에서 SELECT하면 PostgreSQL이 25P02로 트랜잭션 전체를 abort시켜 안내 문구가 만들어지지 못하고 `-1 처리 중 오류가 발생하였습니다`로 샌다 | `ProblemServiceImpl.java:99-100(create),150-151(update),463-469(주석)` |
+| N5 | 부서명 조회 시점(QA-1 재발 금지) | 쓰기(INSERT/UPDATE) 직전 | 부서명은 쓰기 **전에** 읽어 둔다 — catch 안에서 SELECT하면 PostgreSQL이 25P02로 트랜잭션 전체를 abort시켜 안내 문구가 만들어지지 못하고 `-1 처리 중 오류가 발생하였습니다`로 샌다 | `ProblemServiceImpl.java:99-100(create),150-151(update),479-488(duplicateSourceNumber 주석)` |
 | N6 | 다른 제약의 UNIQUE 위반 | 제약 이름이 `uq_problems_department_source_number`가 아님 | 번호 탓으로 돌리지 않고 원래 예외를 그대로 던진다 | `ProblemServiceImpl.java:491-494` |
 | N7 | postgres.js 오류 객체 속성명 | 동일 `code`로 두 번 insert했을 때 실측 | `code:"23505"`, **`constraint_name`**은 있음, **`constraint`는 undefined**(pg 드라이버와 이름이 다름) | Spring 소스 아님 — postgres.js 런타임 실측(plan Global Constraints 원문, `docs/superpowers/plans/2026-08-19-migration-problem-bank.md:115-121`) |
 
