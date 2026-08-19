@@ -5,4 +5,7 @@ next-env.d.ts
 # 로컬 시크릿(SESSION_JWT_SECRET, DATABASE_URL, BOOTSTRAP_ADMIN_PASSWORD 등). Auth 서브플랜부터 사용.
 .env
 .env.*
+# 단, .env.example 을 두게 되면 그건 커밋한다 — 실제 값이 아니라 채워야 할 항목 목록이라
+# .env.* 에 함께 걸려 무시되면 공유가 안 된다.
+!.env.example
 tsconfig.tsbuildinfo
