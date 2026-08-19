@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { migrateTestDb, testDb, truncateAll } from "../../../../test/db";
-import { departments, users } from "../../../../lib/db/schema";
-import type { AuthUser } from "../../../../lib/auth/types";
+import { migrateTestDb, testDb, truncateAll } from "../../../test/db";
+import { departments, users } from "../../../lib/db/schema";
+import type { AuthUser } from "../../../lib/auth/types";
 
 const state = vi.hoisted(() => ({ currentUser: null as unknown }));
-vi.mock("../../../../lib/db/client", async () => {
-  const { testDb } = await import("../../../../test/db");
-  const actual = await vi.importActual<object>("../../../../lib/db/client");
+vi.mock("../../../lib/db/client", async () => {
+  const { testDb } = await import("../../../test/db");
+  const actual = await vi.importActual<object>("../../../lib/db/client");
   return { ...actual, getDb: () => testDb() };
 });
-vi.mock("../../../../lib/auth/session", () => ({ getAuthUser: async () => state.currentUser }));
+vi.mock("../../../lib/auth/session", () => ({ getAuthUser: async () => state.currentUser }));
 
 const db = testDb();
 async function seedUser(role: AuthUser["role"] = "EMPLOYEE") {
