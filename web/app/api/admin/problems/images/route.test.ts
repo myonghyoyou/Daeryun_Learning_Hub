@@ -97,20 +97,28 @@ describe("POST /api/admin/problems/images", () => {
     expect((await res.json()).resultCode).toBe(980);
   });
 
-  it("file 필드가 없으면 HTTP 200 + 1009, 기본 문구다(파싱은 성공했지만 항목이 비었다)", async () => {
+  it("file 파트가 아예 없으면 HTTP 200 + 1009, 이탈 ⑥ 문구다(파싱은 성공했지만 파트가 없다)", async () => {
+    // Java: MissingServletRequestPartException → 전용 핸들러 없음 → catch-all(200/-1). 포트는
+    // -1 대신 형제 라우트(엑셀 업로드 둘)와 동일하게 1009 로 안내하는 의도적 개선(승인된 이탈 ⑥).
     await loginAs("SUPER_ADMIN", deptA, "admin");
     const { POST } = await import("./route");
     const res = await POST(post(new FormData()));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "필수 파일이 누락되었습니다." });
+    expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "파일을 업로드할 수 없습니다." });
   });
 
-  it("빈 파일도 1009 다", async () => {
+  it("0바이트 파일은 HTTP 400 + 1009, ErrorCode 기본 문구다(Java file.isEmpty() 실제 경로)", async () => {
+    // file 파트는 있으므로 Java 바인딩은 성공하고, 서비스의 file.isEmpty() 가드
+    // (ProblemImageServiceImpl.java:60-62)에 실제로 도달한다 → BizException(FILE_REQUIRED),
+    // 커스텀 메시지 없음 → ErrorCode 기본 문구. BizException 은 EMPTY_SESSION·ACCESS_AUTH_DENIED
+    // 가 아니므로 400(GlobalExceptionHandler.java:34-37).
     await loginAs("SUPER_ADMIN", deptA, "admin");
     const form = new FormData();
     form.set("file", new File([], "empty.png", { type: "image/png" }));
     const { POST } = await import("./route");
-    expect((await (await POST(post(form))).json())).toEqual({ resultCode: 1009, resultMsg: "필수 파일이 누락되었습니다." });
+    const res = await POST(post(form));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "필수 파일이 누락되었습니다." });
   });
 
   it("5MB 를 넘으면 400/1015 다(I4)", async () => {

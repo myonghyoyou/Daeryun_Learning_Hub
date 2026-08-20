@@ -103,7 +103,7 @@ describe("POST /api/admin/problems/excel-upload", () => {
     expect((await res.json()).resultCode).toBe(980);
   });
 
-  it("file 필드가 없으면 HTTP 200 + 1009 다(F1)", async () => {
+  it("file 파트가 아예 없으면 HTTP 200 + 1009, 이탈 ⑥ 문구다(F1a)", async () => {
     await seedDepartments();
     await loginAs("SUPER_ADMIN", deptA, "admin");
     const { POST } = await import("./route");
@@ -112,13 +112,15 @@ describe("POST /api/admin/problems/excel-upload", () => {
     expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "파일을 업로드할 수 없습니다." });
   });
 
-  it("빈 파일도 1009 다(F1)", async () => {
+  it("0바이트 파일은 HTTP 400 + 1009, ErrorCode 기본 문구다(F1b, Java file.isEmpty() 실제 경로)", async () => {
     await seedDepartments();
     await loginAs("SUPER_ADMIN", deptA, "admin");
     const form = new FormData();
     form.set("file", new File([], "empty.xlsx"));
     const { POST } = await import("./route");
-    expect((await (await POST(post(form))).json()).resultCode).toBe(1009);
+    const res = await POST(post(form));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ resultCode: 1009, resultMsg: "필수 파일이 누락되었습니다." });
   });
 
   it("4MB 를 넘으면 400/1015 다(F7·승인된 이탈 ③)", async () => {

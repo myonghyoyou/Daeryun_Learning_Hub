@@ -101,6 +101,8 @@ export async function storeProblemImage(file: ProblemImageFile, actor: AuthUser)
     upsert: false,
   });
   if (uploadError) {
+    // 키·자격증명은 절대 로그에 남기지 않는다 — 저장 파일명(비밀 아님)과 오류 메시지만 남긴다.
+    console.warn("이미지 스토리지 업로드에 실패했습니다:", storedName, uploadError.message);
     throw new BizError(ErrorCode.MSG_PROC_FAIL, "이미지 업로드에 실패했습니다.");
   }
 
@@ -115,7 +117,17 @@ export async function storeProblemImage(file: ProblemImageFile, actor: AuthUser)
       detail: { fileName: storedName },
     });
   } catch {
-    await client.storage.from(BUCKET).remove([storedName]).catch(() => {});
+    // Java deleteQuietly(java:112-118) 미러: 정리 자체가 실패했을 때만 LOGGER.warn 을 남긴다
+    // (감사 실패 자체는 Java 도 로그하지 않는다). 정리 실패를 조용히 삼키면 "감사도 없고 파일만
+    // 남는" I8 이 막으려던 상태가 서버 로그 흔적조차 없이 재발한다.
+    try {
+      const { error: removeError } = await client.storage.from(BUCKET).remove([storedName]);
+      if (removeError) {
+        console.warn("감사 로그 기록 실패 후 업로드 파일 정리에도 실패했습니다:", storedName, removeError.message);
+      }
+    } catch (removeThrown) {
+      console.warn("감사 로그 기록 실패 후 업로드 파일 정리에도 실패했습니다:", storedName, removeThrown);
+    }
     throw new BizError(ErrorCode.MSG_PROC_FAIL, "이미지 업로드에 실패했습니다.");
   }
 
