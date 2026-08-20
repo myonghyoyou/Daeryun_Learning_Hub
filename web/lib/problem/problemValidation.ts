@@ -24,7 +24,9 @@ export interface ProblemCreateInput {
   answers?: (string | null)[] | null;
   blanks?: BlankInput[] | null;
   blankRevealCount?: number | null;
-  tags?: string[] | null;
+  // 원소가 null 일 수 있다 — 본문 매핑(problemRequestBody.ts)이 Jackson 처럼 List 안의 null 을
+  // 그대로 남기고, 아래 normalizeTags 가 건너뛴다.
+  tags?: (string | null)[] | null;
   sourceNumber?: number | null;
 }
 
@@ -84,7 +86,7 @@ export function normalizeProblemRequest(req: ProblemCreateInput): ProblemCreateI
  * trim → 빈 것 제거 → toLowerCase → 중복 제거. `toLowerCase()`(Locale 독립)만 쓴다 —
  * `toLocaleLowerCase()`는 튀르키예 로케일에서 "I" → "ı" 로 바뀌는 문제를 재도입한다.
  */
-export function normalizeTags(input: string[] | null | undefined): string[] {
+export function normalizeTags(input: (string | null)[] | null | undefined): string[] {
   if (!input) return [];
   const seen = new Set<string>();
   const result: string[] = [];
@@ -253,5 +255,11 @@ export function validateProblem(req: ProblemCreateInput): void {
     case "FILL_BLANK":
       validateFillBlank(req.content, req.blanks ?? [], req.blankRevealCount);
       break;
+    default:
+      // Java 에서는 닿을 수 없다(type 이 enum 이라 Jackson 이 먼저 거른다). TS 에서는 캐스팅
+      // 한 번이면 닿고, 분기가 없으면 유형별 검사를 통째로 건너뛴 채 DB 까지 가서 CHECK 제약이
+      // -1 "처리 중 오류가 발생하였습니다." 로 터진다. 본문 매핑(problemRequestBody.ts)이
+      // 1차 관문이고 이건 2차 그물이다.
+      invalid("문제 유형을 선택하세요.");
   }
 }

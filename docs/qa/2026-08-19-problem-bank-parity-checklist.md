@@ -9,7 +9,7 @@
 
 ---
 
-## 승인된 이탈(4건)
+## 승인된 이탈(7건)
 
 | 번호 | 유형 | 설명 | Spring 출처 | 근거 문서 |
 |------|------|------|------|----------|
@@ -17,6 +17,9 @@
 | ② | 이미지 URL 접두어 변경 | `ImageUrlValidator.PREFIX`가 새 접두어로 바뀐다. 현재 `problems.image_url`이 NULL이 아닌 행은 0건(26건 중 0)이라 기존 데이터가 깨지지 않는다 | `ImageUrlValidator.java:17`(PREFIX 정의) | DB 실측(2026-08-19) — 이 사실 자체는 Spring 코드가 아니라 런타임 데이터 조회로 확인됨. plan Global Constraints 원문에 실측치로 기록됨 |
 | ③ | 엑셀 파일 상한 하향 | Spring 멀티파트 상한 20MB → 플랫폼 안전값 4MB로 하향, resultCode 1015 (서브플랜 3 Q6 승인 기준과 동일 취급) | `application.yml:18-19`(`max-file-size: 20MB`, `max-request-size: 20MB`) | 이관 스펙 Q6 |
 | ④ | SheetJS 행 번호 어긋남 | SheetJS `blankrows:false`로 인해 빈 행이 많은 파일에서 오류 행 번호가 엑셀과 어긋날 수 있다. 동일한 이유로 `totalRows` 집계와 500행 상한 판정에서도 빈 행이 제외된다(Spring `lastRowNum`은 빈 행을 포함해 센다) | `ExcelProblemUploadServiceImpl.java:111`(`sheet.getLastRowNum()`, 빈 행 포함 계수) | `docs/qa/2026-08-16-dept-users-parity-checklist.md` 승인된 이탈 ⑤와 동일 사유 |
+| ⑤ | 유형 enum 의 서수(ordinal) 입력 거부 | Jackson 은 `FAIL_ON_NUMBERS_FOR_ENUMS` 가 기본 off 라 `{"type": 3}` 을 열거 4번째 상수(`SHORT_ANSWER`)로 읽는다. 이식판 본문 매퍼(`web/lib/problem/problemRequestBody.ts` `readType`)는 숫자를 거부하고 1000("잘못된 파라미터를 입력했습니다.")을 낸다 — 서수는 `ProblemType` 열거 순서가 바뀌면 조용히 다른 유형이 되는 입력이고, 화면은 언제나 이름을 보낸다. **resultCode 는 양쪽 모두 1000 이 아니다: Spring 은 200/정상 처리로 저장까지 간다** — 거부가 더 안전하므로 이탈을 유지한다. Task 7·9 가 같은 매퍼를 재사용하므로 엑셀·부서이동 경로도 동일하다 | `ProblemCreateRequest.java:11`(`private ProblemType type`), Jackson 기본 설정 | 정답지 F1 정리 항목(Task 6) — `web/lib/problem/problemRequestBody.test.ts` `rejects numeric type` 로 고정 |
+| ⑥ | 리스트 원소의 null 관용 | `{"tags":[null]}` 같은 입력에서 Java `normalizeTags` 는 `.map(String::trim)` 이라 NPE 로 죽어 -1 "처리 중 오류가 발생하였습니다." 가 나간다. 이식판 `normalizeTags`(`web/lib/problem/problemValidation.ts`)는 null 원소를 건너뛰고 정상 처리한다. `answers`·`blanks` 의 null 원소도 마찬가지로 빈 항목으로 접혀 각 유형의 한국어 문구(1000)로 안내된다. **더 나은 동작이므로 유지**하되, 타입이 사실을 말하도록 `ProblemCreateInput.tags` 는 `(string \| null)[] \| null` 이다 — 하류에서 `raw.trim()` 을 안심하고 쓰면 Java 와 같은 결함이 재발한다 | `ProblemServiceImpl.java:259-264`(`normalizeTags`, `.map(String::trim)`) | 정답지 F1 정리 항목(Task 6) — `problemRequestBody.test.ts` `keeps a null list element…` 로 고정 |
+| ⑦ | 엑셀 중복 판정의 좁힘 | Spring 엑셀 경로는 `DuplicateKeyException` 을 **제약 구분 없이** 잡아 그 행의 어떤 UNIQUE 위반이든 문항 번호 탓으로 돌린다("문항 번호 \<n\>번은 이 부서에 이미 있습니다."). 이식판은 `isDuplicateSourceNumber`(`web/lib/problem/problemService.ts`)로 `uq_problems_department_source_number` **하나만** 그 문구에 대응시키고, 나머지 23505 는 행 단위 "문제 저장 중 오류가 발생했습니다." 로 보낸다. 실제로 갈리는 경우가 있다 — 동시 업로드에서 `findOrCreateTagsByNames` 가 행 트랜잭션 안에서 `tags_name_unique` 를 낼 수 있고, 그때 Spring 은 멀쩡한 문항 번호를 탓하지만 포트는 저장 실패로 안내한다. **틀린 원인을 지목하지 않는 쪽이 낫다**. M5 는 이것을 의도적으로 구현하고, M7 은 불일치로 신고하지 말 것 | `ExcelProblemUploadServiceImpl.java:286-289,364-367`(두 곳 모두 `catch (DuplicateKeyException e)` 뒤 바로 번호 문구) | N6(같은 좁힘의 CRUD 경로 근거) — `problemService.test.ts` `isDuplicateSourceNumber 는 그 제약의 23505 에만 true 다` 로 고정 |
 
 ---
 
@@ -75,6 +78,7 @@
 | V30 | 수정 시 재삽입 | `update()` 저장 단계 | 기존 보기/정답/빈칸을 전량 삭제(`deleteByProblemId` ×3) 후 `saveTypeSpecificData`로 재삽입 | `ProblemServiceImpl.java:158-161` |
 | V31 | FILL_BLANK 아닌 유형의 blankRevealCount 저장 | 생성·수정, `type != FILL_BLANK` | 저장되는 `blankRevealCount`는 요청 값과 무관하게 항상 `null` — V28(검증)과 별개인 **영속 규칙**이다 | `ProblemServiceImpl.java:108(create),148(update)` |
 | V32 | 보기·빈칸 displayOrder는 1-based | 생성·수정 시 `saveTypeSpecificData` | 보기·빈칸 모두 배열 인덱스가 아니라 `i + 1`을 `displayOrder`로 저장(1부터 시작) | `ProblemServiceImpl.java:305-316`(보기, `toChoiceEntities`),`289-301`(빈칸, 특히 `:297`) |
+| V33 | 본문을 DTO 모양으로 읽을 수 없음 | `type` 이 알 수 없는 enum 이름, 숫자 자리에 `"abc"`, 스칼라 자리에 객체·배열, 배열 자리에 단일 값 등 — Jackson 이 `HttpMessageNotReadableException` 을 던지는 입력 | **HTTP 200** + `resultCode` 1000 + `resultMsg` "잘못된 파라미터를 입력했습니다.", `errorList` 는 **필드 자체가 빠진다**. 핸들러가 `ResponseEntity` 가 아니라 `ErrorResponse` 를 그대로 반환하므로 상태는 200 이고, `buildFieldErrors(..., null)` 이 `data=null` 을 넣어 `@JsonInclude(NON_NULL)` 이 `errorList` 를 지운다 — `errorList: []` 도 `errorList: null` 도 아니다(`MethodArgumentNotValidException` 분기는 반대로 `errorList` 를 싣는다). 승인된 이탈 ⑤·⑥ 은 이 규칙의 **예외 두 건**이고, 이 행이 규칙 본문이다 | `GlobalExceptionHandler.java:48-51`(핸들러), `:91-96`(`buildFieldErrors`), `ErrorResponse.java:11,16`(`@JsonInclude(NON_NULL)`, `errorList`), `ErrorCode.java:9`(1000 문구); 포트: `web/lib/http/errors.ts` `handleRoute` 의 `MessageNotReadableError` 분기 |
 
 ---
 

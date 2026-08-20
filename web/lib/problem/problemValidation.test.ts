@@ -305,9 +305,16 @@ describe("normalizeProblemRequest", () => {
     expect(input).toEqual(snapshot);
   });
 
+  it("falls through to the type message for a type outside the five (switch default net)", () => {
+    // Java 는 enum 이라 닿을 수 없는 분기다. TS 는 캐스팅 한 번이면 닿는데, default 가 없으면
+    // 유형별 검사를 하나도 돌리지 않은 채 통과해 DB 의 CHECK 제약에서 -1 로 터진다.
+    const input = { type: "MCQ" as never, content: "본문", choices: [] };
+    expectMessage(() => validateProblem(input), "문제 유형을 선택하세요.");
+  });
+
   it("does not touch tags — normalizeTags runs only at save time in Java, after validate/validateSourceNumber (A1)", () => {
     // Java's normalize() (ProblemServiceImpl.java:230-249) never calls normalizeTags; it is
-    // called at save time only (:117,:159), after validate() and validateSourceNumber(). If
+    // called at save time only (:124,:162), after validate() and validateSourceNumber(). If
     // normalizeProblemRequest normalized tags, a request with 21 tags AND a missing type would
     // report the tag-count message instead of Java's "문제 유형을 선택하세요." because tag
     // normalization would throw first, before validateProblem ever runs.

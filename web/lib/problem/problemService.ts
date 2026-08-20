@@ -66,6 +66,27 @@ export function assertOwnership(problem: { departmentId: number }, actor: AuthUs
 }
 
 /**
+ * "이 오류가 UNIQUE(department_id, source_number) 위반인가"의 **유일한 정의**(정답지 N4·N6).
+ *
+ * postgres.js 는 제약 이름을 `constraint_name` 으로 준다(`constraint` 는 undefined, 정답지 N7).
+ * 다른 제약의 23505 는 여기서 false 다 — 번호 탓으로 돌리지 않는다(정답지 N6).
+ *
+ * 번역 문구가 아니라 **불리언**으로도 노출하는 이유: 엑셀 일괄 등록(Task 9)은 같은 위반에
+ * 다른 문구를 낸다("문항 번호 <n>번은 이 부서에 이미 있습니다.",
+ * `ExcelProblemUploadServiceImpl.java:289,367`). 그쪽이 판정을 재현하려면
+ * `translateDuplicateSourceNumber(...) instanceof BizError` 로 우회해야 하는데, 그러면
+ * (1) 쓰지도 않을 부서명을 만들어 넘겨야 하고 (2) "쓰기 트랜잭션 안에서 BizError 를 던지는
+ * 것은 이 번역뿐"이라는 **적히지 않은 전제**에 기댄다. 그 전제는 지금은 참이지만
+ * (`recordAudit` 은 평범한 Error 를 던진다) 같은 트랜잭션 안에서 던지는 `normalizeTags` 를
+ * 부르는 선례가 이미 있다(아래 createProblem 참고) — 태그 21개짜리 행이 멀쩡한 문항번호를
+ * 탓하는 안내로 둔갑한다. 판정은 이 함수 하나로 모은다.
+ */
+export function isDuplicateSourceNumber(error: unknown): boolean {
+  const e = error as { code?: string; constraint_name?: string } | null | undefined;
+  return e?.code === "23505" && e.constraint_name === SOURCE_NUMBER_UNIQUE_CONSTRAINT;
+}
+
+/**
  * UNIQUE(department_id, source_number) 위반을 사람이 읽는 문구로 바꾼다(정답지 N4).
  * 그대로 두면 handleRoute 의 마지막 분기에 걸려 -1 "처리 중 오류가 발생하였습니다."로만 나간다.
  *
@@ -73,12 +94,9 @@ export function assertOwnership(problem: { departmentId: number }, actor: AuthUs
  * 트랜잭션 전체를 abort 하므로(25P02), 실패한 쓰기와 같은 트랜잭션에서 부서를 다시 SELECT 하면
  * 그 SELECT 가 새 예외를 던지고 안내 문구는 만들어지지도 못한다 — 2026-08-14 QA-1 Critical 이
  * 정확히 이 모양이었다. **이 함수는 DB 를 건드리지 않는다. 되돌리지 말 것.**
- *
- * postgres.js 는 제약 이름을 `constraint_name` 으로 준다(`constraint` 는 undefined, 정답지 N7).
  */
 export function translateDuplicateSourceNumber(error: unknown, departmentName: string, sourceNumber: number): unknown {
-  const e = error as { code?: string; constraint_name?: string };
-  if (e?.code !== "23505" || e.constraint_name !== SOURCE_NUMBER_UNIQUE_CONSTRAINT) {
+  if (!isDuplicateSourceNumber(error)) {
     return error; // 다른 UNIQUE 위반이면 번호 탓으로 돌리지 않는다(정답지 N6)
   }
   return new BizError(ErrorCode.INPUT_VALUE_INVALID, `${departmentName} ${sourceNumber}번은 이미 있습니다. 다른 번호를 입력하세요.`);
