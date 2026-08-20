@@ -8,6 +8,7 @@ import {
 import { insertProblem } from "../db/problems";
 import { findTagNamesByProblemId } from "../db/tags";
 import { BizError } from "../http/errors";
+import { IMAGE_URL_PREFIX } from "./imageUrl";
 import type { AuthUser } from "../auth/types";
 import { normalizeExcelTagCell, uploadProblemsExcel } from "./problemExcel";
 
@@ -229,7 +230,9 @@ describe("uploadProblemsExcel — 행 검증(X 구획)", () => {
   it("X11: 이미지 열이 유효한 경로가 아니면 거부한다", async () => {
     const res = await uploadProblemsExcel(db, buildExcel([
       ["OX", "가", "/x.png", "", "O", "X", "", "", "", "1", "", "", 1],
-      ["OX", "나", "/uploads/images/../secret.png", "", "O", "X", "", "", "", "1", "", "", 2],
+      // 접두어는 맞지만 `..` 로 탈출하는 행. M6 가 IMAGE_URL_PREFIX 를 바꿔도
+      // 이 행이 계속 "탈출" 분기를 타도록 상수에서 조립한다(리터럴이면 접두어 불일치로 바뀌어 이름과 다른 것을 검사하게 된다).
+      ["OX", "나", `${IMAGE_URL_PREFIX}../secret.png`, "", "O", "X", "", "", "", "1", "", "", 2],
     ]), deptA, superAdmin);
     expect(res.failRows).toBe(2);
     expect(res.errorDetail!.split("\n")).toEqual([
@@ -248,7 +251,8 @@ describe("uploadProblemsExcel — 행 검증(X 구획)", () => {
   });
 
   it("X11: 500자를 넘는 경로는 접두어가 맞아도 거부한다(TOO_LONG)", async () => {
-    const overlong = `/uploads/images/${"a".repeat(500)}.png`;
+    // 길이 초과만으로 거부되는지 보는 행 — 접두어는 반드시 유효해야 하므로 M6 이후에도 상수를 따른다.
+    const overlong = `${IMAGE_URL_PREFIX}${"a".repeat(500)}.png`;
     const res = await uploadProblemsExcel(db, buildExcel([
       ["OX", "가", overlong, "", "O", "X", "", "", "", "1", "", "", 1],
     ]), deptA, superAdmin);
@@ -444,12 +448,12 @@ describe("uploadProblemsExcel — 파일 수준(F 구획)", () => {
     // 파일은 열 수도 없는 쓰레기지만, 부서 해석이 먼저라 1013 이 아니라 부서 문구가 나온다.
     const junk = new TextEncoder().encode("not xlsx").buffer as ArrayBuffer;
     await expect(uploadProblemsExcel(db, { buffer: junk, fileName: "j.xlsx" }, null, superAdmin))
-      .rejects.toThrow("문제가 귀속될 부서를 선택하세요.");
+      .rejects.toMatchObject({ message: "문제가 귀속될 부서를 선택하세요." });
   });
 
   it("R10: 비활성 부서로는 업로드할 수 없다", async () => {
     await expect(uploadProblemsExcel(db, buildExcel([]), deptClosed, superAdmin))
-      .rejects.toThrow("비활성 부서에는 문제를 등록할 수 없습니다: 폐지팀");
+      .rejects.toMatchObject({ message: "비활성 부서에는 문제를 등록할 수 없습니다: 폐지팀" });
   });
 });
 
