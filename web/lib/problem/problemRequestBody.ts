@@ -144,6 +144,36 @@ function readRecord(value: unknown, field: string): Record<string, unknown> | nu
   return unreadable(field);
 }
 
+/**
+ * Jackson Long: Integer 와 규칙은 같고 범위만 넓다. `departments.id` 는 `bigserial` 이고
+ * Java 쪽 필드도 `Long` 이므로 Integer 상한으로 재면 안 된다 — 다만 JS 의 number 는 2^53 을
+ * 넘으면 값이 뭉개지므로 거기를 경계로 삼는다(`parseNumericParam` 의 쿼리 파라미터 쪽 판정과
+ * 같은 기준). 경계를 넘는 값은 어차피 존재하는 부서일 수 없고, 여기서 막지 않으면 조용히
+ * 다른 id 로 반올림되어 **엉뚱한 부서로 문제가 옮겨간다**.
+ */
+function readLong(value: unknown, field: string): number | null {
+  if (value == null) return null;
+  const raw = typeof value === "string"
+    ? (value.trim() === "" ? null : (/^[+-]?\d+$/.test(value.trim()) ? Number(value.trim()) : unreadable(field)))
+    : typeof value === "number" ? value : unreadable(field);
+  if (raw == null) return null;
+  if (!Number.isFinite(raw)) return unreadable(field);
+  const truncated = Math.trunc(raw);
+  if (!Number.isSafeInteger(truncated)) return unreadable(field);
+  return truncated;
+}
+
+/** `DepartmentChangeRequest`(dto/problem/DepartmentChangeRequest.java) 로의 본문 매핑. */
+export interface DepartmentChangeInput {
+  departmentId: number | null;
+}
+
+export function toDepartmentChangeInput(body: Record<string, unknown>): DepartmentChangeInput {
+  // 누락·null 은 여기서 막지 않는다 — changeProblemDepartment 의 "옮길 부서를 선택하세요."
+  // (정답지 C3)가 Java 와 같은 문구를 내야 한다. 여기서 걸러야 하는 것은 읽을 수 없는 값뿐이다.
+  return { departmentId: readLong(body.departmentId, "departmentId") };
+}
+
 export function toProblemCreateInput(body: Record<string, unknown>): ProblemCreateInput {
   return {
     // 유형 누락은 여기서 막지 않는다 — validateProblem 의 "문제 유형을 선택하세요." 가

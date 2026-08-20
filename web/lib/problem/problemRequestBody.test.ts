@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MessageNotReadableError } from "../http/errors";
-import { toProblemCreateInput } from "./problemRequestBody";
+import { toDepartmentChangeInput, toProblemCreateInput } from "./problemRequestBody";
 import { normalizeTags, validateProblem } from "./problemValidation";
 
 function expectUnreadable(body: Record<string, unknown>) {
@@ -111,5 +111,35 @@ describe("toProblemCreateInput — 읽을 수 없는 본문(Spring HttpMessageNo
     ["object tag element", { tags: [{ a: 1 }] }],
   ])("rejects %s", (_label, patch) => {
     expectUnreadable({ ...ox, ...patch });
+  });
+});
+
+describe("toDepartmentChangeInput", () => {
+  it("maps departmentId and leaves an absent one null for the service guard", () => {
+    // 누락을 여기서 1000 으로 바꿔 버리면 "옮길 부서를 선택하세요."(정답지 C3)가 사라진다.
+    expect(toDepartmentChangeInput({ departmentId: 7 })).toEqual({ departmentId: 7 });
+    expect(toDepartmentChangeInput({})).toEqual({ departmentId: null });
+    expect(toDepartmentChangeInput({ departmentId: null })).toEqual({ departmentId: null });
+    expect(toDepartmentChangeInput({ departmentId: "" })).toEqual({ departmentId: null });
+  });
+
+  it("coerces a numeric string and truncates a float the way Jackson does", () => {
+    expect(toDepartmentChangeInput({ departmentId: "12" }).departmentId).toBe(12);
+    expect(toDepartmentChangeInput({ departmentId: 12.9 }).departmentId).toBe(12);
+  });
+
+  it("accepts ids beyond Integer.MAX_VALUE — the column is bigserial and the field is Long", () => {
+    expect(toDepartmentChangeInput({ departmentId: 3000000000 }).departmentId).toBe(3000000000);
+  });
+
+  it.each([
+    ["a non-numeric string", "abc"],
+    ["a boolean", true],
+    ["an object", { a: 1 }],
+    ["an array", [1]],
+    // 2^53 을 넘으면 number 가 값을 뭉갠다 — 조용히 다른 부서로 옮기느니 여기서 막는다.
+    ["a value past the safe-integer boundary", "9007199254740993"],
+  ])("rejects %s departmentId", (_label, departmentId) => {
+    expect(() => toDepartmentChangeInput({ departmentId })).toThrowError(MessageNotReadableError);
   });
 });
