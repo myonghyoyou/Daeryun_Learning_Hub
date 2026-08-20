@@ -46,7 +46,7 @@ describe("validateProblem — common", () => {
           imageUrl: "https://evil/x.png",
           choices: [choice("가", true), choice("나")],
         }),
-      "이미지는 이미지 업로드 API로 등록한 경로(/uploads/images/...)만 사용할 수 있습니다.",
+      "이미지는 이미지 업로드 API로 등록한 경로(/api/problem-images/...)만 사용할 수 있습니다.",
     );
   });
   it("rejects an image URL over 500 characters", () => {

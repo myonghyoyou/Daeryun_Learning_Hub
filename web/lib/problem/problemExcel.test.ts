@@ -241,13 +241,15 @@ describe("uploadProblemsExcel — 행 검증(X 구획)", () => {
     ]);
   });
 
-  it("X11: 이미 유효한 /uploads/images/ 경로는 그대로 저장된다(빈 열 강제 아님)", async () => {
+  it("X11: 이미 유효한 /api/problem-images/ 경로는 그대로 저장된다(빈 열 강제 아님)", async () => {
+    // 정답지 X11: 이 리터럴은 M6 의 IMAGE_URL_PREFIX 값을 그대로 박아 둔 플립 감지용이다 —
+    // 접두어가 바뀌면 이 테스트가 의도적으로 깨져 상수와 리터럴이 어긋났음을 알린다.
     const res = await uploadProblemsExcel(db, buildExcel([
-      ["OX", "가", "/uploads/images/a.png", "", "O", "X", "", "", "", "1", "", "", 1],
+      ["OX", "가", "/api/problem-images/a.png", "", "O", "X", "", "", "", "1", "", "", 1],
     ]), deptA, superAdmin);
     expect(res.successRows).toBe(1);
     const [saved] = await db.select().from(problems);
-    expect(saved.imageUrl).toBe("/uploads/images/a.png");
+    expect(saved.imageUrl).toBe("/api/problem-images/a.png");
   });
 
   it("X11: 500자를 넘는 경로는 접두어가 맞아도 거부한다(TOO_LONG)", async () => {
