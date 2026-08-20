@@ -1,6 +1,6 @@
-// vitest 는 .env 를 자동으로 읽지 않는다(Next 런타임만 자동 로드한다) — problemImage.test.ts 와
-// 같은 이유로 여기서도 명시해야 한다(scripts/bootstrap.ts 주석 참고).
-import "dotenv/config";
+// Supabase 환경변수를 세운다. .env 를 통째로 로드하면 DATABASE_URL 이 함께 실려
+// 스위트가 개발 DB 를 truncate 한다(test/env.ts 주석 참고).
+import "../../../../../test/env";
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { migrateTestDb, testDb, truncateAll } from "../../../../../test/db";
 import { auditLogs, departments, users } from "../../../../../lib/db/schema";
