@@ -130,8 +130,22 @@ Foundation(1)은 이후 모든 서브플랜의 선행 조건이다. 서브플랜
 | 1 Foundation | ✅ 완료·master 병합 | 계획 `2026-08-15-migration-foundation.md`, web/ 31 테스트 |
 | 2 Auth | ✅ 완료·master 병합 | 계획 `2026-08-16-migration-auth.md`, 정답지+E2E, 누적 73 테스트 |
 | 3 부서·계정 | ✅ 완료·master 병합 | 계획 `2026-08-16-migration-dept-users.md`, 정답지 41행+E2E 23행, 누적 116 테스트 |
-| **4 문제은행** | ▶ **다음 착수 대상** | 계획 미작성. 5유형·빈칸·태그·이미지(Supabase Storage)·문제 엑셀·페이지네이션·문항번호 |
+| **4 문제은행** | ▶ **진행 중 (7구간 중 4구간 완료)** | 계획 `2026-08-19-migration-problem-bank.md`, 정답지 136행, 누적 361 테스트. M1 기반·M2 데이터계층·M3 CRUD·M4 목록/이동 완료, M5 엑셀·M6 이미지·M7 검증 남음 |
 | 5 풀이 / 6 통계 / 7 컷오버 | 미착수 | 4 이후 순차 |
+
+> **서브플랜 5 착수 시 놓치기 쉬운 것 — `GET /api/tags/in-use`.**
+> 위 배정표가 `TagController` 를 "4(관리자 태그) + 5(풀이 활성 태그)"로 나눴다. 서브플랜 4 가
+> `GET /api/tags` 만 만들었으므로 **나머지 절반은 서브플랜 5 것이다.** `SolveController`·
+> `AttemptController` 만 보고 계획을 세우면 다른 컨트롤러에 있는 이 엔드포인트를 놓친다.
+>
+> DAO 는 이미 있다 — `web/lib/db/tags.ts` 의 `findInUseTags`(활성 문제에 붙은 태그만,
+> `DISTINCT` + `p.status='ACTIVE'` + 이름순)와 테스트 2건이 서브플랜 4 에서 함께 만들어졌다.
+> 서브플랜 5 는 `web/app/api/tags/in-use/route.ts` 만 추가하면 된다. `TagController` 에는
+> `@RequireRole` 이 없으므로 인증만 요구한다(`requireActor()` 인자 없이).
+>
+> 소비자는 `frontend/src/api/problems.js:16` → `SolveProblemListPage` 이고 실패를
+> `.catch(() => setTags([]))` 로 삼킨다. 빠뜨리면 학습자 태그 필터가 **오류 없이 조용히 빈 채로**
+> 뜬다. 컷오버(7)가 5·6 뒤라 그 전에는 실현되지 않지만, 컷오버 스모크에서야 발견하면 늦다.
 
 **서브플랜 4로 승계된 항목(레저 파킹분):**
 - `xlsx` 패키지를 SheetJS CDN tarball(0.20.x)로 교체 — npm 0.18.5에 미해결 High 권고 2건, 문제 엑셀이 두 번째 파싱 경로를 추가하기 전에 처리(+컷오버 보안노트).
