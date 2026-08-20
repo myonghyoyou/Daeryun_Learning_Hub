@@ -12,9 +12,18 @@ import type { BlankInput, ChoiceInput, ProblemCreateInput, ProblemType } from ".
  *
  * **여기 두는 이유**: 이 매핑이 만드는 `ProblemCreateInput` 은 옆 파일
  * `problemValidation.ts` 가 소유한 타입이다. 타입과 그 유일한 와이어 포맷 매퍼를 붙여 두면
- * 필드가 늘 때 한 파일만 보면 된다. 라우트 옆에 두면 Task 7·9(엑셀 업로드)가 라우트
- * 디렉터리를 거꾸로 import 해야 한다. 일반적인 Jackson 강제변환 규칙 중 라우트 공용인 것은
+ * 필드가 늘 때 한 파일만 보면 된다. 라우트 옆에 두면 Task 7(부서 이동)이 라우트 디렉터리를
+ * 거꾸로 import 해야 한다. 일반적인 Jackson 강제변환 규칙 중 라우트 공용인 것은
  * `lib/http/body.ts`(asStringField)에 이미 있고, 여기 있는 것들은 이 DTO 모양 전용이다.
+ *
+ * **엑셀 업로드(Task 9)는 `toProblemCreateInput` 을 쓰지 않는다.** `ProblemCreateInput`
+ * *모양*은 `saveTypeSpecificData` 에 넘기려면 필요하지만, 셀을 그 모양으로 바꾸는 일은
+ * 엑셀 경로가 자기 파서로 해야 한다. 이유는 두 가지다. (1) 여기의 모든 reader 는
+ * `unreadable()` 로 **던진다** — 엑셀 루프에서 행 매핑은 행별 try 바깥에서 일어나므로
+ * 47행의 셀 하나 때문에 500행 파일 전체가 1000 으로 거절되고 행별 리포트가 사라진다.
+ * Spring 은 그 행만 실패시킨다(`ExcelProblemUploadServiceImpl.java:216-220` →
+ * "문항 번호는 숫자여야 합니다: <원문>"). (2) 강제변환 규칙도 옮겨지지 않는다 — POI 의
+ * `DataFormatter` 는 모든 셀을 String 으로 주고, 엑셀 경로는 자체 파싱과 자체 문구를 쓴다.
  *
  * 규칙은 Jackson 기본 설정을 따른다:
  *  - 모르는 필드는 무시한다(Spring Boot 는 FAIL_ON_UNKNOWN_PROPERTIES 를 끈다)

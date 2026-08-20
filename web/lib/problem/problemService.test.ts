@@ -3,10 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { auditLogs, departments, problems, users } from "../db/schema";
 import { ErrorCode } from "../http/errorCode";
+import { BizError } from "../http/errors";
 import type { AuthUser } from "../auth/types";
 import type { ChoiceInput, ProblemCreateInput } from "./problemValidation";
 import {
-  archiveProblem, createProblem, getProblemDetail, lookupDepartmentName,
+  archiveProblem, createProblem, getProblemDetail, isDuplicateSourceNumber, lookupDepartmentName,
   translateDuplicateSourceNumber, updateProblem,
 } from "./problemService";
 
@@ -92,6 +93,35 @@ describe("problem service", () => {
     expect(translateDuplicateSourceNumber(other, "가팀", 5)).toBe(other);
     const notUnique = { code: "23503", constraint_name: "uq_problems_department_source_number" };
     expect(translateDuplicateSourceNumber(notUnique, "가팀", 5)).toBe(notUnique);
+  });
+
+  // Task 9(엑셀)는 같은 위반에 다른 문구를 내야 하므로 번역문이 아니라 이 판정을 쓴다.
+  // BizError 여부로 대신 판정하면 트랜잭션 안의 다른 BizError(예: 태그 21개)까지
+  // 중복 번호로 오분류된다 — 그래서 판정은 여기 하나뿐이어야 한다.
+  it("isDuplicateSourceNumber 는 그 제약의 23505 에만 true 다", () => {
+    expect(isDuplicateSourceNumber({ code: "23505", constraint_name: "uq_problems_department_source_number" })).toBe(true);
+    // 다른 제약의 UNIQUE 위반(동시 태그 생성 등)은 false 다.
+    expect(isDuplicateSourceNumber({ code: "23505", constraint_name: "tags_name_unique" })).toBe(false);
+    // SQLSTATE 가 다르면 제약명이 같아도 false 다.
+    expect(isDuplicateSourceNumber({ code: "23503", constraint_name: "uq_problems_department_source_number" })).toBe(false);
+    // postgres.js 는 `constraint` 가 아니라 `constraint_name` 을 준다(정답지 N7).
+    expect(isDuplicateSourceNumber({ code: "23505", constraint: "uq_problems_department_source_number" })).toBe(false);
+    // BizError 로 판정하던 우회가 오분류하던 바로 그 입력들.
+    expect(isDuplicateSourceNumber(new BizError(ErrorCode.INPUT_VALUE_INVALID, "태그는 문제당 20개, 태그명은 100자 이하여야 합니다."))).toBe(false);
+    expect(isDuplicateSourceNumber(new Error("boom"))).toBe(false);
+    expect(isDuplicateSourceNumber(null)).toBe(false);
+    expect(isDuplicateSourceNumber(undefined)).toBe(false);
+  });
+
+  it("실제 DB 의 중복 위반에도 isDuplicateSourceNumber 가 true 다", async () => {
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
+    // 번역을 거치지 않은 **원본** 드라이버 오류로 판정한다 — Task 9 가 보게 될 모양 그대로.
+    const raw = await db.insert(problems).values({
+      type: "OX", content: "본문", status: "ACTIVE",
+      departmentId: deptA, sourceNumber: 5, createdBy: superAdminId,
+    }).then(() => null, (error: unknown) => error);
+    expect(raw).not.toBeNull();
+    expect(isDuplicateSourceNumber(raw)).toBe(true);
   });
 
   it("부서 관리자는 남의 부서 문제에 접근할 수 없다", async () => {
