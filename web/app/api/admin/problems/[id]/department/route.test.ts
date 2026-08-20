@@ -42,7 +42,7 @@ function putRequest(body: unknown): Request {
 const params = (id: number | string) => ({ params: Promise.resolve({ id: String(id) }) });
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("PUT /api/admin/problems/[id]/department", () => {
   it("moves the problem and answers with the new source number", async () => {

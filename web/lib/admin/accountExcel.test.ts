@@ -16,7 +16,7 @@ function sheetBuffer(rows: unknown[][]): ArrayBuffer {
 }
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   const [hq] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
   const [admin] = await db.insert(users).values({ employeeNo: "admin", name: "총괄", email: "admin@x.local", passwordHash: "h", departmentId: hq.id, role: "SUPER_ADMIN" }).returning();
   actorId = admin.id;

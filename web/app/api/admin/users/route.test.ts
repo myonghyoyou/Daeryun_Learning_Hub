@@ -23,7 +23,7 @@ async function seedAdmin(role: AuthUser["role"] = "SUPER_ADMIN") {
   return u.id;
 }
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("users routes", () => {
   it("GET lists accounts", async () => {

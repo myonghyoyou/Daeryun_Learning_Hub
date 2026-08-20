@@ -46,7 +46,7 @@ async function loginAs(role: AuthUser["role"], departmentId: number, employeeNo:
 }
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("POST /api/admin/problems/excel-upload", () => {
   it("총괄 관리자가 올리면 집계를 돌려준다", async () => {

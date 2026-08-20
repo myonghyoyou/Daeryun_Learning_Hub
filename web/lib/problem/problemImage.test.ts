@@ -61,7 +61,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   storageState.uploads = [];
   storageState.removed = [];
   storageState.failUpload = false;
@@ -162,7 +162,8 @@ describe("storeProblemImage", () => {
     expect(warn).toHaveBeenCalled();
     const loggedText = warn.mock.calls.flat().map(String).join(" ");
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (key) expect(loggedText).not.toContain(key);
+    expect(key).toBeTruthy(); // test/env.ts 가 항상 세팅한다 — 이 단언이 빠지면 아래는 공허하게 통과한다.
+    expect(loggedText).not.toContain(key);
     warn.mockRestore();
   });
 
@@ -184,7 +185,8 @@ describe("storeProblemImage", () => {
     expect(warn).toHaveBeenCalled();
     const loggedText = warn.mock.calls.flat().map(String).join(" ");
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (key) expect(loggedText).not.toContain(key);
+    expect(key).toBeTruthy(); // test/env.ts 가 항상 세팅한다 — 이 단언이 빠지면 아래는 공허하게 통과한다.
+    expect(loggedText).not.toContain(key);
     warn.mockRestore();
   });
 });

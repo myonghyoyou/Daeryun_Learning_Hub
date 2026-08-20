@@ -20,7 +20,7 @@ async function seedAdmin(role: AuthUser["role"] = "SUPER_ADMIN") {
   state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role, departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
 }
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("departments routes", () => {
   it("GET lists departments for a super admin", async () => {

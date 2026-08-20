@@ -48,7 +48,7 @@ async function loginAs(role: AuthUser["role"], departmentId: number, employeeNo:
 
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   state.currentUser = null;
   storageState.uploads = [];
   [{ id: deptA }] = await db.insert(departments).values({ name: "가팀", code: "A" }).returning({ id: departments.id });

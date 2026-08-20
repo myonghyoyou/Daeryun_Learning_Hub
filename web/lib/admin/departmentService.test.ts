@@ -20,7 +20,7 @@ function msg(fn: () => Promise<unknown>): Promise<string> {
   });
 }
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); actorId = await seedActor(); });
+beforeEach(async () => { await truncateAll(); actorId = await seedActor(); });
 
 describe("createDepartment", () => {
   it("creates ACTIVE and records audit {code}", async () => {

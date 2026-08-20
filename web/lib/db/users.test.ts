@@ -16,7 +16,7 @@ async function seedUser(overrides: Partial<typeof users.$inferInsert> = {}) {
 }
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); });
+beforeEach(async () => { await truncateAll(); });
 
 describe("users dao", () => {
   it("finds a user by employee number", async () => {

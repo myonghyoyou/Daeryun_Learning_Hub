@@ -4,7 +4,7 @@ import { findAllDepartments, findDepartmentByCode, findDepartmentById, insertDep
 
 const db = testDb();
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); });
+beforeEach(async () => { await truncateAll(); });
 
 describe("departments dao", () => {
   it("inserts, finds by id/code, lists ordered by name", async () => {

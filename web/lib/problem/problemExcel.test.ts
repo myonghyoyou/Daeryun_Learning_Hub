@@ -54,7 +54,7 @@ let deptAdminOfA: AuthUser;
 beforeAll(async () => { await migrateTestDb(); });
 
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   [{ id: deptA }] = await db.insert(departments).values({ name: "가팀", code: "A" }).returning({ id: departments.id });
   [{ id: deptB }] = await db.insert(departments).values({ name: "나팀", code: "B" }).returning({ id: departments.id });
   [{ id: deptClosed }] = await db.insert(departments)

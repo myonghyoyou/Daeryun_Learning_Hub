@@ -28,7 +28,7 @@ function post(form: FormData): Request {
   return new Request("http://localhost/api/admin/users/excel-upload", { method: "POST", body: form });
 }
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("excel-upload route", () => {
   it("uploads and returns D7 successAccounts", async () => {

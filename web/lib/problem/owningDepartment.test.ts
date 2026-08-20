@@ -10,7 +10,7 @@ let superAdmin: AuthUser;
 
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   [{ id: deptA }] = await db.insert(departments).values({ name: "가팀", code: "A", status: "ACTIVE" }).returning({ id: departments.id });
   [{ id: deptB }] = await db.insert(departments).values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
   [{ id: inactiveDeptId }] = await db.insert(departments).values({ name: "폐지팀", code: "Z", status: "INACTIVE" }).returning({ id: departments.id });

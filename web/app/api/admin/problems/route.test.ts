@@ -48,7 +48,7 @@ function listRequest(query = ""): Request {
 }
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("GET /api/admin/problems", () => {
   it("returns items, totalCount, page and size", async () => {

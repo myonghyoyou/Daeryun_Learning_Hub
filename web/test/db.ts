@@ -36,7 +36,12 @@ export async function migrateTestDb() {
 }
 
 // FK 순서를 신경 쓰지 않도록 CASCADE 로 전부 비운다.
-export async function truncateAll(db: ReturnType<typeof testDb>) {
+// 인자를 받지 않고 모듈 클라이언트(testDb())를 직접 쓴다 — 인자로 받으면 타입만
+// ReturnType<typeof testDb> 를 만족하는 다른 db(예: getDb())를 실수로 넘겨도 tsc 가
+// 잡아내지 못한다. test/db.ts 상단의 URL 가드는 이 모듈의 URL만 지킬 뿐, 호출부를
+// 지키지 않는다.
+export async function truncateAll() {
+  const db = testDb();
   await db.execute(sql`TRUNCATE TABLE
     audit_logs, problem_tags, tags, excel_upload_logs, attempt_choices,
     attempt_blank_answers, attempts, problem_blanks, problem_answers,

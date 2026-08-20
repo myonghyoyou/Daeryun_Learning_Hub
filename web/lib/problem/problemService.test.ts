@@ -49,7 +49,7 @@ async function createAndReturnId(
 
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   seq = 0;
   [{ id: deptA }] = await db.insert(departments).values({ name: "가팀", code: "A", status: "ACTIVE" }).returning({ id: departments.id });
   [{ id: deptB }] = await db.insert(departments).values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });

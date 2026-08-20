@@ -13,7 +13,7 @@ let deptId = 0, userId = 0, problemId = 0;
 
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   [{ id: deptId }] = await db.insert(departments).values({ name: "가팀", code: "A", status: "ACTIVE" }).returning({ id: departments.id });
   [{ id: userId }] = await db.insert(users).values({
     employeeNo: "admin", name: "관리자", email: "a@b.c", passwordHash: "x",
