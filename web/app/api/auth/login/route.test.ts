@@ -30,7 +30,7 @@ async function seedUser() {
 }
 
 beforeAll(async () => { await migrateTestDb(); process.env.SESSION_JWT_SECRET = "test-secret-at-least-32-bytes-long-000"; });
-beforeEach(async () => { await truncateAll(db); spies.setSessionCookie.mockClear(); spies.clearSessionCookie.mockClear(); });
+beforeEach(async () => { await truncateAll(); spies.setSessionCookie.mockClear(); spies.clearSessionCookie.mockClear(); });
 
 function post(body: unknown): Request {
   return new Request("http://localhost/api/auth/login", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });

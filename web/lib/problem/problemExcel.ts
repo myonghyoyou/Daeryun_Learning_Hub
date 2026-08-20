@@ -185,7 +185,7 @@ function parseRow(row: string[], seenSourceNumbers: Set<number>): ParsedRow | st
   if (isBlank(answerText)) return "정답은 필수입니다.";
 
   const imageUrl = emptyToNull(cell(row, COL_IMAGE));
-  // 빈 열 강제가 아니다 — 이미 유효한 /uploads/images/... 경로는 통과한다(정답지 X11).
+  // 빈 열 강제가 아니다 — 이미 유효한 /api/problem-images/... 경로는 통과한다(정답지 X11).
   if (checkImageUrl(imageUrl) !== "VALID") return IMAGE_NOT_ALLOWED;
 
   const base = {

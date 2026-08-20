@@ -26,7 +26,7 @@ let deptA = 0, deptB = 0, userId = 0;
 
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
   [{ id: deptA }] = await db.insert(departments).values({ name: "가팀", code: "A", status: "ACTIVE" }).returning({ id: departments.id });
   [{ id: deptB }] = await db.insert(departments).values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
   [{ id: userId }] = await db.insert(users).values({

@@ -9,7 +9,7 @@ beforeAll(async () => {
   await migrateTestDb();
 });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
 });
 
 describe("schema round-trip", () => {

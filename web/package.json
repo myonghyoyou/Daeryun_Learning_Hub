@@ -13,6 +13,7 @@
     "bootstrap": "tsx scripts/bootstrap.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "bcryptjs": "^2.4",
     "drizzle-orm": "^0.36",
     "jose": "^5.10.0",

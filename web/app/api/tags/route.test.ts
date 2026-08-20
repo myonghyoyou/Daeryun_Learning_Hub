@@ -20,7 +20,7 @@ async function seedUser(role: AuthUser["role"] = "EMPLOYEE") {
   state.currentUser = { userId: u.id, employeeNo: "emp", name: "직원", role, departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
 }
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("tags route", () => {
   it("인증된 사용자면 역할과 무관하게 태그 목록을 돌려준다", async () => {

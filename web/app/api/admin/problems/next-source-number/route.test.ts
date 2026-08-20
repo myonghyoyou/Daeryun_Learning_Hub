@@ -38,7 +38,7 @@ function request(query = ""): Request {
 }
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("GET /api/admin/problems/next-source-number", () => {
   it("returns the bare number, not a wrapper object", async () => {

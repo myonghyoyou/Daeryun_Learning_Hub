@@ -11,9 +11,27 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 const MAX_FILE_BYTES = 4 * 1024 * 1024; // 승인된 이탈 ③: Spring 20MB → 플랫폼 안전값 4MB, 1015
 
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json;charset=UTF-8" } });
+}
+
+// 승인된 이탈 ⑥(docs/qa/2026-08-16-dept-users-parity-checklist.md:19, plan
+// docs/superpowers/plans/2026-08-16-migration-dept-users.md:23). 멀티파트 자체를 파싱할 수 없는
+// 경우와, 파싱은 됐지만 "file" 파트가 아예 없는 경우 둘 다 이 문구로 통일한다 — Java 는 후자를
+// MissingServletRequestPartException 으로 처리하는데 GlobalExceptionHandler 에 전용 핸들러가 없어
+// catch-all(200/-1/"처리 중 오류가 발생하였습니다.")로 떨어진다. 포트는 -1 대신 1009 로 안내하는
+// 의도적 개선을 그대로 적용한다(images/route.ts 와 동일 근거).
 function fileRequired(): Response {
-  return new Response(JSON.stringify(okMessage(ErrorCode.FILE_REQUIRED.code, "파일을 업로드할 수 없습니다.")),
-    { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } });
+  return json(okMessage(ErrorCode.FILE_REQUIRED.code, "파일을 업로드할 수 없습니다."));
+}
+
+// file 파트는 있지만 0바이트인 경우만 Java 의 `file.isEmpty()` 가드
+// (ExcelProblemUploadServiceImpl.java:97-99)에 실제로 도달한다 → `BizException(ErrorCode.FILE_REQUIRED)`
+// — 커스텀 메시지가 없으므로 ErrorCode 기본 문구("필수 파일이 누락되었습니다.")가 그대로 나간다.
+// GlobalExceptionHandler.handleBizException 은 EMPTY_SESSION·ACCESS_AUTH_DENIED 가 아닌 모든
+// BizException 을 400 으로 낸다 — bizStatus() 를 재사용해 200 을 하드코딩하지 않는다.
+function emptyFile(): Response {
+  return json(okMessage(ErrorCode.FILE_REQUIRED.code, ErrorCode.FILE_REQUIRED.message), bizStatus(ErrorCode.FILE_REQUIRED));
 }
 
 /**
@@ -44,7 +62,8 @@ export async function POST(request: Request): Promise<Response> {
     throw error;
   }
   const entry = form.get("file");
-  if (!(entry instanceof File) || entry.size === 0) return fileRequired(); // 정답지 F1(빈 파일 포함)
+  if (!(entry instanceof File)) return fileRequired(); // file 파트 부재 — 이탈 ⑥ (F1a)
+  if (entry.size === 0) return emptyFile(); // 0바이트 파일 — Java file.isEmpty() 가드 (F1b)
   const uploaded = entry;
   return handleRoute(async () => {
     const actor = await requireActor("SUPER_ADMIN", "DEPT_ADMIN");

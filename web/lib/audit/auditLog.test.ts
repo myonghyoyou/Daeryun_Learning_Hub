@@ -13,7 +13,7 @@ async function seedActor() {
   return u.id;
 }
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); });
+beforeEach(async () => { await truncateAll(); });
 
 describe("recordAudit (fail-closed)", () => {
   it("writes an audit row with jsonb detail", async () => {

@@ -28,7 +28,7 @@ function code(fn: () => Promise<unknown>): Promise<number> {
 }
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); });
+beforeEach(async () => { await truncateAll(); });
 
 describe("login", () => {
   it("succeeds and returns name/role/mustChangePassword; resets failures", async () => {

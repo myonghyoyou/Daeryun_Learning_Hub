@@ -29,7 +29,7 @@ async function seedUser(mustChange = false) {
 }
 
 beforeAll(async () => { await migrateTestDb(); process.env.SESSION_JWT_SECRET = "test-secret-at-least-32-bytes-long-000"; });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; state.setSessionCookie.mockClear(); });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; state.setSessionCookie.mockClear(); });
 
 describe("GET /api/auth/session", () => {
   it("returns not-logged-in when there is no session", async () => {

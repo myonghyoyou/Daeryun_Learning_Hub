@@ -35,7 +35,7 @@ function postRequest(body: unknown, query = ""): Request {
 }
 
 beforeAll(async () => { await migrateTestDb(); });
-beforeEach(async () => { await truncateAll(db); state.currentUser = null; });
+beforeEach(async () => { await truncateAll(); state.currentUser = null; });
 
 describe("problem routes", () => {
   it("POST creates a problem and returns bare ok", async () => {

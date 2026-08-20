@@ -14,7 +14,7 @@ beforeAll(async () => {
   process.env.BOOTSTRAP_ADMIN_PASSWORD = "changeme1234";
 });
 beforeEach(async () => {
-  await truncateAll(db);
+  await truncateAll();
 });
 
 describe("bootstrap", () => {
