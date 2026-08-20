@@ -92,6 +92,33 @@ describe("problem routes", () => {
       .toEqual([["O", true], ["X", false]]);
   });
 
+  it("GET rejects an employee with 403/990", async () => {
+    await seedAdmin("EMPLOYEE");
+    const { GET } = await import("./route");
+    const res = await GET(new Request("http://localhost"), { params: Promise.resolve({ id: "1" }) });
+    expect(res.status).toBe(403);
+    expect((await res.json()).resultCode).toBe(990);
+  });
+
+  it("PUT rejects an employee with 403/990", async () => {
+    await seedAdmin("EMPLOYEE");
+    const { PUT } = await import("./route");
+    const res = await PUT(
+      new Request("http://localhost", { method: "PUT", body: JSON.stringify(oxBody(1)), headers: { "content-type": "application/json" } }),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).resultCode).toBe(990);
+  });
+
+  it("DELETE rejects an employee with 403/990", async () => {
+    await seedAdmin("EMPLOYEE");
+    const { DELETE } = await import("./route");
+    const res = await DELETE(new Request("http://localhost", { method: "DELETE" }), { params: Promise.resolve({ id: "1" }) });
+    expect(res.status).toBe(403);
+    expect((await res.json()).resultCode).toBe(990);
+  });
+
   it("PUT updates and DELETE archives", async () => {
     await seedAdmin();
     const { POST } = await import("../route");
