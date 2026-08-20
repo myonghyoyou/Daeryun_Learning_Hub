@@ -29,7 +29,7 @@
 |---|---|---|---|---|
 | R1 | 클래스 레벨 역할 | `ProblemController`의 create/list/getDetail/update/archive/uploadImage/nextSourceNumber/uploadExcel 8개 엔드포인트 | `SUPER_ADMIN`·`DEPT_ADMIN` 모두 허용 | `ProblemController.java:22-23` |
 | R2 | 메서드 레벨 역할 좁힘 | `changeDepartment`(`PUT /{id}/department`) | `SUPER_ADMIN` 전용 — `RoleCheckInterceptor`가 메서드 애너테이션을 클래스 애너테이션보다 먼저 본다 | `ProblemController.java:90-99` |
-| R3 | 태그 컨트롤러 역할 없음 | `TagController`의 `list`·`listInUse` | 인증(로그인)만 요구, `@RequireRole` 없음 | `TagController.java:11-17,25-34` |
+| R3 | 태그 컨트롤러 역할 없음 | `TagController`의 `list`·`listInUse` | 인증(로그인)만 요구, `@RequireRole` 없음. **이 서브플랜은 `list`(→`GET /api/tags`)만 이식했다. `listInUse`(→`GET /api/tags/in-use`)는 이관 설계의 배정표대로 서브플랜 5(풀이) 소관이다** — DAO `findInUseTags` 와 테스트는 M2 에 이미 있고 라우트만 남았다. 소비자가 실패를 `.catch(() => setTags([]))` 로 삼키므로 빠뜨리면 학습자 태그 필터가 조용히 빈 채로 뜬다. | `TagController.java:11-17,25-34` |
 | R4 | 역할 불일치 응답 | 역할이 맞지 않는 사용자가 접근 | HTTP 403, resultCode 990 | `ErrorCode.java:20`(`ACCESS_AUTH_DENIED`) |
 | R5 | 쓰기 경로 부서 관문(non-SUPER_ADMIN 분기) | 생성·엑셀 업로드·다음 문항번호 조회, actor가 `SUPER_ADMIN`이 아님 | `OwningDepartmentResolver.resolve`가 단일 관문 — 요청값 무시, `actor.departmentId` 강제(SUPER_ADMIN 분기의 세 가지 검증은 R8~R10 참고) | `OwningDepartmentResolver.java:36-39`; 호출부 `ProblemServiceImpl.java:98,561-562`, `ExcelProblemUploadServiceImpl.java:101` |
 | R6 | 읽기·수정·보관 부서 관문 | 상세 조회·수정·보관 | `assertOwnership`이 단일 관문 — `SUPER_ADMIN` 아니고 `problem.departmentId !== actor.departmentId` → `ACCESS_AUTH_DENIED`(990) | `ProblemServiceImpl.java:214-218`; 호출부 `136,174,202` |
