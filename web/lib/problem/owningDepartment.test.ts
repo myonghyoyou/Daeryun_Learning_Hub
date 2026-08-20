@@ -17,6 +17,12 @@ beforeEach(async () => {
   superAdmin = { userId: 1, role: "SUPER_ADMIN", departmentId: deptA } as AuthUser;
 });
 
+/**
+ * 파리티 단언은 **정확히 일치**로 쓴다. Vitest 의 `toThrow(string)` 은 부분 문자열 검사라
+ * "존재하지 않는 부서입니다. (id=3)" 같은 군더더기가 붙어도 초록으로 남는다 — 정답지가
+ * 고정하려는 것은 문구 전체이므로 그때 통과하면 안 된다. 이 저장소의 다른 파리티 테스트는
+ * 모두 `toMatchObject({ message })`·`toBe`·`toEqual` 을 쓰고, 이 파일만 빠져 있었다.
+ */
 describe("resolveOwningDepartment", () => {
   it("총괄 관리자가 지정한 부서를 그대로 쓴다", async () => {
     expect(await resolveOwningDepartment(db, deptB, superAdmin)).toBe(deptB);
@@ -34,14 +40,14 @@ describe("resolveOwningDepartment", () => {
   });
 
   it("총괄 관리자가 부서를 안 주면 막는다", async () => {
-    await expect(resolveOwningDepartment(db, null, superAdmin)).rejects.toThrow("문제가 귀속될 부서를 선택하세요.");
+    await expect(resolveOwningDepartment(db, null, superAdmin)).rejects.toMatchObject({ message: "문제가 귀속될 부서를 선택하세요." });
   });
 
   it("없는 부서를 막는다", async () => {
-    await expect(resolveOwningDepartment(db, 999999, superAdmin)).rejects.toThrow("존재하지 않는 부서입니다.");
+    await expect(resolveOwningDepartment(db, 999999, superAdmin)).rejects.toMatchObject({ message: "존재하지 않는 부서입니다." });
   });
 
   it("비활성 부서를 막고 부서명을 문구에 넣는다", async () => {
-    await expect(resolveOwningDepartment(db, inactiveDeptId, superAdmin)).rejects.toThrow("비활성 부서에는 문제를 등록할 수 없습니다: 폐지팀");
+    await expect(resolveOwningDepartment(db, inactiveDeptId, superAdmin)).rejects.toMatchObject({ message: "비활성 부서에는 문제를 등록할 수 없습니다: 폐지팀" });
   });
 });
