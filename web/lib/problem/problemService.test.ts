@@ -1,0 +1,194 @@
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { and, eq } from "drizzle-orm";
+import { migrateTestDb, testDb, truncateAll } from "../../test/db";
+import { auditLogs, departments, problems, users } from "../db/schema";
+import { ErrorCode } from "../http/errorCode";
+import type { AuthUser } from "../auth/types";
+import type { ChoiceInput, ProblemCreateInput } from "./problemValidation";
+import {
+  archiveProblem, createProblem, getProblemDetail, translateDuplicateSourceNumber, updateProblem,
+} from "./problemService";
+
+const db = testDb();
+let deptA = 0, deptB = 0, inactiveDeptId = 0, superAdminId = 0, deptAdminId = 0;
+let superAdmin: AuthUser;
+let deptAdminOfA: AuthUser;
+let seq = 0;
+
+function nextNumber() { return ++seq; }
+function c(text: string, correct = false): ChoiceInput { return { text, correct }; }
+
+function oxRequest(o: Partial<ProblemCreateInput> = {}): ProblemCreateInput {
+  return { type: "OX", content: "본문", choices: [c("O", true), c("X")], sourceNumber: nextNumber(), ...o };
+}
+function mcqRequest(o: Partial<ProblemCreateInput> = {}): ProblemCreateInput {
+  return { type: "MCQ_SINGLE", content: "본문", choices: [c("가", true), c("나")], sourceNumber: nextNumber(), ...o };
+}
+function shortAnswerRequest(o: Partial<ProblemCreateInput> = {}): ProblemCreateInput {
+  return { type: "SHORT_ANSWER", content: "본문", answers: ["서울"], sourceNumber: nextNumber(), ...o };
+}
+function fillBlankRequest(o: Partial<ProblemCreateInput> = {}): ProblemCreateInput {
+  return {
+    type: "FILL_BLANK", content: "수도는 {{a}} 이다.",
+    blanks: [{ blankKey: "a", answerText: "서울" }], blankRevealCount: 1,
+    sourceNumber: nextNumber(), ...o,
+  };
+}
+
+async function createAndReturnId(
+  input: ProblemCreateInput, departmentId: number = deptA, actor: AuthUser = superAdmin,
+): Promise<number> {
+  await createProblem(db, input, departmentId, actor);
+  const owning = actor.role === "SUPER_ADMIN" ? departmentId : actor.departmentId;
+  const [row] = await db.select().from(problems)
+    .where(and(eq(problems.departmentId, owning), eq(problems.sourceNumber, input.sourceNumber!)));
+  return row.id;
+}
+
+beforeAll(async () => { await migrateTestDb(); });
+beforeEach(async () => {
+  await truncateAll(db);
+  seq = 0;
+  [{ id: deptA }] = await db.insert(departments).values({ name: "가팀", code: "A", status: "ACTIVE" }).returning({ id: departments.id });
+  [{ id: deptB }] = await db.insert(departments).values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
+  [{ id: inactiveDeptId }] = await db.insert(departments).values({ name: "폐지팀", code: "Z", status: "INACTIVE" }).returning({ id: departments.id });
+  [{ id: superAdminId }] = await db.insert(users).values({
+    employeeNo: "admin", name: "총괄", email: "a@b.c", passwordHash: "x",
+    departmentId: deptA, role: "SUPER_ADMIN", status: "ACTIVE", mustChangePassword: false,
+  }).returning({ id: users.id });
+  [{ id: deptAdminId }] = await db.insert(users).values({
+    employeeNo: "dept", name: "부서", email: "d@b.c", passwordHash: "x",
+    departmentId: deptA, role: "DEPT_ADMIN", status: "ACTIVE", mustChangePassword: false,
+  }).returning({ id: users.id });
+  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false };
+  deptAdminOfA = { userId: deptAdminId, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false };
+});
+
+describe("problem service", () => {
+  it("중복 문항번호를 한국어로 안내한다", async () => {
+    // 2026-08-14 Critical(QA-1) 재발 방지: 부서명 조회가 catch 안에 있으면
+    // 트랜잭션 abort(25P02) 때문에 이 테스트가 BizError 대신 DB 예외로 실패한다.
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
+    await expect(createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin))
+      .rejects.toThrow("가팀 5번은 이미 있습니다. 다른 번호를 입력하세요.");
+  });
+
+  it("수정 경로도 같은 문구를 낸다", async () => {
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
+    const id = await createAndReturnId(oxRequest({ sourceNumber: 6 }));
+    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 5 }), superAdmin))
+      .rejects.toThrow("가팀 5번은 이미 있습니다. 다른 번호를 입력하세요.");
+  });
+
+  it("중복 안내는 BizError(1000) 이다", async () => {
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
+    await expect(createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin))
+      .rejects.toMatchObject({ errorCode: ErrorCode.INPUT_VALUE_INVALID });
+  });
+
+  it("다른 제약의 UNIQUE 위반은 번호 탓으로 돌리지 않는다", () => {
+    const other = { code: "23505", constraint_name: "users_email_key" };
+    expect(translateDuplicateSourceNumber(other, "가팀", 5)).toBe(other);
+    const notUnique = { code: "23503", constraint_name: "uq_problems_department_source_number" };
+    expect(translateDuplicateSourceNumber(notUnique, "가팀", 5)).toBe(notUnique);
+  });
+
+  it("부서 관리자는 남의 부서 문제에 접근할 수 없다", async () => {
+    const id = await createAndReturnId(oxRequest({}), deptB, superAdmin);
+    await expect(getProblemDetail(db, id, deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
+    await expect(updateProblem(db, id, oxRequest({}), deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
+    await expect(archiveProblem(db, id, deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
+  });
+
+  it("부서 관리자는 요청 부서를 무시하고 자기 부서에 등록한다", async () => {
+    await createProblem(db, oxRequest({ sourceNumber: 3 }), deptB, deptAdminOfA);
+    const [row] = await db.select().from(problems);
+    expect(row.departmentId).toBe(deptA);
+  });
+
+  it("비활성 부서에는 등록할 수 없다", async () => {
+    await expect(createProblem(db, oxRequest({}), inactiveDeptId, superAdmin))
+      .rejects.toThrow("비활성 부서에는 문제를 등록할 수 없습니다: 폐지팀");
+  });
+
+  it("문항번호 검증이 부서 해석보다 먼저다", async () => {
+    // 정답지 R12: 부서도 번호도 없으면 "문항 번호를 입력하세요."가 먼저 뜬다.
+    await expect(createProblem(db, oxRequest({ sourceNumber: null }), null, superAdmin))
+      .rejects.toThrow("문항 번호를 입력하세요.");
+  });
+
+  it("수정은 유형을 바꿀 수 없다", async () => {
+    const id = await createAndReturnId(oxRequest({}));
+    await expect(updateProblem(db, id, shortAnswerRequest({}), superAdmin)).rejects.toThrow("문제 유형은 수정할 수 없습니다.");
+  });
+
+  it("수정은 보기·정답·빈칸을 지우고 다시 넣는다", async () => {
+    const id = await createAndReturnId(mcqRequest({ choices: [c("가", true), c("나")] }));
+    await updateProblem(db, id, mcqRequest({ choices: [c("다", true), c("라"), c("마")] }), superAdmin);
+    const detail = await getProblemDetail(db, id, superAdmin);
+    expect(detail.choices.map((x) => x.choiceText)).toEqual(["다", "라", "마"]);
+  });
+
+  it("보관은 상태만 바꾼다", async () => {
+    const id = await createAndReturnId(oxRequest({}));
+    await archiveProblem(db, id, superAdmin);
+    expect((await getProblemDetail(db, id, superAdmin)).status).toBe("ARCHIVED");
+  });
+
+  it("없는 문제는 안내 문구가 같다", async () => {
+    await expect(archiveProblem(db, 999999, superAdmin)).rejects.toThrow("존재하지 않는 문제입니다.");
+    await expect(getProblemDetail(db, 999999, superAdmin)).rejects.toThrow("존재하지 않는 문제입니다.");
+    await expect(updateProblem(db, 999999, oxRequest({}), superAdmin)).rejects.toThrow("존재하지 않는 문제입니다.");
+  });
+
+  it("상세조회 보기의 정답 플래그 이름은 correct 다", async () => {
+    // 정답지 D2: 프론트는 choice.correct 를 읽는다. Drizzle 행의 isCorrect 를 그대로 펼치면
+    // 저장된 MCQ/OX 를 다시 열 때 정답이 선택되지 않은 것처럼 보이고, 그 상태로 저장하면 정답이 지워진다.
+    const id = await createAndReturnId(mcqRequest({ choices: [c("가", false), c("나", true)] }));
+    const detail = await getProblemDetail(db, id, superAdmin);
+    expect(detail.choices.map((x) => x.correct)).toEqual([false, true]);
+    expect(Object.keys(detail.choices[0]).sort()).toEqual(["choiceText", "correct", "displayOrder", "id", "problemId"]);
+  });
+
+  it("상세조회 응답은 Spring 필드 구성과 같다", async () => {
+    const id = await createAndReturnId(shortAnswerRequest({ answers: ["서울"], tags: ["Seoul", "seoul", "지리"] }));
+    const detail = await getProblemDetail(db, id, superAdmin);
+    expect(Object.keys(detail)).toEqual([
+      "id", "type", "content", "imageUrl", "referenceText", "explanation", "blankRevealCount",
+      "status", "departmentId", "sourceNumber", "choices", "answers", "blanks", "tags",
+    ]);
+    // 정답지 D4: answers·tags 는 객체가 아니라 문자열 배열이다.
+    expect(detail.answers).toEqual(["서울"]);
+    // 정답지 V29: 태그는 저장 시점에 소문자·중복 제거된다("Seoul"·"seoul" 이 한 개로 합쳐진다).
+    // 정렬은 DAO 가 DB 콜레이션(tags.name ASC)에 맡기므로 비교 전에 다시 정렬한다.
+    expect([...detail.tags].sort()).toEqual(["seoul", "지리"]);
+  });
+
+  it("빈칸 문제는 blanks 와 노출 개수를 그대로 돌려준다", async () => {
+    const id = await createAndReturnId(fillBlankRequest({}));
+    const detail = await getProblemDetail(db, id, superAdmin);
+    expect(detail.blanks.map((b) => b.blankKey)).toEqual(["a"]);
+    expect(detail.blanks[0].answerText).toBe("서울");
+    expect(detail.blankRevealCount).toBe(1);
+  });
+
+  it("FILL_BLANK 가 아니면 blankRevealCount 는 항상 null 로 저장된다", async () => {
+    // 정답지 V31: 요청에 값이 실려 와도 저장은 null 이다(생성·수정 모두).
+    const id = await createAndReturnId(oxRequest({ blankRevealCount: 3 }));
+    expect((await getProblemDetail(db, id, superAdmin)).blankRevealCount).toBeNull();
+    await updateProblem(db, id, oxRequest({ sourceNumber: 1, blankRevealCount: 4 }), superAdmin);
+    expect((await getProblemDetail(db, id, superAdmin)).blankRevealCount).toBeNull();
+  });
+
+  it("감사 로그를 남긴다", async () => {
+    const id = await createAndReturnId(oxRequest({}));
+    await updateProblem(db, id, oxRequest({ sourceNumber: 1 }), superAdmin);
+    await archiveProblem(db, id, superAdmin);
+    const rows = await db.select().from(auditLogs).orderBy(auditLogs.id);
+    expect(rows.map((r) => r.action)).toEqual(["PROBLEM_CREATED", "PROBLEM_UPDATED", "PROBLEM_ARCHIVED"]);
+    expect(rows[0].targetType).toBe("PROBLEM");
+    expect(rows[0].targetId).toBe(id);
+    expect(rows[0].detail).toEqual({ type: "OX" });
+    expect(rows[2].detail).toEqual({});
+  });
+});
