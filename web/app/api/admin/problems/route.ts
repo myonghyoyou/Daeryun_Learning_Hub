@@ -1,15 +1,15 @@
 import { getDb } from "@/lib/db/client";
 import { handleRoute } from "@/lib/http/errors";
 import { readJson } from "@/lib/http/body";
-import { parseNumericParam } from "@/lib/http/params";
+import { parseDateParam, parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { createProblem } from "@/lib/problem/problemService";
+import { listProblems } from "@/lib/problem/problemListService";
 import type { ProblemCreateInput } from "@/lib/problem/problemValidation";
 
 export const runtime = "nodejs";
 
 // ProblemController 는 클래스 레벨 @RequireRole({SUPER_ADMIN, DEPT_ADMIN}) 이다(정답지 R1).
-// 목록(GET)은 Task 6 에서 이 파일에 추가된다.
 export async function POST(request: Request): Promise<Response> {
   return handleRoute(async () => {
     const actor = await requireActor("SUPER_ADMIN", "DEPT_ADMIN");
@@ -19,5 +19,33 @@ export async function POST(request: Request): Promise<Response> {
     const departmentId = parseNumericParam(new URL(request.url).searchParams.get("departmentId"), "departmentId");
     await createProblem(getDb(), body as unknown as ProblemCreateInput, departmentId, actor);
     return undefined; // ok()
+  });
+}
+
+/**
+ * 목록 조회(ProblemController.java:45-65). 아홉 파라미터를 그대로 받는다(정답지 L1).
+ *
+ * page·size 의 기본값은 서버가 채운다 — 파라미터 없이 부르던 기존 호출이 첫 페이지를 받는다.
+ * 상·하한 클램프(정답지 L2~L4)는 서비스가 한다: 라우트가 먼저 손보면 규칙이 두 곳으로 갈라진다.
+ *
+ * type·status·tag·keyword 는 `searchParams.get` 이 준 값을 그대로 넘긴다. 없으면 null,
+ * `?type=` 이면 빈 문자열인데 이는 Spring 의 `@RequestParam(required=false) String` 과 같다.
+ * 날짜만 형식 검증이 필요하다 — `@DateTimeFormat(ISO.DATE)` 미러(정답지 L15).
+ */
+export async function GET(request: Request): Promise<Response> {
+  return handleRoute(async () => {
+    const actor = await requireActor("SUPER_ADMIN", "DEPT_ADMIN");
+    const params = new URL(request.url).searchParams;
+    return listProblems(getDb(), actor, {
+      departmentId: parseNumericParam(params.get("departmentId"), "departmentId"),
+      type: params.get("type"),
+      status: params.get("status"),
+      createdFrom: parseDateParam(params.get("createdFrom"), "createdFrom"),
+      createdTo: parseDateParam(params.get("createdTo"), "createdTo"),
+      tag: params.get("tag"),
+      keyword: params.get("keyword"),
+      page: parseNumericParam(params.get("page"), "page") ?? 1,
+      size: parseNumericParam(params.get("size"), "size") ?? 20,
+    });
   });
 }

@@ -4,6 +4,7 @@ import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import {
   insertProblem, findProblemById, findMaxSourceNumber,
   updateProblem, updateProblemStatus, updateDepartmentAndSourceNumber,
+  listProblems, countProblems, type ProblemListFilters,
 } from "./problems";
 import { insertChoices, findChoicesByProblemId } from "./problemParts";
 import { findAllTags, findOrCreateTagsByNames, findTagNamesByProblemId, replaceProblemTags } from "./tags";
@@ -158,5 +159,137 @@ describe("DAO 트랜잭션 합성", () => {
     // 바깥에서 커밋된 행은 그대로다
     expect(await findProblemById(db, survivor)).not.toBeNull();
     expect(await findTagNamesByProblemId(db, survivor)).toEqual(["유지"]);
+  });
+});
+
+describe("problems DAO — 목록·총건수", () => {
+  const noFilters: ProblemListFilters = {
+    departmentId: null, type: null, status: null,
+    createdFrom: null, createdTo: null, tag: null, keyword: null,
+  };
+  const firstPage = { ...noFilters, limit: 100, offset: 0 };
+
+  async function seed(values: {
+    content: string; type?: string; status?: "ACTIVE" | "ARCHIVED"; departmentId?: number;
+    sourceNumber?: number | null; createdAt?: string; tags?: string[];
+  }) {
+    const id = await insertProblem(db, {
+      type: values.type ?? "OX", content: values.content, status: values.status ?? "ACTIVE",
+      departmentId: values.departmentId ?? deptA, sourceNumber: values.sourceNumber ?? null, createdBy: userId,
+    });
+    if (values.createdAt) {
+      await db.update(problems).set({ createdAt: sql`${values.createdAt}::timestamp` }).where(eq(problems.id, id));
+    }
+    if (values.tags?.length) {
+      await replaceProblemTags(db, id, await findOrCreateTagsByNames(db, values.tags));
+    }
+    return id;
+  }
+
+  it("찾은 행에 부서명과 태그 배열을 함께 싣는다", async () => {
+    // 정답지 L14: {id,type,content,status,departmentId,departmentName,createdAt,tags}
+    const id = await seed({ content: "SWOT 분석", type: "SHORT_ANSWER", tags: ["회계", "전략"] });
+    const [item] = await listProblems(db, firstPage);
+    expect(item.id).toBe(id);
+    expect(item.type).toBe("SHORT_ANSWER");
+    expect(item.content).toBe("SWOT 분석");
+    expect(item.status).toBe("ACTIVE");
+    expect(item.departmentId).toBe(deptA);
+    expect(item.departmentName).toBe("가팀");
+    expect(item.createdAt).toBeInstanceOf(Date);
+    expect([...item.tags].sort()).toEqual(["전략", "회계"]);
+  });
+
+  it("태그가 없는 문제의 tags 는 빈 배열이다", async () => {
+    // array_agg 의 FILTER/COALESCE 가 없으면 [null] 이 나가 화면이 빈 칩을 그린다.
+    await seed({ content: "태그 없음" });
+    expect((await listProblems(db, firstPage))[0].tags).toEqual([]);
+  });
+
+  it("countProblems 는 태그 수만큼 부풀지 않는다", async () => {
+    // 정답지 L13: countAll 에 태그 조인을 두면 태그 3개짜리 문제 1건이 3건으로 세어진다.
+    await seed({ content: "태그 셋", tags: ["가", "나", "다"] });
+    expect(await countProblems(db, noFilters)).toBe(1);
+    expect(await listProblems(db, firstPage)).toHaveLength(1);
+  });
+
+  it("created_at 이 같아도 p.id 타이브레이커로 전순서가 된다", async () => {
+    // 정답지 L12: 엑셀 업로드는 created_at 이 같은 행을 무더기로 만든다. 타이브레이커가 없으면
+    // LIMIT/OFFSET 페이징에서 중복·누락이 난다.
+    const sameInstant = "2026-08-19 09:00:00";
+    const ids: number[] = [];
+    for (const n of [1, 2, 3, 4, 5, 6]) ids.push(await seed({ content: `행 ${n}`, sourceNumber: n, createdAt: sameInstant }));
+    const paged: number[] = [];
+    for (const offset of [0, 2, 4]) paged.push(...(await listProblems(db, { ...firstPage, limit: 2, offset })).map((i) => i.id));
+    expect(paged).toEqual([...ids].sort((a, b) => b - a));
+    expect(new Set(paged).size).toBe(6);
+  });
+
+  it("created_at 내림차순이 id 보다 우선한다", async () => {
+    const older = await seed({ content: "예전", sourceNumber: 1, createdAt: "2026-08-01 09:00:00" });
+    const newer = await seed({ content: "최근", sourceNumber: 2, createdAt: "2026-08-18 09:00:00" });
+    expect((await listProblems(db, firstPage)).map((i) => i.id)).toEqual([newer, older]);
+  });
+
+  it("departmentId·type·status 필터가 각각 걸린다", async () => {
+    await seed({ content: "가팀 OX", sourceNumber: 1 });
+    await seed({ content: "나팀 OX", departmentId: deptB, sourceNumber: 1 });
+    await seed({ content: "가팀 단답", type: "SHORT_ANSWER", sourceNumber: 2 });
+    await seed({ content: "가팀 보관", status: "ARCHIVED", sourceNumber: 3 });
+
+    expect(await countProblems(db, { ...noFilters, departmentId: deptB })).toBe(1);
+    expect((await listProblems(db, { ...firstPage, departmentId: deptB }))[0].content).toBe("나팀 OX");
+    expect(await countProblems(db, { ...noFilters, type: "SHORT_ANSWER" })).toBe(1);
+    expect(await countProblems(db, { ...noFilters, status: "ARCHIVED" })).toBe(1);
+    expect(await countProblems(db, { ...noFilters, status: "ACTIVE" })).toBe(3);
+  });
+
+  it("createdFrom 은 그 날 0시부터 포함한다", async () => {
+    await seed({ content: "전날 늦게", sourceNumber: 1, createdAt: "2026-08-18 23:59:59" });
+    await seed({ content: "당일 0시", sourceNumber: 2, createdAt: "2026-08-19 00:00:00" });
+    const from = new Date(Date.UTC(2026, 7, 19));
+    expect((await listProblems(db, { ...firstPage, createdFrom: from })).map((i) => i.content)).toEqual(["당일 0시"]);
+  });
+
+  it("createdTo 는 그 날 전체를 포함한다", async () => {
+    // 정답지 L9: `< (createdTo + INTERVAL '1 day')` 가 아니면 그날 등록분이 통째로 빠진다.
+    await seed({ content: "그날 23시", sourceNumber: 1, createdAt: "2026-08-19 23:59:59" });
+    await seed({ content: "다음날 0시", sourceNumber: 2, createdAt: "2026-08-20 00:00:00" });
+    const to = new Date(Date.UTC(2026, 7, 19));
+    expect((await listProblems(db, { ...firstPage, createdTo: to })).map((i) => i.content)).toEqual(["그날 23시"]);
+    expect(await countProblems(db, { ...noFilters, createdTo: to })).toBe(1);
+  });
+
+  it("tag 필터는 대소문자를 가리지 않고, 태그 하나만 맞아도 1건으로 센다", async () => {
+    // 정답지 L10: 상관 서브쿼리라 조인 없이도 걸린다 — countProblems 도 같은 답을 내야 한다.
+    await seed({ content: "회계 문제", sourceNumber: 1, tags: ["회계", "swot", "전략"] });
+    await seed({ content: "무관", sourceNumber: 2, tags: ["기타"] });
+    expect((await listProblems(db, { ...firstPage, tag: "회계" })).map((i) => i.content)).toEqual(["회계 문제"]);
+    expect((await listProblems(db, { ...firstPage, tag: "SWOT" })).map((i) => i.content)).toEqual(["회계 문제"]);
+    expect(await countProblems(db, { ...noFilters, tag: "SWOT" })).toBe(1);
+    expect(await countProblems(db, { ...noFilters, tag: "없는태그" })).toBe(0);
+  });
+
+  it("keyword 는 본문 부분일치이고 대소문자를 가리지 않는다", async () => {
+    // 정답지 L11: p.content ILIKE '%' || keyword || '%'
+    await seed({ content: "SWOT 분석이란 무엇인가", sourceNumber: 1 });
+    await seed({ content: "손익분기점", sourceNumber: 2 });
+    expect((await listProblems(db, { ...firstPage, keyword: "swot" }))).toHaveLength(1);
+    expect((await listProblems(db, { ...firstPage, keyword: "분석" }))).toHaveLength(1);
+    expect(await countProblems(db, { ...noFilters, keyword: "swot" })).toBe(1);
+  });
+
+  it("목록과 총건수가 같은 필터 조각을 쓴다", async () => {
+    // 두 벌로 갈라지면 총건수와 실제 결과가 어긋나 마지막 페이지가 빈다(ProblemMapper.xml:76-78).
+    await seed({ content: "SWOT 가팀", sourceNumber: 1, tags: ["회계"], createdAt: "2026-08-19 10:00:00" });
+    await seed({ content: "SWOT 나팀", departmentId: deptB, sourceNumber: 1, tags: ["회계"], createdAt: "2026-08-19 10:00:00" });
+    await seed({ content: "다른 본문", sourceNumber: 2, tags: ["회계"], createdAt: "2026-08-19 10:00:00" });
+    const filters: ProblemListFilters = {
+      departmentId: deptA, type: "OX", status: "ACTIVE",
+      createdFrom: new Date(Date.UTC(2026, 7, 19)), createdTo: new Date(Date.UTC(2026, 7, 19)),
+      tag: "회계", keyword: "swot",
+    };
+    expect(await countProblems(db, filters)).toBe(1);
+    expect(await listProblems(db, { ...filters, limit: 100, offset: 0 })).toHaveLength(1);
   });
 });
