@@ -86,9 +86,10 @@ export function translateDuplicateSourceNumber(error: unknown, departmentName: s
 
 /**
  * 안내 문구에 쓸 부서명을 **쓰기 전에** 읽어 둔다(정답지 N5). 행이 없거나 id 가 null 이면
- * 리터럴 "해당 부서"로 폴백한다(정답지 N8).
+ * 리터럴 "해당 부서"로 폴백한다(정답지 N8) — 그래야 중복 번호 안내가 부서명을 못 찾아 통째로
+ * 무너지지 않는다. Task 7·9 도 이 번역 경로를 재사용하므로 폴백을 테스트로 고정한다.
  */
-async function lookupDepartmentName(conn: DbConn, departmentId: number | null): Promise<string> {
+export async function lookupDepartmentName(conn: DbConn, departmentId: number | null): Promise<string> {
   if (departmentId == null) return "해당 부서";
   const department = await findDepartmentById(conn, departmentId);
   return department?.name ?? "해당 부서";
@@ -135,7 +136,6 @@ export async function createProblem(
   const owningDepartmentId = await resolveOwningDepartment(conn, requestedDepartmentId, actor);
   // 부서명은 쓰기 전에 읽어 둔다 — 이유는 translateDuplicateSourceNumber 주석 참고.
   const departmentName = await lookupDepartmentName(conn, owningDepartmentId);
-  const tags = normalizeTags(req.tags);
 
   await conn.transaction(async (tx) => {
     let problemId: number;
@@ -156,7 +156,10 @@ export async function createProblem(
       throw translateDuplicateSourceNumber(error, departmentName, req.sourceNumber!);
     }
     await saveTypeSpecificData(tx, problemId, req);
-    await replaceProblemTags(tx, problemId, await findOrCreateTagsByNames(tx, tags));
+    // normalizeTags 는 여기서, 쓰기 **뒤에** 부른다. Java 는 이걸 replaceTags 의 인자로 평가하므로
+    // (ProblemServiceImpl.java:124 create, :162 update) INSERT/UPDATE 보다 늦다. 위로 끌어올리면
+    // 태그 21개 + 이미 쓰인 문항번호일 때 중복 번호 안내 대신 태그 문구가 먼저 나가 순서가 어긋난다.
+    await replaceProblemTags(tx, problemId, await findOrCreateTagsByNames(tx, normalizeTags(req.tags)));
     await recordAudit(tx, {
       actorId: actor.userId, action: "PROBLEM_CREATED", targetType: "PROBLEM",
       targetId: problemId, detail: { type: req.type },
@@ -179,7 +182,6 @@ export async function updateProblem(
   validateSourceNumber(req.sourceNumber);
   // 부서명은 쓰기 전에 읽어 둔다 — 이유는 translateDuplicateSourceNumber 주석 참고.
   const departmentName = await lookupDepartmentName(conn, existing.departmentId);
-  const tags = normalizeTags(req.tags);
 
   await conn.transaction(async (tx) => {
     try {
@@ -201,7 +203,8 @@ export async function updateProblem(
     await deleteAnswersByProblemId(tx, id);
     await deleteBlanksByProblemId(tx, id);
     await saveTypeSpecificData(tx, id, req);
-    await replaceProblemTags(tx, id, await findOrCreateTagsByNames(tx, tags));
+    // 쓰기 뒤에 정규화한다 — 이유는 createProblem 쪽 같은 줄의 주석 참고.
+    await replaceProblemTags(tx, id, await findOrCreateTagsByNames(tx, normalizeTags(req.tags)));
     await recordAudit(tx, {
       actorId: actor.userId, action: "PROBLEM_UPDATED", targetType: "PROBLEM",
       targetId: id, detail: { type: existing.type },
