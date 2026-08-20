@@ -119,6 +119,65 @@ describe("problem routes", () => {
     expect((await res.json()).resultCode).toBe(990);
   });
 
+  // 정답지 R1 의 허용 절반. 위의 EMPLOYEE 거부 테스트 넷은 requireActor("SUPER_ADMIN") 으로
+  // 좁혀도 전부 초록으로 남으므로, 부서 관리자가 잠기는 회귀를 잡지 못한다. 부서 관리자는
+  // 문제가 귀속된 부서를 소유하도록 심는다 — 아니면 assertOwnership 이 (옳게) 먼저 막아
+  // 역할 관문이 아니라 소유권 관문을 시험하게 된다.
+  async function seedProblemOwnedByDeptAdmin() {
+    await seedAdmin();
+    const { POST } = await import("../route");
+    await POST(postRequest(oxBody(1), `?departmentId=${deptId}`));
+    const [row] = await db.select().from(problems);
+    const [u] = await db.insert(users).values({
+      employeeNo: "dept", name: "부서", email: "dept@x.local", passwordHash: "h",
+      departmentId: deptId, role: "DEPT_ADMIN",
+    }).returning();
+    state.currentUser = {
+      userId: u.id, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN",
+      departmentId: deptId, mustChangePassword: false,
+    } satisfies AuthUser;
+    return row.id;
+  }
+
+  it("GET allows a DEPT_ADMIN that owns the problem's department", async () => {
+    const id = await seedProblemOwnedByDeptAdmin();
+    const { GET } = await import("./route");
+    const body = await (await GET(new Request("http://localhost"), { params: Promise.resolve({ id: String(id) }) })).json();
+    expect(body.resultCode).toBe(200);
+    expect(body.data.id).toBe(id);
+  });
+
+  it("PUT allows a DEPT_ADMIN that owns the problem's department", async () => {
+    const id = await seedProblemOwnedByDeptAdmin();
+    const { PUT } = await import("./route");
+    const res = await PUT(
+      new Request("http://localhost", { method: "PUT", body: JSON.stringify({ ...oxBody(1), content: "부서 관리자 수정" }), headers: { "content-type": "application/json" } }),
+      { params: Promise.resolve({ id: String(id) }) },
+    );
+    expect((await res.json()).resultCode).toBe(200);
+    const [after] = await db.select().from(problems);
+    expect(after.content).toBe("부서 관리자 수정");
+  });
+
+  it("DELETE allows a DEPT_ADMIN that owns the problem's department", async () => {
+    const id = await seedProblemOwnedByDeptAdmin();
+    const { DELETE } = await import("./route");
+    const res = await DELETE(new Request("http://localhost", { method: "DELETE" }), { params: Promise.resolve({ id: String(id) }) });
+    expect((await res.json()).resultCode).toBe(200);
+    const [after] = await db.select().from(problems);
+    expect(after.status).toBe("ARCHIVED");
+  });
+
+  it("PUT still maps an unreadable body to 1000 (F1)", async () => {
+    const id = await seedProblemOwnedByDeptAdmin();
+    const { PUT } = await import("./route");
+    const res = await PUT(
+      new Request("http://localhost", { method: "PUT", body: JSON.stringify({ ...oxBody(1), sourceNumber: "abc" }), headers: { "content-type": "application/json" } }),
+      { params: Promise.resolve({ id: String(id) }) },
+    );
+    expect(await res.json()).toEqual({ resultCode: 1000, resultMsg: "잘못된 파라미터를 입력했습니다." });
+  });
+
   it("PUT updates and DELETE archives", async () => {
     await seedAdmin();
     const { POST } = await import("../route");

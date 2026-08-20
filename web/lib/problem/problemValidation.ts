@@ -253,5 +253,11 @@ export function validateProblem(req: ProblemCreateInput): void {
     case "FILL_BLANK":
       validateFillBlank(req.content, req.blanks ?? [], req.blankRevealCount);
       break;
+    default:
+      // Java 에서는 닿을 수 없다(type 이 enum 이라 Jackson 이 먼저 거른다). TS 에서는 캐스팅
+      // 한 번이면 닿고, 분기가 없으면 유형별 검사를 통째로 건너뛴 채 DB 까지 가서 CHECK 제약이
+      // -1 "처리 중 오류가 발생하였습니다." 로 터진다. 본문 매핑(problemRequestBody.ts)이
+      // 1차 관문이고 이건 2차 그물이다.
+      invalid("문제 유형을 선택하세요.");
   }
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ZodError, z } from "zod";
 import { ErrorCode } from "./errorCode";
 import { ok, okMessage } from "./envelope";
-import { BizError, bizStatus, handleRoute } from "./errors";
+import { BizError, MessageNotReadableError, bizStatus, handleRoute } from "./errors";
 
 describe("envelope", () => {
   it("ok wraps data with the fixed success message", () => {
@@ -60,6 +60,16 @@ describe("handleRoute", () => {
     expect(body.resultMsg).toBe("잘못된 파라미터를 입력했습니다.");
     expect(Array.isArray(body.errorList)).toBe(true);
     expect(body.errorList[0].field).toBe("name");
+  });
+
+  it("maps an unreadable body to HTTP 200 + 1000 with no errorList (Spring HttpMessageNotReadableException)", async () => {
+    // GlobalExceptionHandler.java:48-51 → buildFieldErrors(INPUT_VALUE_INVALID, null).
+    // ErrorResponse 는 @JsonInclude(NON_NULL) 이라 errorList 필드 자체가 응답에서 빠진다.
+    const res = await handleRoute(async () => {
+      throw new MessageNotReadableError("choices");
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ resultCode: 1000, resultMsg: "잘못된 파라미터를 입력했습니다." });
   });
 
   it("maps an unexpected error to HTTP 200 + MSG_PROC_FAIL", async () => {

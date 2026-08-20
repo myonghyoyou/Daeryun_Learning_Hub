@@ -137,3 +137,57 @@ describe("GET /api/admin/problems", () => {
     expect((await res.json()).resultCode).toBe(980);
   });
 });
+
+describe("POST /api/admin/problems — 본문 매핑(정답지 F1)", () => {
+  function postRequest(body: unknown, query = ""): Request {
+    return new Request(`http://localhost/api/admin/problems${query}`, {
+      method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" },
+    });
+  }
+  const ox = (sourceNumber: number) => ({
+    type: "OX", content: "본문", sourceNumber,
+    choices: [{ text: "O", correct: true }, { text: "X", correct: false }],
+  });
+
+  // 캐스팅만 하던 시절에는 아래 셋이 전부 -1 "처리 중 오류가 발생하였습니다." 로 나갔다.
+  // Spring 은 Jackson 이 먼저 실패하며 1000 을 낸다(GlobalExceptionHandler.java:48-51).
+  it.each([
+    ["an unrecognised type", { type: "MCQ" }],
+    ["a non-numeric sourceNumber", { sourceNumber: "abc" }],
+    ["choices that are not an array", { choices: "O,X" }],
+  ])("maps %s to 1000 instead of -1", async (_label, patch) => {
+    await seedAdmin();
+    const { POST } = await import("./route");
+    const res = await POST(postRequest({ ...ox(1), ...patch }, `?departmentId=${deptA}`));
+    const body = await res.json();
+    expect(body.resultCode).toBe(1000);
+    expect(body.resultMsg).toBe("잘못된 파라미터를 입력했습니다.");
+    expect(await db.select().from(problems)).toEqual([]);
+  });
+
+  it("still reports the Korean message for a missing type", async () => {
+    // 매핑이 "유형 누락" 까지 1000 의 일반 문구로 삼키면 안 된다.
+    await seedAdmin();
+    const { POST } = await import("./route");
+    const res = await POST(postRequest({ ...ox(1), type: undefined }, `?departmentId=${deptA}`));
+    expect(await res.json()).toEqual({ resultCode: 1000, resultMsg: "문제 유형을 선택하세요." });
+  });
+
+  it("prefers the body error over a malformed departmentId (Spring argument order)", async () => {
+    await seedAdmin();
+    const { POST } = await import("./route");
+    const res = await POST(postRequest({ ...ox(1), type: "MCQ" }, "?departmentId=abc"));
+    expect((await res.json()).resultMsg).toBe("잘못된 파라미터를 입력했습니다.");
+  });
+
+  it("lets a DEPT_ADMIN create in its own department (정답지 R1·R5)", async () => {
+    // 정답지 R1 의 허용 절반. 라우트를 requireActor("SUPER_ADMIN") 으로 좁혀도 거부 테스트만
+    // 있으면 전부 초록인 채 부서 관리자가 잠긴다.
+    await seedAdmin("DEPT_ADMIN");
+    const { POST } = await import("./route");
+    const res = await POST(postRequest(ox(1), `?departmentId=${deptB}`));
+    expect(await res.json()).toEqual({ resultCode: 200, resultMsg: "정상 처리되었습니다." });
+    const [row] = await db.select().from(problems);
+    expect(row.departmentId).toBe(deptA); // 요청한 나팀이 아니라 본인 부서로 강제된다
+  });
+});

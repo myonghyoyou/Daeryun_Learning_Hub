@@ -4,8 +4,8 @@ import { readJson } from "@/lib/http/body";
 import { parseDateParam, parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { createProblem } from "@/lib/problem/problemService";
+import { toProblemCreateInput } from "@/lib/problem/problemRequestBody";
 import { listProblems } from "@/lib/problem/problemListService";
-import type { ProblemCreateInput } from "@/lib/problem/problemValidation";
 
 export const runtime = "nodejs";
 
@@ -13,11 +13,13 @@ export const runtime = "nodejs";
 export async function POST(request: Request): Promise<Response> {
   return handleRoute(async () => {
     const actor = await requireActor("SUPER_ADMIN", "DEPT_ADMIN");
-    const body = await readJson(request);
+    // 본문을 먼저 읽는다. Spring 은 인자 선언 순서대로 해석하므로 @RequestBody 실패가
+    // @RequestParam 변환 실패보다 먼저 나간다 — 둘 다 틀린 요청의 문구가 뒤바뀌지 않게 한다.
+    const body = toProblemCreateInput(await readJson(request));
     // departmentId 는 본문이 아니라 쿼리 파라미터다 — ProblemCreateRequest 는 update 와 공유되므로
     // 필드로 넣으면 수정 경로에도 부서 지정 표면이 생긴다(ProblemController.java:37-39).
     const departmentId = parseNumericParam(new URL(request.url).searchParams.get("departmentId"), "departmentId");
-    await createProblem(getDb(), body as unknown as ProblemCreateInput, departmentId, actor);
+    await createProblem(getDb(), body, departmentId, actor);
     return undefined; // ok()
   });
 }
