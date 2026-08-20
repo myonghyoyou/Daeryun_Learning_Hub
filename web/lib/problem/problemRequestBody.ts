@@ -37,22 +37,33 @@ function readString(value: unknown, field: string): string | null {
   return unreadable(field);
 }
 
+// Java 의 필드는 `Integer` 다 — 32비트를 넘는 값은 Jackson 이 InputCoercionException 으로
+// 거부한다. JS 의 안전 정수(2^53)로 재면 3000000000 같은 값이 통과해 버리고, 그 뒤로는
+// 아무도 막지 않는다: validateSourceNumber 는 `>= 1` 만 보고, 컬럼은 `integer` 라 INSERT 가
+// SQLSTATE 22003 으로 터지며, translateDuplicateSourceNumber 는 23505 만 가로채므로
+// handleRoute 의 마지막 분기에서 -1 "처리 중 오류가 발생하였습니다." 로 나간다. F1 이 닫으려던
+// 바로 그 구멍이므로 두 갈래(숫자·문자열) 모두 여기서 잰다.
+const JAVA_INTEGER_MIN = -2147483648;
+const JAVA_INTEGER_MAX = 2147483647;
+
+function toJavaInteger(value: number, field: string): number {
+  if (!Number.isFinite(value)) return unreadable(field);
+  // 절삭이 먼저다: Jackson 의 ACCEPT_FLOAT_AS_INT 도 범위 판정 전에 정수부를 취한다.
+  const truncated = Math.trunc(value);
+  if (truncated < JAVA_INTEGER_MIN || truncated > JAVA_INTEGER_MAX) return unreadable(field);
+  return truncated;
+}
+
 // Jackson Integer: 정수 문자열은 변환, 실수는 절삭(ACCEPT_FLOAT_AS_INT 기본 TryConvert),
 // 빈 문자열은 null(CoercionAction.AsNull), boolean·객체·배열은 실패.
 function readInteger(value: unknown, field: string): number | null {
   if (value == null) return null;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return unreadable(field);
-    return Math.trunc(value);
-  }
+  if (typeof value === "number") return toJavaInteger(value, field);
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed === "") return null;
     if (!/^[+-]?\d+$/.test(trimmed)) return unreadable(field);
-    const parsed = Number(trimmed);
-    // Java 의 Integer 는 범위를 넘으면 변환 자체가 실패한다.
-    if (!Number.isSafeInteger(parsed)) return unreadable(field);
-    return parsed;
+    return toJavaInteger(Number(trimmed), field);
   }
   return unreadable(field);
 }
@@ -89,9 +100,14 @@ function readType(value: unknown): ProblemType | null {
   return name as ProblemType;
 }
 
-function readStringList(value: unknown, field: string): string[] | null {
+// 원소의 null 을 그대로 남긴다(Jackson 도 List<String> 안의 null 을 허용한다). 반환 타입이
+// `(string | null)[]` 인 것은 장식이 아니다: `string[]` 로 단언하면 `tags:[null]` 이 타입상
+// 존재할 수 없는 값이 되어 하류가 `raw.trim()` 같은 코드를 안심하고 쓰게 된다 — Java 의
+// normalizeTags 가 `.map(String::trim)` 으로 정확히 그렇게 하다 NPE(-1)를 낸다. 이식판
+// normalizeTags 는 null 을 건너뛰므로 동작은 유지하고 타입만 사실대로 좁혔다(정답지 승인된 이탈).
+function readStringList(value: unknown, field: string): (string | null)[] | null {
   const array = readArray(value, field);
-  return array?.map((element, index) => readString(element, `${field}[${index}]`)!) ?? null;
+  return array?.map((element, index) => readString(element, `${field}[${index}]`)) ?? null;
 }
 
 function readChoices(value: unknown): ChoiceInput[] | null {

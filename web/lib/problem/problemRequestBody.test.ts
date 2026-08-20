@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MessageNotReadableError } from "../http/errors";
 import { toProblemCreateInput } from "./problemRequestBody";
-import { validateProblem } from "./problemValidation";
+import { normalizeTags, validateProblem } from "./problemValidation";
 
 function expectUnreadable(body: Record<string, unknown>) {
   expect(() => toProblemCreateInput(body)).toThrowError(MessageNotReadableError);
@@ -37,6 +37,20 @@ describe("toProblemCreateInput — 읽을 수 있는 본문", () => {
     const mapped = toProblemCreateInput({ ...ox, content: 1001, referenceText: true });
     expect(mapped.content).toBe("1001");
     expect(mapped.referenceText).toBe("true");
+  });
+
+  it("accepts the Integer boundaries themselves", () => {
+    expect(toProblemCreateInput({ ...ox, sourceNumber: 2147483647 }).sourceNumber).toBe(2147483647);
+    expect(toProblemCreateInput({ ...ox, blankRevealCount: -2147483648 }).blankRevealCount).toBe(-2147483648);
+  });
+
+  it("keeps a null list element instead of asserting it away (Minor 1)", () => {
+    // Java 의 normalizeTags 는 .map(String::trim) 이라 같은 입력에 NPE(-1)가 난다. 이식판은
+    // null 을 건너뛰므로 결과가 낫고, 타입도 그 사실을 말해야 한다((string|null)[]).
+    const mapped = toProblemCreateInput({ ...ox, tags: ["가", null], answers: [null] });
+    expect(mapped.tags).toEqual(["가", null]);
+    expect(mapped.answers).toEqual([null]);
+    expect(normalizeTags(mapped.tags)).toEqual(["가"]);
   });
 
   it("coerces an integer string into a number and truncates a float", () => {
@@ -80,6 +94,13 @@ describe("toProblemCreateInput — 읽을 수 없는 본문(Spring HttpMessageNo
   });
 
   it.each([
+    // Critical: Java 의 필드는 Integer 다. 2^53 으로 재면 이 값이 통과해 컬럼(`integer`)에
+    // 닿고 SQLSTATE 22003 → -1 로 나간다 — F1 이 닫으려던 바로 그 구멍이다. JSON 숫자로
+    // 넣어야 이 갈래를 탄다(문자열 21자리는 정수 문자열 검사에서 먼저 걸린다).
+    ["a JSON number sourceNumber over Integer.MAX_VALUE", { sourceNumber: 3000000000 }],
+    ["a JSON number sourceNumber under Integer.MIN_VALUE", { sourceNumber: -3000000000 }],
+    ["a numeric string over Integer.MAX_VALUE", { sourceNumber: "2147483648" }],
+    ["a blankRevealCount over Integer.MAX_VALUE", { blankRevealCount: 4e9 }],
     ["object content", { content: { a: 1 } }],
     ["array content", { content: [1] }],
     ["boolean sourceNumber", { sourceNumber: true }],

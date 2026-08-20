@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/db/client";
 import { handleRoute } from "@/lib/http/errors";
-import { readJson } from "@/lib/http/body";
+import { readJsonStrict } from "@/lib/http/body";
 import { parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { archiveProblem, getProblemDetail, updateProblem } from "@/lib/problem/problemService";
@@ -24,7 +24,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     const { id } = await context.params;
     // 캐스팅이 아니라 매핑이다 — 읽을 수 없는 본문은 -1 이 아니라 1000 으로 나간다
     // (등록 라우트의 같은 줄 주석 참고).
-    const body = toProblemCreateInput(await readJson(request));
+    const body = toProblemCreateInput(await readJsonStrict(request));
     await updateProblem(getDb(), parseNumericParam(id, "id")!, body, actor);
     return undefined; // ok()
   });

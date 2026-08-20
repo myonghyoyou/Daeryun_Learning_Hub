@@ -114,6 +114,14 @@ describe("GET /api/admin/problems", () => {
     expect(body.resultMsg).toBe(`요청 값의 형식이 올바르지 않습니다: ${query.split("=")[0]}`);
   });
 
+  it("maps a malformed departmentId param to 400/1000", async () => {
+    await seedAdmin();
+    const { GET } = await import("./route");
+    const res = await GET(listRequest("?departmentId=abc"));
+    expect(res.status).toBe(400);
+    expect((await res.json()).resultMsg).toBe("요청 값의 형식이 올바르지 않습니다: departmentId");
+  });
+
   it("maps a malformed page param to 400/1000", async () => {
     await seedAdmin();
     const { GET } = await import("./route");
@@ -164,6 +172,28 @@ describe("POST /api/admin/problems — 본문 매핑(정답지 F1)", () => {
     expect(body.resultMsg).toBe("잘못된 파라미터를 입력했습니다.");
     expect(await db.select().from(problems)).toEqual([]);
   });
+
+  it("maps a sourceNumber past Integer.MAX_VALUE to 1000, not -1", async () => {
+    // 이 값은 컬럼이 `integer` 라 INSERT 에서 SQLSTATE 22003 으로 터지고, 23505 만 가로채는
+    // translateDuplicateSourceNumber 를 지나 -1 로 나갔다.
+    await seedAdmin();
+    const { POST } = await import("./route");
+    const res = await POST(postRequest({ ...ox(1), sourceNumber: 3000000000 }, `?departmentId=${deptA}`));
+    expect(await res.json()).toEqual({ resultCode: 1000, resultMsg: "잘못된 파라미터를 입력했습니다." });
+    expect(await db.select().from(problems)).toEqual([]);
+  });
+
+  it.each([["깨진 JSON", "{"], ["빈 본문", ""], ["최상위 배열", "[]"]])(
+    "maps a body that is not a readable JSON object (%s) to 1000", async (_label, raw) => {
+      // Spring 은 Jackson 파싱 실패도 HttpMessageNotReadableException 이다. readJson 의
+      // `{}` 폴백을 그대로 쓰면 "문제 유형을 선택하세요." 라는 엉뚱한 안내가 나갔다.
+      await seedAdmin();
+      const { POST } = await import("./route");
+      const res = await POST(new Request(`http://localhost/api/admin/problems?departmentId=${deptA}`, {
+        method: "POST", body: raw, headers: { "content-type": "application/json" },
+      }));
+      expect(await res.json()).toEqual({ resultCode: 1000, resultMsg: "잘못된 파라미터를 입력했습니다." });
+    });
 
   it("still reports the Korean message for a missing type", async () => {
     // 매핑이 "유형 누락" 까지 1000 의 일반 문구로 삼키면 안 된다.

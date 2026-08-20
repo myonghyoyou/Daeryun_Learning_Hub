@@ -9,7 +9,7 @@
 
 ---
 
-## 승인된 이탈(4건)
+## 승인된 이탈(6건)
 
 | 번호 | 유형 | 설명 | Spring 출처 | 근거 문서 |
 |------|------|------|------|----------|
@@ -17,6 +17,8 @@
 | ② | 이미지 URL 접두어 변경 | `ImageUrlValidator.PREFIX`가 새 접두어로 바뀐다. 현재 `problems.image_url`이 NULL이 아닌 행은 0건(26건 중 0)이라 기존 데이터가 깨지지 않는다 | `ImageUrlValidator.java:17`(PREFIX 정의) | DB 실측(2026-08-19) — 이 사실 자체는 Spring 코드가 아니라 런타임 데이터 조회로 확인됨. plan Global Constraints 원문에 실측치로 기록됨 |
 | ③ | 엑셀 파일 상한 하향 | Spring 멀티파트 상한 20MB → 플랫폼 안전값 4MB로 하향, resultCode 1015 (서브플랜 3 Q6 승인 기준과 동일 취급) | `application.yml:18-19`(`max-file-size: 20MB`, `max-request-size: 20MB`) | 이관 스펙 Q6 |
 | ④ | SheetJS 행 번호 어긋남 | SheetJS `blankrows:false`로 인해 빈 행이 많은 파일에서 오류 행 번호가 엑셀과 어긋날 수 있다. 동일한 이유로 `totalRows` 집계와 500행 상한 판정에서도 빈 행이 제외된다(Spring `lastRowNum`은 빈 행을 포함해 센다) | `ExcelProblemUploadServiceImpl.java:111`(`sheet.getLastRowNum()`, 빈 행 포함 계수) | `docs/qa/2026-08-16-dept-users-parity-checklist.md` 승인된 이탈 ⑤와 동일 사유 |
+| ⑤ | 유형 enum 의 서수(ordinal) 입력 거부 | Jackson 은 `FAIL_ON_NUMBERS_FOR_ENUMS` 가 기본 off 라 `{"type": 3}` 을 열거 4번째 상수(`SHORT_ANSWER`)로 읽는다. 이식판 본문 매퍼(`web/lib/problem/problemRequestBody.ts` `readType`)는 숫자를 거부하고 1000("잘못된 파라미터를 입력했습니다.")을 낸다 — 서수는 `ProblemType` 열거 순서가 바뀌면 조용히 다른 유형이 되는 입력이고, 화면은 언제나 이름을 보낸다. **resultCode 는 양쪽 모두 1000 이 아니다: Spring 은 200/정상 처리로 저장까지 간다** — 거부가 더 안전하므로 이탈을 유지한다. Task 7·9 가 같은 매퍼를 재사용하므로 엑셀·부서이동 경로도 동일하다 | `ProblemCreateRequest.java:11`(`private ProblemType type`), Jackson 기본 설정 | 정답지 F1 정리 항목(Task 6) — `web/lib/problem/problemRequestBody.test.ts` `rejects numeric type` 로 고정 |
+| ⑥ | 리스트 원소의 null 관용 | `{"tags":[null]}` 같은 입력에서 Java `normalizeTags` 는 `.map(String::trim)` 이라 NPE 로 죽어 -1 "처리 중 오류가 발생하였습니다." 가 나간다. 이식판 `normalizeTags`(`web/lib/problem/problemValidation.ts`)는 null 원소를 건너뛰고 정상 처리한다. `answers`·`blanks` 의 null 원소도 마찬가지로 빈 항목으로 접혀 각 유형의 한국어 문구(1000)로 안내된다. **더 나은 동작이므로 유지**하되, 타입이 사실을 말하도록 `ProblemCreateInput.tags` 는 `(string \| null)[] \| null` 이다 — 하류에서 `raw.trim()` 을 안심하고 쓰면 Java 와 같은 결함이 재발한다 | `ProblemServiceImpl.java:259-264`(`normalizeTags`, `.map(String::trim)`) | 정답지 F1 정리 항목(Task 6) — `problemRequestBody.test.ts` `keeps a null list element…` 로 고정 |
 
 ---
 

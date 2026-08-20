@@ -58,7 +58,9 @@ export interface ProblemListFilters {
   departmentId: number | null;
   type: string | null;
   status: string | null;
+  /** UTC 자정이어야 한다 — `toDateLiteral` 주석 참고. `parseDateParam` 의 출력이 그렇다. */
   createdFrom: Date | null;
+  /** UTC 자정이어야 한다 — `toDateLiteral` 주석 참고. */
   createdTo: Date | null;
   tag: string | null;
   keyword: string | null;
@@ -78,8 +80,16 @@ export interface ProblemListItem {
   tags: string[];
 }
 
-// LocalDate 바인딩 미러: 날짜만 넘기고 비교는 DB 의 date 타입에 맡긴다. Date 객체를 그대로
-// 바인딩하면 timestamptz 로 나가 세션 타임존만큼 어긋난다(created_at 은 timestamp 무 tz).
+/**
+ * LocalDate 바인딩 미러: 날짜만 넘기고 비교는 DB 의 date 타입에 맡긴다. Date 객체를 그대로
+ * 바인딩하면 timestamptz 로 나가 세션 타임존만큼 어긋난다(created_at 은 timestamp 무 tz).
+ *
+ * **호출 계약: `createdFrom`·`createdTo` 는 UTC 자정이어야 한다.** `parseDateParam` 이 항상
+ * `Date.UTC` 로 만들므로 지금은 성립한다. 로컬 시각 Date(예: KST 오전 9시 이전의 `new Date()`)
+ * 를 넘기면 `toISOString()` 이 전날로 굴러가 필터가 하루 어긋난다 — 조용히 틀리는 종류다.
+ * 로컬 시각 Date 를 받아야 할 일이 생기면 여기서 UTC 로 정규화하지 말고 호출부에서
+ * `parseDateParam` 과 같은 방식으로 만들어 넘길 것.
+ */
 function toDateLiteral(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
