@@ -315,12 +315,11 @@ export async function uploadProblemsExcel(
       // 판정은 `isDuplicateSourceNumber` 하나로 모은다(정답지 N6, 승인된 이탈 ⑦).
       // `instanceof BizError` 로 우회하면 이 트랜잭션 안에서 던지는 다른 BizError(예: 동시 업로드의
       // 태그 UNIQUE 위반 번역)까지 문항 번호 탓으로 둔갑한다.
-      if (!isDuplicateSourceNumber(error)) {
-        console.warn(`행 ${rowNumber} 문제 저장 실패`, error);
-      }
+      const duplicate = isDuplicateSourceNumber(error);
+      if (!duplicate) console.warn(`행 ${rowNumber} 문제 저장 실패`, error);
       outcomes.push({
         rowNumber, success: false,
-        reason: isDuplicateSourceNumber(error)
+        reason: duplicate
           ? `문항 번호 ${parsed.sourceNumber}번은 이 부서에 이미 있습니다.`
           : "문제 저장 중 오류가 발생했습니다.",
       });

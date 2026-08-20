@@ -9,7 +9,7 @@ import { insertProblem } from "../db/problems";
 import { findTagNamesByProblemId } from "../db/tags";
 import { BizError } from "../http/errors";
 import type { AuthUser } from "../auth/types";
-import { uploadProblemsExcel } from "./problemExcel";
+import { normalizeExcelTagCell, uploadProblemsExcel } from "./problemExcel";
 
 const HEADER = [
   "문제유형", "문제내용", "이미지", "참조지문", "보기1", "보기2", "보기3", "보기4", "보기5",
@@ -106,6 +106,22 @@ describe("uploadProblemsExcel — 행별 격리(X22)", () => {
     expect(await db.select().from(problemChoices)).toHaveLength(4);
     const created = (await db.select().from(auditLogs)).filter((a) => a.action === "PROBLEM_CREATED_BY_EXCEL");
     expect(created).toHaveLength(2);
+  });
+
+  it("루프가 끝난 뒤 이력 쓰기가 실패해도 이미 커밋된 행은 남는다", async () => {
+    // 행 루프를 하나의 트랜잭션으로 감싸는 회귀는 **루프 뒤의 실패**에서만 드러난다 — 행 하나가
+    // 실패하는 것만으로는 SAVEPOINT 가 구해 주기 때문이다. 이 테스트가 그 형태를 고정한다.
+    // 곁들여 `excel_upload_logs.file_name varchar(255)` 누수를 특성화한다: 파일명이 255자를 넘으면
+    // 행은 모두 커밋된 뒤 이력 insert 가 실패해 호출 전체가 던진다. Spring 도 같은 모양이라
+    // 여기서 고치지 않는다(M7 컷오버 이월) — 다만 동작을 스위트에 기록해 둔다.
+    const longName = `${"x".repeat(300)}.xlsx`;
+    await expect(uploadProblemsExcel(db, buildExcel([
+      ["OX", "앞", "", "", "O", "X", "", "", "", "1", "", "", 1],
+      ["OX", "뒤", "", "", "O", "X", "", "", "", "1", "", "", 2],
+    ], longName), deptA, superAdmin)).rejects.toThrow(/character varying\(255\)/);
+    const stored = await db.select().from(problems).orderBy(asc(problems.sourceNumber));
+    expect(stored.map((p) => p.content)).toEqual(["앞", "뒤"]);
+    expect(await db.select().from(excelUploadLogs)).toHaveLength(0);
   });
 });
 
@@ -229,6 +245,14 @@ describe("uploadProblemsExcel — 행 검증(X 구획)", () => {
     expect(res.successRows).toBe(1);
     const [saved] = await db.select().from(problems);
     expect(saved.imageUrl).toBe("/uploads/images/a.png");
+  });
+
+  it("X11: 500자를 넘는 경로는 접두어가 맞아도 거부한다(TOO_LONG)", async () => {
+    const overlong = `/uploads/images/${"a".repeat(500)}.png`;
+    const res = await uploadProblemsExcel(db, buildExcel([
+      ["OX", "가", overlong, "", "O", "X", "", "", "", "1", "", "", 1],
+    ]), deptA, superAdmin);
+    expect(res.errorDetail).toBe("행 2: 이미지는 엑셀로 등록할 수 없습니다. 이미지 열은 비워 두고, 문제 개별 등록/수정 화면에서 이미지를 첨부하세요.");
   });
 
   it("X12: 보기 개수 위반", async () => {
@@ -400,8 +424,11 @@ describe("uploadProblemsExcel — 파일 수준(F 구획)", () => {
   it("F5: 501행이면 처리 전에 전체를 거부한다", async () => {
     const rows = Array.from({ length: 501 }, (_, i): Cell[] =>
       ["OX", `문항${i}`, "", "", "O", "X", "", "", "", "1", "", "", i + 1]);
-    await expect(uploadProblemsExcel(db, buildExcel(rows), deptA, superAdmin))
-      .rejects.toThrow("한 번에 업로드할 수 있는 데이터 행은 최대 500건입니다. 파일을 나눠 업로드하세요.");
+    const err = await uploadProblemsExcel(db, buildExcel(rows), deptA, superAdmin)
+      .then(() => null, (e) => e as BizError);
+    expect(err).toBeInstanceOf(BizError);
+    expect((err as BizError).errorCode.code).toBe(1000);
+    expect((err as BizError).message).toBe("한 번에 업로드할 수 있는 데이터 행은 최대 500건입니다. 파일을 나눠 업로드하세요.");
     expect(await db.select().from(problems)).toHaveLength(0);
     expect(await db.select().from(excelUploadLogs)).toHaveLength(0);
   });
@@ -494,6 +521,23 @@ describe("uploadProblemsExcel — 태그 재사용", () => {
     ]), deptA, superAdmin);
     const [saved] = await db.select().from(problems);
     expect(await findTagNamesByProblemId(db, saved.id)).toEqual(["finance"]);
+  });
+});
+
+describe("normalizeExcelTagCell — X24 (던지지 않는 변형)", () => {
+  it("trim → 빈 것 제거 → 소문자 → 중복 제거 순으로 정규화한다", () => {
+    expect(normalizeExcelTagCell(" 회계 , ,Finance, FINANCE ,회계")).toEqual(["회계", "finance"]);
+    expect(normalizeExcelTagCell("")).toEqual([]);
+    expect(normalizeExcelTagCell(",,")).toEqual([]);
+  });
+
+  it("위반하면 던지지 않고 null 을 돌려준다 — 한 행의 태그 위반이 배치를 멈추면 안 된다", () => {
+    // problemValidation.normalizeTags 와 규칙은 같지만 그쪽은 BizError 를 던진다. 이 변형이
+    // 던지면 태그 21개짜리 행 하나가 파일 전체를 거절한다.
+    expect(normalizeExcelTagCell(Array.from({ length: 21 }, (_, i) => `t${i}`).join(","))).toBeNull();
+    expect(normalizeExcelTagCell("가".repeat(101))).toBeNull();
+    expect(normalizeExcelTagCell(Array.from({ length: 20 }, (_, i) => `t${i}`).join(","))).toHaveLength(20);
+    expect(normalizeExcelTagCell("가".repeat(100))).toHaveLength(1);
   });
 });
 
