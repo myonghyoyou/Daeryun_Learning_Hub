@@ -7,7 +7,10 @@ import { findActiveSolveProblems, findRandomActiveProblems, type SolveListRow } 
 import { BizError } from "../http/errors";
 import { ErrorCode } from "../http/errorCode";
 
-const NOT_FOUND_MESSAGE = "존재하지 않거나 보관된 문제입니다.";
+// Task 4(submitAttempt)가 **글자 그대로 같은 문구**를 써야 한다 — Java 도 같은 세 줄이다
+// (SolveServiceImpl.java:62-64 와 :103-105). 재타이핑하면 마침표 하나 차이로 두 엔드포인트가
+// 갈라지고 스위트는 초록인 채 Task 7 E2E 에서야 드러난다. import 해서 써라.
+export const PROBLEM_NOT_FOUND_MESSAGE = "존재하지 않거나 보관된 문제입니다.";
 
 export interface SolveDetail {
   id: number;
@@ -58,7 +61,7 @@ export async function getSolveDetail(db: DbConn, problemId: number): Promise<Sol
   const problem = await findProblemById(db, problemId);
   // Q1: 없는 것과 보관된 것이 같은 문구다. 나누지 마라.
   if (!problem || problem.status !== "ACTIVE") {
-    throw new BizError(ErrorCode.INPUT_VALUE_INVALID, NOT_FOUND_MESSAGE);
+    throw new BizError(ErrorCode.INPUT_VALUE_INVALID, PROBLEM_NOT_FOUND_MESSAGE);
   }
 
   let choices: SolveDetail["choices"] = null;

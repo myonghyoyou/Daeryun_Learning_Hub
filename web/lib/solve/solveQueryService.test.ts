@@ -185,6 +185,22 @@ describe("getSolveDetail", () => {
     expect(JSON.stringify(caught)).not.toContain("정답-");
   });
 
+  it("blankRevealCount 가 0 이면 던지지 않는다 — 가드는 < 0 에서 멈춰야 한다", async () => {
+    // 최종 리뷰가 변이로 드러낸 구멍이다. 가드를 `< 0` → `< 1` 로 조여도 45개가 전부 통과했다.
+    // Java: selectRandomBlankKeys(blanks, 0) → subList(0, min(0, size)) → 빈 목록 →
+    // blanksToAnswer [] · revealedBlanks 전체, HTTP 200. 0 은 **통과해야 하는 값**이다.
+    // "생성 검증이 >= 1 을 강제하니 더 방어적으로" 라며 조이면 200 이던 응답이 200/-1 이 된다.
+    const id = await seed({ type: "FILL_BLANK", blankRevealCount: 0 });
+    await db.insert(problemBlanks).values([
+      { problemId: id, blankKey: "a", answerText: "정답-a", displayOrder: 1 },
+      { problemId: id, blankKey: "b", answerText: "정답-b", displayOrder: 2 },
+      { problemId: id, blankKey: "c", answerText: "정답-c", displayOrder: 3 },
+    ]);
+    const d = await getSolveDetail(db, id);
+    expect(d.blanksToAnswer).toEqual([]);
+    expect(d.revealedBlanks).toHaveLength(3);
+  });
+
   it("Critical: blankRevealCount 가 음수여도 같은 방식으로 던진다 — slice(0,-1) 로 전부 새지 않는다", async () => {
     const id = await seed({ type: "FILL_BLANK", blankRevealCount: -1 });
     await db.insert(problemBlanks).values([
