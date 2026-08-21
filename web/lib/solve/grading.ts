@@ -99,6 +99,10 @@ export function grade(input: GradeInput): GradeResult {
       ) {
         throw new BizError(ErrorCode.INPUT_VALUE_INVALID, BLANK_COUNT_MESSAGE);
       }
+      // Java 는 Collectors.toMap 을 쓴다 — 정의된 blankKey 가 중복되면 터진다.
+      // JS Map 은 동일 키를 조용히 덮어쓴다(마지막 값 유지). 도달 불가능 —
+      // problem_blanks 에 (problem_id, blank_key) 유일성 제약이 없어 DB 가 막지 않으므로,
+      // 이 가드는 애플리케이션 계층만의 안전망이다(문제 생성 검증이 중복 키를 거부한다).
       const answerByKey = new Map(input.blanks.map((b) => [b.blankKey, b.answerText]));
       const blankResults = submitted.map((s) => {
         const correctAnswer = answerByKey.get(s.blankKey)!;
@@ -114,10 +118,15 @@ export function grade(input: GradeInput): GradeResult {
         selectedChoices: [],
         blankResults,
         // T4: 답만 잇는다. 키는 화면에 안 나오는 내부 식별자다.
+        // Java describeBlanks(:236) 은 String.trim() 을 쓴다 — JS trim() 을 쓰면 U+00A0 같은
+        // 유니코드 공백만 입력한 제출이 "(미입력)" 으로 잘못 갈린다(T4).
         submittedAnswerSummary: submitted
-          .map((b) => (b.submittedAnswer == null || b.submittedAnswer.trim() === "" ? "(미입력)" : b.submittedAnswer))
+          .map((b) => (b.submittedAnswer == null || javaTrim(b.submittedAnswer) === "" ? "(미입력)" : b.submittedAnswer))
           .join(", "),
       };
     }
+    // Java 는 default 분기에서 MSG_PROC_FAIL 를 던진다. 여기서는 GradeInput 이 판별 조합 타입이라
+    // switch 가 정적으로 완전해져(exhaustive) default 가 도달 불가능하다 —
+    // 잘못된 type 값은 라우트 계층의 zod 검증을 통과하지 못해 handleRoute 가 같은 봉투를 만든다.
   }
 }

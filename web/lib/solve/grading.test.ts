@@ -20,14 +20,22 @@ describe("normalizeAnswer — SolveServiceImpl.java:209-211 미러", () => {
 
   it("Java 의 trim 은 U+0020 이하만 깎는다 — JS 기본 trim 을 쓰면 안 된다", () => {
     // U+00A0 는 Java trim 이 남기고 Java \s 도 안 잡는다. JS 기본 동작과 반대다.
-    expect(normalizeAnswer(" 가 ")).toBe(" 가 ");
-    expect(normalizeAnswer("가")).toBe("가"); // 제어문자는 U+0020 이하라 깎인다
+    expect(normalizeAnswer("\u00A0가\u00A0")).toBe("\u00A0가\u00A0");
+    expect(normalizeAnswer("\u0001가\u0001")).toBe("가"); // 제어문자는 U+0020 이하라 깎인다
   });
 
-  it("G8: toLocaleLowerCase 가 아니라 toLowerCase 다", () => {
+  it("JAVA_WHITESPACE 는 \\x0B(수직 탭)도 접는다 — 문자 클래스에서 이 바이트가 빠지면 조용히 통과한다", () => {
+    // 가장자리는 javaTrim 이 이미 덮는다. 이 테스트는 문자열 *내부*의 \x0B 가 접히는지를 본다 —
+    // JAVA_WHITESPACE 문자 클래스에서 \u000B 가 빠지면(리포맷·"보이지 않는 문자 제거" 같은 작업으로
+    // 흔히 사라진다) 아래가 깨진다.
+    expect(normalizeAnswer("a\u000B\u000Bb")).toBe("a b");
+  });
+
+  it("소문자 변환이 일어난다 — JS 에는 toLowerCase 와 toLocaleLowerCase 를 구분하는 무인자 단언이 없다", () => {
     // Java 의 무인자 toLowerCase() 는 Locale.getDefault() 를 쓰지만(터키어 I→ı),
-    // 한글·ASCII 에서는 JS 의 로케일 무관 변환과 결과가 같다. JS 쪽이 서버 로케일 설정에
-    // 흔들리지 않아 더 안전하다 — toLocaleLowerCase() 를 쓰면 그 안전성을 버리는 것이다.
+    // 한글·ASCII 에서는 JS 의 로케일 무관 변환과 결과가 같다. 이 테스트가 실제로 고정하는 것은
+    // "소문자화가 일어난다"는 사실뿐이다 — locale 인자 없이는 toLowerCase 와 toLocaleLowerCase 를
+    // 가르는 JS 단언을 쓸 수 없으므로, 그 구분은 코드 주석으로만 남긴다.
     expect(normalizeAnswer("ABC")).toBe("abc");
     expect(normalizeAnswer("가나다")).toBe("가나다");
   });
@@ -68,6 +76,9 @@ describe("MCQ·OX — 집합 동등성(G2~G5)", () => {
     expect(r.submittedAnswerSummary).toBe("가, 나"); // 제출 순서였다면 "나, 가"
     expect(r.selectedChoices.map((c) => c.id)).toEqual([9, 10]);
   });
+  it("G14: MCQ·OX 는 blankResults 가 null 이다", () => {
+    expect(mcq([1]).blankResults).toBeNull();
+  });
 });
 
 describe("SHORT_ANSWER (G6·G7-1)", () => {
@@ -77,6 +88,16 @@ describe("SHORT_ANSWER (G6·G7-1)", () => {
   it("G7-1: 앞뒤 공백은 무시된다", () => expect(sa("  보정계수  ").correct).toBe(true));
   it("G3: null 은 오답", () => expect(sa(null).correct).toBe(false));
   it("T2-1: 요약은 제출 원문 그대로다", () => expect(sa("  보정계수  ").submittedAnswerSummary).toBe("  보정계수  "));
+  it("G14: SHORT_ANSWER 는 blankResults 가 null 이다", () => {
+    expect(sa("보정계수").blankResults).toBeNull();
+  });
+  it("G6·G7: 저장된 허용 정답 쪽도 normalize 된다 — 제출 쪽만 normalize 하면 이 케이스가 오답으로 갈린다", () => {
+    // Java 는 answers.stream().anyMatch(a -> normalize(a).equals(normalize(submitted))) 로
+    // 양쪽 다 normalize 한다(:132). 정답이 "  ABC  " 로 저장돼 있어도(관리자가 트리밍 없이 입력)
+    // "abc" 제출은 정답이어야 한다.
+    const r = grade({ type: "SHORT_ANSWER", answers: ["  ABC  "], submittedText: "abc" });
+    expect(r.correct).toBe(true);
+  });
 });
 
 describe("FILL_BLANK (G9~G13)", () => {
@@ -117,6 +138,41 @@ describe("FILL_BLANK (G9~G13)", () => {
     ]);
   });
 
+  it("blankResults 순서는 제출 순서를 따른다 — [b, a] 로 보내면 결과와 요약도 [b, a] 순이다", () => {
+    // MCQ 의 T3(정의 순서 고정)와 정반대다: Java 는 FILL_BLANK 에서 submitted 리스트를 그대로
+    // for 문으로 돌며 blankResults 를 쌓는다(:152-159) — 정의 순서로 재배열하지 않는다.
+    const r = fb([
+      { blankKey: "b", submittedAnswer: "한라산" },
+      { blankKey: "a", submittedAnswer: "서울" },
+    ]);
+    expect(r.blankResults!.map((x) => x.blankKey)).toEqual(["b", "a"]);
+    expect(r.submittedAnswerSummary).toBe("한라산, 서울");
+  });
+
+  it("빈칸이 5개인 문제에서 2개만 묻는 정상 경로 — blanks.length 와 blankRevealCount 가 다르다", () => {
+    // 기존 fixture 는 blanks.length === blankRevealCount === 2 인 퇴화 케이스라 blankRevealCount
+    // 검증을 blanks.length 검증으로 바꿔도 걸리지 않는다. getDetail 이 blankRevealCount 개만큼
+    // 무작위로 골라 물어보므로(Q5/Q8), 실제로는 blanks.length > blankRevealCount 인 부분 제출이
+    // 정상 경로다.
+    const wide = {
+      type: "FILL_BLANK" as const,
+      blanks: [
+        { blankKey: "a", answerText: "서울" },
+        { blankKey: "b", answerText: "한라산" },
+        { blankKey: "c", answerText: "제주도" },
+      ],
+      blankRevealCount: 2,
+    };
+    const r = grade({
+      ...wide,
+      blankAnswers: [
+        { blankKey: "a", submittedAnswer: "서울" },
+        { blankKey: "b", submittedAnswer: "한라산" },
+      ],
+    });
+    expect(r.correct).toBe(true);
+  });
+
   // G9·G10·G11 은 세 조건이 한 if 로 묶여 있어 **문구가 구분되지 않는다**.
   // 나눠서 다른 문구를 내면 파리티 위반이다.
   const MSG = "제출한 빈칸 개수가 올바르지 않습니다.";
@@ -147,5 +203,17 @@ describe("FILL_BLANK (G9~G13)", () => {
       { blankKey: "b", submittedAnswer: "   " },
     ]);
     expect(r.submittedAnswerSummary).toBe("서울, (미입력)");
+  });
+
+  it("T4: describeBlanks 는 Java String.trim() 을 쓴다 — U+00A0·U+3000 만 있는 제출은 (미입력) 이 아니다", () => {
+    // Java describeBlanks(:236) 는 String.trim() 이라 U+0020 이하만 깎는다고 생각하기 쉽지만,
+    // isEmpty() 앞의 trim() 자체가 그 기준이다 — 실측 판별은 반대다: U+00A0·U+3000 은 Java trim
+    // 이 "공백 아님"으로 보고 남기므로 isEmpty() 가 false 가 되어 원문이 그대로 저장된다.
+    // JS trim() 을 쓰면 이 문자들이 깎여 isEmpty() 가 true 가 되고 "(미입력)" 으로 잘못 갈린다.
+    const r = fb([
+      { blankKey: "a", submittedAnswer: "\u00A0" },
+      { blankKey: "b", submittedAnswer: "\u3000" },
+    ]);
+    expect(r.submittedAnswerSummary).toBe("\u00A0, \u3000");
   });
 });
