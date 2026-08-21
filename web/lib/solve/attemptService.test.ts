@@ -161,18 +161,27 @@ describe("submitAttempt — attempts 행 전체(정답지 T1, finding 1)", () =>
     // `isCorrect: !result.correct` 처럼 부호를 뒤집는 mutation 은 둘 중 하나에서 반드시 걸린다.
     const { problemId: problemA, choiceId } = await seedMcq();
     const { problemId: problemB, wrongChoiceId } = await seedMcq();
-    const [userB] = await db.insert(users).values({
-      employeeNo: "emp02", name: "직원B", email: "emp2@x.local", passwordHash: "h", departmentId: deptId, role: "EMPLOYEE",
-    }).returning();
+    // **id 공간이 겹치면 안 된다.** truncateAll 이 RESTART IDENTITY 를 돌리므로 사용자와
+    // 문제가 나란히 1, 2 를 받는다. 그러면 userId 와 problemId 값이 같아져 두 필드를
+    // 맞바꿔도 컬럼 값이 동일해지고 — 단언이 조용히 동어반복이 된다(재리뷰가 잡은 지점).
+    // 사용자를 둘 더 심어 번호를 어긋나게 한다.
+    const [userB, userC] = await db.insert(users).values([
+      { employeeNo: "emp02", name: "직원B", email: "emp2@x.local", passwordHash: "h", departmentId: deptId, role: "EMPLOYEE" },
+      { employeeNo: "emp03", name: "직원C", email: "emp3@x.local", passwordHash: "h", departmentId: deptId, role: "EMPLOYEE" },
+    ]).returning();
     const actorB: AuthUser = { ...actor, userId: userB.id, employeeNo: "emp02", name: "직원B" };
+    const actorC: AuthUser = { ...actor, userId: userC.id, employeeNo: "emp03", name: "직원C" };
 
-    await submitAttempt(db, problemA, { selectedChoiceIds: [choiceId], submittedText: null, blankAnswers: null }, actor);
-    await submitAttempt(db, problemB, { selectedChoiceIds: [wrongChoiceId], submittedText: null, blankAnswers: null }, actorB);
+    await submitAttempt(db, problemA, { selectedChoiceIds: [choiceId], submittedText: null, blankAnswers: null }, actorB);
+    await submitAttempt(db, problemB, { selectedChoiceIds: [wrongChoiceId], submittedText: null, blankAnswers: null }, actorC);
 
     const rowA = (await db.select().from(attempts).where(eq(attempts.problemId, problemA)))[0];
     const rowB = (await db.select().from(attempts).where(eq(attempts.problemId, problemB)))[0];
-    expect(rowA).toMatchObject({ userId: actor.userId, problemId: problemA, isCorrect: true });
-    expect(rowB).toMatchObject({ userId: userB.id, problemId: problemB, isCorrect: false });
+    // 픽스처 전제를 명시적으로 지킨다 — 이게 깨지면 아래 단언들이 무의미해진다.
+    expect(rowA.userId).not.toBe(rowA.problemId);
+    expect(rowB.userId).not.toBe(rowB.problemId);
+    expect(rowA).toMatchObject({ userId: userB.id, problemId: problemA, isCorrect: true });
+    expect(rowB).toMatchObject({ userId: userC.id, problemId: problemB, isCorrect: false });
   });
 });
 
