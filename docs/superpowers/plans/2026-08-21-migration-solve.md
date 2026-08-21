@@ -29,7 +29,7 @@
 | # | 항목 | Spring | 이 포트 | 근거 |
 |---|---|---|---|---|
 | **㉮** | `count` 파라미터 누락(P1) | 200 / **-1** / `처리 중 오류가 발생하였습니다.` | **400 / 1000 / `잘못된 파라미터를 입력했습니다.`** | 서브플랜 3·4가 같은 모양(`MissingServletRequestPart` → catch-all)을 이탈 ⑥ 으로 이미 개선했다. `-1` 을 없애는 것이 이 이관의 목적 중 하나다. 프론트는 항상 `count` 를 보내므로(`frontend/src/api/solve.js:25`) 화면 동작에는 영향이 없다 |
-| **㉯** | `submit` 이 비트랜잭션이고 자식 답안을 자르지 않는다(T8·T8-1) | 600자 빈칸 답 → 200/-1, 그런데 `attempts` 행은 커밋돼 남는다(**실측**) | **① 한 트랜잭션으로 묶고 ② 자식 답안도 부모와 같은 500자 규칙으로 자른다** | 부모의 자르기 주석(`SolveServiceImpl.java:170`)이 "insert 실패를 막는다"고 밝히므로 자식 자르기는 **원저자 의도의 완성**이다. 트랜잭션은 그 위의 안전망. 방치하면 사용자가 실패로 보고 재제출해 시도가 중복되고 서브플랜 6 통계가 둘 다 센다 |
+| **㉯** | `submit` 이 비트랜잭션이고 자식 답안을 자르지 않는다(T8·T8-1·T8-2) | 600자 빈칸 답 → 200/-1, 그런데 `attempts` 행은 커밋돼 남는다(**실측**) | **① 한 트랜잭션으로 묶고 ② 자식 답안도 부모와 같은 500자 규칙으로 자른다** | 부모의 자르기 주석(`SolveServiceImpl.java:170`)이 "insert 실패를 막는다"고 밝히므로 자식 자르기는 **원저자 의도의 완성**이다. 트랜잭션은 그 위의 안전망. 방치하면 사용자가 실패로 보고 재제출해 시도가 중복되고 서브플랜 6 통계가 둘 다 센다 |
 | **㉰** | 목록·이력에 페이지네이션 없음(S1·H3) | 전체 반환 | **그대로 이식** | 프론트 계약이 바뀐다. 성능은 컷오버 후 실측해 판단 |
 | **㉱** | 비공개 버킷 이미지 조회 | 로컬 디스크를 정적 리소스로 서빙 | **프록시 라우트 `GET /api/problem-images/[key]`** | 이탈 ①(이미지 저장 이관)의 연장. 근거는 Task 6 |
 
@@ -195,6 +195,23 @@ describe("findActiveSolveProblems", () => {
     await db.insert(problemTags).values(rows.map((t) => ({ problemId: pid, tagId: t.id })));
     expect((await findActiveSolveProblems(db, {})).length).toBe(1);
   });
+
+  it("S1: 페이지네이션이 없다 — 전부 돌려준다", async () => {
+    // 승인된 이탈 ㉰. 나중에 누가 LIMIT 을 '성능 개선'으로 끼워 넣으면 이 테스트가 잡는다.
+    for (let i = 0; i < 30; i++) await seed({ content: `q${i}` });
+    expect((await findActiveSolveProblems(db, {})).length).toBe(30);
+  });
+
+  it("S8: 응답 필드가 정확히 6개이고 정답 관련 필드가 없다", async () => {
+    // 정답 비노출은 상세(Q11)만의 문제가 아니다. 목록이 새면 똑같이 망가진다.
+    await seed();
+    const row = (await findActiveSolveProblems(db, {}))[0];
+    expect(Object.keys(row).sort()).toEqual(
+      ["content", "departmentName", "id", "sourceNumber", "tags", "type"]);
+    for (const leak of ["isCorrect", "explanation", "answerText", "choiceText"]) {
+      expect(JSON.stringify(row)).not.toContain(leak);
+    }
+  });
 });
 ```
 
@@ -247,6 +264,8 @@ export async function findActiveSolveProblems(
       WHERE fpt.problem_id = ${problems.id} AND lower(ft.name) = lower(${tag}))`);
   }
 
+  // S9: 부서 필터가 **없다.** 직원은 전 부서 문제를 본다 — 관리자 목록과 다르다.
+  //     "직원이니 자기 부서만 보여 주는 게 맞지 않나" 싶어도 넣지 마라. 파리티 위반이다.
   // ORDER BY 는 created_at DESC 뿐이다 — Java 에도 p.id 타이브레이커가 없다(정답지 S7).
   // 페이지네이션이 없어 중복·누락이 생기지 않으므로 그대로 이식한다.
   return baseSelect(db).where(and(...where))
@@ -341,6 +360,22 @@ it("H5: 응답 필드가 정확히 7개다", async () => {
     ["correct", "departmentName", "problemContent", "problemId", "sourceNumber", "submittedAnswer", "submittedAt"]);
 });
 
+it("H7: 보관된 문제의 이력도 나온다 — 목록(S2)과 정반대다", async () => {
+  // findAttemptsByUserId 에 p.status 조건을 넣고 싶어지는 자리다. Java 에는 없다.
+  const archived = await seed({ status: "ARCHIVED" });
+  await insertAttempt(db, { userId, problemId: archived, submittedAnswer: "x", isCorrect: false });
+  expect((await findAttemptsByUserId(db, userId)).length).toBe(1);
+});
+
+it("H6: problems·departments 는 INNER JOIN 이다", async () => {
+  // 문제는 보관만 되고 삭제되지 않으므로 실질 무해하지만, LEFT JOIN 으로 바꾸면 Java 와
+  // 다른 행이 나올 수 있다. 조인 방식을 문서 대신 테스트로 남긴다.
+  await insertAttempt(db, { userId, problemId, submittedAnswer: "x", isCorrect: false });
+  const row = (await findAttemptsByUserId(db, userId))[0];
+  expect(row.departmentName).toBe("가팀");
+  expect(row.problemContent).toBe("본문");
+});
+
 it("T5/T7: 빈 배열이면 DB 를 건드리지 않는다(SQL 오류가 나면 안 된다)", async () => {
   await expect(insertAttemptChoices(db, [])).resolves.toBeUndefined();
   await expect(insertAttemptBlankAnswers(db, [])).resolves.toBeUndefined();
@@ -419,7 +454,9 @@ git commit -m "feat: add solve list, random set, and attempt data access"
 - Create: `web/lib/solve/grading.ts`, `web/lib/solve/grading.test.ts`
 
 **Interfaces:**
-- Consumes: 없음 (**DB 도, 네트워크도 모른다**)
+- Consumes: `BizError`·`ErrorCode`(`lib/http/*`) 만. **DB 도, 네트워크도, 요청/응답도 모른다.**
+  검증 실패를 `BizError` 로 던지는 것은 라우트 계층이 `handleRoute` 로 400/1000 을 만들게 하기
+  위해서다 — 이 모듈이 HTTP 를 아는 것은 아니다
 - Produces:
   ```ts
   export function normalizeAnswer(value: string | null | undefined): string;
@@ -785,8 +822,38 @@ it("Q6-1: 전부 묻는 문제면 revealedBlanks 는 빈 배열이지 null 이 �
   expect(d.revealedBlanks).toEqual([]);
 });
 
+it("Q7: FILL_BLANK 는 choices 가 null 이다", async () => {
+  expect((await getSolveDetail(db, blankId)).choices).toBeNull();
+});
+
 it("Q10: 부서명은 별도 조회다", async () => {
   expect((await getSolveDetail(db, mcqId)).departmentName).toBe("가팀");
+});
+
+// selectRandomBlankKeys 는 순수 함수라 무작위여도 성질은 결정적으로 고정된다(Q8·Q9).
+describe("selectRandomBlankKeys", () => {
+  it("Q8: count 개를 고르고, 원본의 부분집합이며, 중복이 없다", () => {
+    const keys = ["a", "b", "c", "d"];
+    for (let i = 0; i < 50; i++) {
+      const picked = selectRandomBlankKeys(keys, 2);
+      expect(picked).toHaveLength(2);
+      expect(new Set(picked).size).toBe(2);          // 중복 없음
+      expect(picked.every((k) => keys.includes(k))).toBe(true);
+    }
+  });
+
+  it("Q8: 실제로 섞인다 — 50회 중 두 가지 이상의 결과가 나온다", () => {
+    // 이 단언이 없으면 shuffle 을 빼고 앞에서 잘라도 통과한다. Java 는 shuffle 한다.
+    const seen = new Set<string>();
+    for (let i = 0; i < 50; i++) seen.add(selectRandomBlankKeys(["a", "b", "c"], 2).join(","));
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("Q9: count 가 빈칸 수보다 크면 전체를 돌려준다 — 오류가 아니다", () => {
+    expect(selectRandomBlankKeys(["a", "b"], 5)).toHaveLength(2);
+  });
+
+  it("빈 배열이면 빈 배열", () => expect(selectRandomBlankKeys([], 3)).toEqual([]));
 });
 ```
 
@@ -820,7 +887,9 @@ export async function getSolveDetail(db: DbConn, problemId: number): Promise<Sol
 
   if (problem.type === "FILL_BLANK") {
     const blanks = await findBlanksByProblemId(db, problemId);
-    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount ?? 0);
+    // ?? 0 으로 덮지 않는다 — FILL_BLANK 는 생성 검증이 >= 1 을 강제하므로 null 이 될 수
+    // 없고, 0 으로 덮으면 "물어볼 빈칸이 없다"는 조용히 틀린 화면이 나온다(buildGradeInput 주석 참고).
+    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount!);
     blanksToAnswer = selected;
     // Q6: 안 물어보는 칸은 정답째로 내보낸다. 정답 비노출의 승인된 예외다.
     // Q6-1: filter 결과라 항상 배열이다 — 전부 물어보면 [] 이지 null 이 아니다.
@@ -895,7 +964,12 @@ export async function GET(request: Request): Promise<Response> {
 > **테스트 골격은 `web/app/api/admin/problems/[id]/route.test.ts:1-40` 을 그대로 따른다.**
 > `vi.hoisted` 로 `state.currentUser` 를 만들고 `lib/db/client` 의 `getDb` 를 `testDb()` 로,
 > `lib/auth/session` 의 `getAuthUser` 를 그 상태로 목한다. 아래 조각의 `state`·`req`·`employee` 는
-> 그 파일의 관용구를 가리킨다 — 새로 발명하지 마라.
+> 그 파일의 관용구를 가리킨다 — 새로 발명하지 마라. 이 계획서의 조각에서 `employee` 는
+> `{ userId, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId, mustChangePassword: false }`
+> 형태의 `AuthUser` 를, `req(path)` 는 `new Request("http://localhost" + path)` 를 뜻한다. 같은 규칙으로
+> `inUseGET`·`historyGET` 은 각 라우트의 `GET` 을, `tagsAll`/`tagsInUse` 는 두 태그 라우트를,
+> `validBlankBody` 는 통과하는 FILL_BLANK 제출 본문을, `attemptDao` 는 `lib/db/attempts` 모듈을
+> 가리키는 **조각 안의 약칭**이다 — 실제 파일에서는 풀어 쓴다.
 
 ```typescript
 it("E1: EMPLOYEE 도 통과한다 — 이 엔드포인트에는 역할 제한이 없다", async () => {
@@ -963,7 +1037,49 @@ git commit -m "feat: add solve list, random set, and answer-free detail endpoint
   export interface AttemptResult { correct: boolean; explanation: string | null; blankResults: BlankResult[] | null }
   export async function submitAttempt(
     db: Db, problemId: number, body: AttemptSubmitBody, actor: AuthUser): Promise<AttemptResult>;
+
+  // DB 행 + 요청 본문 → grade() 의 순수 입력. 유형별로 **어떤 DAO 를 부를지가 여기서 갈린다.**
+  async function buildGradeInput(db: DbConn, problem: ProblemRow, body: AttemptSubmitBody): Promise<GradeInput>;
   ```
+
+**`buildGradeInput` 이 이 Task 의 조용한 위험 지점이다.** 유형별로 부르는 DAO 가 다르고, 잘못
+불러도 예외가 아니라 **오답 판정**으로 끝난다(빈 배열 → 정답 집합이 비어 있음 → 전부 오답).
+
+```typescript
+async function buildGradeInput(
+  db: DbConn, problem: ProblemRow, body: AttemptSubmitBody,
+): Promise<GradeInput> {
+  switch (problem.type) {
+    case "MCQ_SINGLE": case "MCQ_MULTI": case "OX":
+      return { type: problem.type,
+        choices: await findChoicesByProblemId(db, problem.id),
+        selectedChoiceIds: body.selectedChoiceIds };
+    case "SHORT_ANSWER":
+      return { type: "SHORT_ANSWER",
+        answers: (await findAnswersByProblemId(db, problem.id)).map((a) => a.answerText),
+        submittedText: body.submittedText };
+    case "FILL_BLANK":
+      return { type: "FILL_BLANK",
+        blanks: await findBlanksByProblemId(db, problem.id),
+        // FILL_BLANK 문제는 생성 검증이 blankRevealCount >= 1 을 강제하므로 여기서 null 이
+        // 될 수 없다(ProblemServiceImpl.java:441). 그래도 ?? 0 으로 덮지 마라 — Java 는
+        // 이 자리에서 Integer 언박싱 NPE 로 죽는데, 0 으로 덮으면 "빈칸 0개를 제출해야
+        // 정답"이라는 **조용히 틀린 채점**이 된다. 도달 불가 경로는 시끄럽게 두는 편이 낫다.
+        blankRevealCount: problem.blankRevealCount!,
+        blankAnswers: body.blankAnswers };
+    default:
+      // 열거형상 도달 불가(G12). Java 도 여기서 MSG_PROC_FAIL 을 던진다.
+      throw new BizError(ErrorCode.MSG_PROC_FAIL);
+  }
+}
+```
+
+> **제출한 빈칸 키가 "보여 준 키"와 같은지는 검사하지 않는다 — 검사할 수 없다.**
+> 상세 조회가 매 요청 무작위로 고르고 **그 선택을 어디에도 저장하지 않으므로**, 서버는 이
+> 사용자에게 무엇을 물었는지 모른다. Java 는 `definedKeys.containsAll(submittedKeys)` 로
+> **정의된 키인지만** 본다(G10). 즉 클라이언트가 쉬운 빈칸을 골라 답해도 통과한다.
+> **이것을 "보안 구멍"으로 판단해 막지 마라** — 막으려면 무엇을 보여 줬는지 저장하는
+> 새 상태가 필요하고, 그건 이 서브플랜의 범위가 아니다. 파리티 대상이다.
 
 **본문을 어떻게 읽는가 — E6 이 여기 걸려 있다.**
 
@@ -1149,7 +1265,21 @@ it("U4: /api/tags 와 /api/tags/in-use 가 다른 결과를 낸다", async () =>
   // 같은 DAO 를 재사용하는 실수를 잡는 판별자다.
   expect((await tagsAll()).length).toBeGreaterThan((await tagsInUse()).length);
 });
-it("E1: EMPLOYEE 도 두 엔드포인트를 쓸 수 있다", async () => {
+it("U2: 이름 오름차순이고 중복이 없다", async () => {
+  // 한 태그를 활성 문제 두 개에 붙여 DISTINCT 가 실제로 필요한 상황을 만든다.
+  const body = await (await inUseGET()).json();
+  const names = body.data.map((t: { name: string }) => t.name);
+  expect(names).toEqual([...names].sort());
+  expect(new Set(names).size).toBe(names.length);
+});
+it("U3: 응답 필드는 id·name·createdAt 이다", async () => {
+  // Tag 도메인을 그대로 내보내는 Spring 응답과 필드가 어긋나면 안 된다
+  // (lib/db/tags.ts:9-12 의 findAllTags 주석이 같은 이유를 적고 있다).
+  const body = await (await inUseGET()).json();
+  expect(Object.keys(body.data[0]).sort()).toEqual(["createdAt", "id", "name"]);
+});
+// U5 도 이 테스트가 덮는다 — TagController 에는 @RequireRole 이 없다.
+it("E1/U5: EMPLOYEE 도 두 엔드포인트를 쓸 수 있다", async () => {
   state.currentUser = { ...employee, role: "EMPLOYEE" };
   expect((await historyGET()).status).toBe(200);
   expect((await inUseGET()).status).toBe(200);
