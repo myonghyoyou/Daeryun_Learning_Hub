@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-정답지: `docs/qa/2026-08-21-solve-parity-checklist.md` (85행). 아래는 그 위에 얹히는 프로젝트 규칙이다.
+정답지: `docs/qa/2026-08-21-solve-parity-checklist.md` (86행). 아래는 그 위에 얹히는 프로젝트 규칙이다.
 
 - **한글 메시지는 글자 단위로 일치해야 한다.** 여러 규칙이 동시에 깨졌을 때 **어느 메시지가 먼저 나오는지도 계약**이다.
 - **파리티 문자열 단언에 `toThrow("문자열")` 을 쓰지 마라.** Vitest 에서 부분 문자열 매칭이다. `rejects.toMatchObject({ message: "..." })` 를 쓴다.
@@ -19,6 +19,9 @@
 - 모든 `pnpm` 명령 앞에 `export NODE_EXTRA_CA_CERTS="C:/Users/dda2220017/.certs/corp-root-ca.pem"` — 없으면 몇 분간 멈춘다.
 - 착수 시점 스위트: **441 통과 / 40 파일**. 각 Task 마다 늘어난다.
 - `backend/**` 는 읽기만 한다. 절대 수정하지 않는다.
+- **TS 의 `!` 는 런타임 가드가 아니다.** 이 서브플랜에서 `!` 를 믿었다가 실제 결함이 한 번
+  나왔다(NULL 이 `Math.min` 을 통과해 0 이 되고 정답이 전부 새어 나갔다). Java 가 그 자리에서
+  NPE 로 죽는다면 포트도 **명시적으로 던져** 결과를 맞춰라.
 - 서비스 롤 키를 출력·로그·커밋하지 않는다.
 - 응답 봉투는 성공 `resultCode: 200`, 실패는 `ErrorCode` 의 코드. **이미지 프록시 라우트만 예외** — 바이너리를 그대로 내보낸다(Task 6 참고).
 
@@ -31,6 +34,7 @@
 | **㉮** | `count` 파라미터 누락(P1) | 200 / **-1** / `처리 중 오류가 발생하였습니다.` | **400 / 1000 / `잘못된 파라미터를 입력했습니다.`** | 서브플랜 3·4가 같은 모양(`MissingServletRequestPart` → catch-all)을 이탈 ⑥ 으로 이미 개선했다. `-1` 을 없애는 것이 이 이관의 목적 중 하나다. 프론트는 항상 `count` 를 보내므로(`frontend/src/api/solve.js:25`) 화면 동작에는 영향이 없다 |
 | **㉯** | `submit` 이 비트랜잭션이고 자식 답안을 자르지 않는다(T8·T8-1·T8-2) | 600자 빈칸 답 → 200/-1, 그런데 `attempts` 행은 커밋돼 남는다(**실측**) | **① 한 트랜잭션으로 묶고 ② 자식 답안도 부모와 같은 500자 규칙으로 자른다** | 부모의 자르기 주석(`SolveServiceImpl.java:170`)이 "insert 실패를 막는다"고 밝히므로 자식 자르기는 **원저자 의도의 완성**이다. 트랜잭션은 그 위의 안전망. 방치하면 사용자가 실패로 보고 재제출해 시도가 중복되고 서브플랜 6 통계가 둘 다 센다 |
 | **㉰** | 목록·이력에 페이지네이션 없음(S1·H3) | 전체 반환 | **그대로 이식** | 프론트 계약이 바뀐다. 성능은 컷오버 후 실측해 판단 |
+| **㉲** | 숫자 파라미터 변환(P10-1) | `NumberUtils.parseNumber` — 공백을 전부 지운 뒤 `Integer.valueOf`(16진수는 `decode`). `1e2`·공백 거부, `"1 0"` → **10** | JS `Number()` + `Number.isSafeInteger`. `1e2` → 100, `" "` → 0, `"1 0"` → 거부 | `parseNumericParam` 은 **서브플랜 3·4가 이미 쓰는 공유 헬퍼**다. 지금 바꾸면 검증이 끝난 두 서브플랜의 동작이 함께 움직인다. 실무상 문제되는 입력은 화면에서 생성되지 않는다 — **컷오버 이월.** Task 7 은 이 행들을 파리티 위반으로 보고하지 마라 |
 | **㉱** | 비공개 버킷 이미지 조회 | 로컬 디스크를 정적 리소스로 서빙 | **프록시 라우트 `GET /api/problem-images/[key]`** | 이탈 ①(이미지 저장 이관)의 연장. 근거는 Task 6 |
 
 ---
@@ -71,7 +75,7 @@
 | 구간 | Task | 끝났을 때 동작하는 것 | 상태 |
 |---|---|---|---|
 | **M1 채점 코어** | 1 + 2 | 데이터 계층 + 채점 순수 함수. 엔드포인트 0개, 파리티 위험의 대부분이 여기서 고정된다. 테스트 441 → 498 | ☑ 2026-08-21 |
-| **M2 조회** | 3 | 목록·랜덤·상세 3개. **정답 비노출이 성립한다** | ☐ |
+| **M2 조회** | 3 | 목록·랜덤·상세 3개. **정답 비노출이 성립한다**. 테스트 498 → 544 | ☑ 2026-08-21 |
 | **M3 제출·이력** | 4 + 5 | 채점 제출·이력·활성태그 3개. 6개 엔드포인트 완성 | ☐ |
 | **M4 이미지·검증** | 6 + 7 | 이미지 프록시 + E2E + 정답지 대조 | ☐ |
 
@@ -891,9 +895,15 @@ export async function getSolveDetail(db: DbConn, problemId: number): Promise<Sol
 
   if (problem.type === "FILL_BLANK") {
     const blanks = await findBlanksByProblemId(db, problemId);
-    // ?? 0 으로 덮지 않는다 — FILL_BLANK 는 생성 검증이 >= 1 을 강제하므로 null 이 될 수
-    // 없고, 0 으로 덮으면 "물어볼 빈칸이 없다"는 조용히 틀린 화면이 나온다(buildGradeInput 주석 참고).
-    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount!);
+    // **`!` 는 아무것도 지켜 주지 않는다.** 초판 계획서가 여기서 틀렸다 — `!` 를 쓰면 NULL 이
+    // 알아서 터질 거라고 가정했는데, `Math.min(null, n)` 은 **0** 이다. 그러면 물어보는 빈칸이
+    // 0개가 되고 필터가 **모든 빈칸을 정답째로 내보낸다.** 오류 없이 200 으로.
+    // Java 는 `selectRandomBlankKeys(List, int)` 가 원시형이라 언박싱 NPE → catch-all →
+    // 200/-1 이고 정답은 하나도 안 나간다. 명시적으로 막아 그 결과를 맞춘다.
+    if (problem.blankRevealCount == null || problem.blankRevealCount < 0) {
+      throw new BizError(ErrorCode.MSG_PROC_FAIL);
+    }
+    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount);
     blanksToAnswer = selected;
     // Q6: 안 물어보는 칸은 정답째로 내보낸다. 정답 비노출의 승인된 예외다.
     // Q6-1: filter 결과라 항상 배열이다 — 전부 물어보면 [] 이지 null 이 아니다.
@@ -1092,11 +1102,13 @@ async function buildGradeInput(
     case "FILL_BLANK":
       return { type: "FILL_BLANK",
         blanks: await findBlanksByProblemId(db, problem.id),
-        // FILL_BLANK 문제는 생성 검증이 blankRevealCount >= 1 을 강제하므로 여기서 null 이
-        // 될 수 없다(ProblemServiceImpl.java:441). 그래도 ?? 0 으로 덮지 마라 — Java 는
-        // 이 자리에서 Integer 언박싱 NPE 로 죽는데, 0 으로 덮으면 "빈칸 0개를 제출해야
-        // 정답"이라는 **조용히 틀린 채점**이 된다. 도달 불가 경로는 시끄럽게 두는 편이 낫다.
-        blankRevealCount: problem.blankRevealCount!,
+        // `!` 로 넘기지 마라 — Task 3 에서 같은 자리가 실제 결함이 됐다. `!` 는 타입만
+        // 잠재울 뿐 런타임에서 NULL 을 막지 않는다. 생성 검증이 >= 1 을 강제하므로
+        // (ProblemServiceImpl.java:441) 도달 불가지만, 도달하면 Java 는 언박싱 NPE 로
+        // 죽는다(200/-1). 그 결과를 명시적으로 맞춘다:
+        //   if (problem.blankRevealCount == null || problem.blankRevealCount < 0)
+        //     throw new BizError(ErrorCode.MSG_PROC_FAIL);
+        blankRevealCount: problem.blankRevealCount,
         blankAnswers: body.blankAnswers };
     default:
       // 열거형상 도달 불가. Java 도 여기서 MSG_PROC_FAIL 을 던진다
@@ -1235,6 +1247,24 @@ export async function submitAttempt(
   return { correct: result.correct, explanation: problem.explanation, blankResults: result.blankResults };
 }
 ```
+
+- [ ] **Step 2-1: 응답의 키 집합을 고정한다 (M2 가 배운 것)**
+
+M2 에서 "정답이 안 샌다"를 **세 문자열 거부목록**으로 단언했더니, 리뷰어가 `hint: explanation`
+을 추가했을 때 40개가 전부 통과했다. 같은 값을 다른 키 이름으로 실어 보내면 안 보인다.
+M2 는 그래서 **키 집합 단언**으로 바꿨다. Task 4 도 같은 것이 필요하다:
+
+```typescript
+expect(Object.keys(result).sort()).toEqual(["blankResults", "correct", "explanation"]);
+expect(Object.keys(result.blankResults![0]).sort())
+  .toEqual(["blankKey", "correct", "correctAnswer", "submittedAnswer"]);  // BlankAnswerResult.java 4필드
+```
+
+두 번째가 특히 중요하다 — `blankResults` 를 DB 행에서 spread 하면 `problem_blanks.id` 와
+`displayOrder` 가 함께 나간다. M2 의 `revealedBlanks` 에서 실제로 살아남은 변이가 그것이다.
+
+**`PROBLEM_NOT_FOUND_MESSAGE` 는 `lib/solve/solveQueryService.ts` 에서 import 한다.** 다시
+타이핑하지 마라 — Java 도 두 자리가 같은 문구다(`SolveServiceImpl.java:62-64`, `:103-105`).
 
 - [ ] **Step 3: 변이 테스트**
 
@@ -1392,6 +1422,14 @@ it("응답 봉투를 쓰지 않는다 — 바이너리다", async () => {
 });
 ```
 
+> **먼저 정할 것 — 미들웨어가 이 라우트에도 JSON 봉투를 씌운다.** `middleware.ts` 의 matcher 가
+> `/api/:path*` 라 비로그인은 **401 + JSON**, `mustChangePassword` 사용자는 **200 + JSON(1012)**
+> 를 받는다. `<img>` 태그가 그 응답을 받으면 깨진 이미지가 된다. Global Constraints 는 이 라우트를
+> 봉투 예외로 뒀지만 **그건 성공 경로 얘기**다. 두 실패 경로를 그대로 둘지(브라우저에는 깨진
+> 이미지, 서버 로그에는 이유가 남는다) 아니면 이 경로만 matcher 에서 빼고 라우트가 직접 세션을
+> 볼지 **의식적으로 정하고 그 근거를 남겨라.** 기본값은 "그대로 둔다" 다 — 로그인하지 않은
+> 사용자에게 이미지가 안 보이는 것은 올바른 결과이고, 봉투를 벗기면 인증 게이트를 손대게 된다.
+
 - [ ] **Step 2: 실패 확인 → 구현 → 통과 확인**
 
 ```typescript
@@ -1488,7 +1526,7 @@ cd web && pnpm build && pnpm start
 
 - [ ] **Step 3: 정답지 대조**
 
-정답지 85행을 한 줄씩 짚어 실측값과 대조한다. **대조하지 않은 행이 남으면 안 된다** — 재현 불가한 행은 사유를 적고 단위 테스트로 대체됐음을 밝힌다.
+정답지 86행을 한 줄씩 짚어 실측값과 대조한다. **대조하지 않은 행이 남으면 안 된다** — 재현 불가한 행은 사유를 적고 단위 테스트로 대체됐음을 밝힌다.
 
 - [ ] **Step 4: 전체 검증**
 
@@ -1515,7 +1553,7 @@ git commit -m "docs: record the solve end-to-end verification results"
 | E (권한·공통) 7행 | E1·E4·E5·E6 은 3·4·5 의 라우트 테스트. **E2(401)·E3(비밀번호 변경 강제)는 미들웨어가 이미 고정한 동작이라 새 테스트를 만들지 않는다** — 서브플랜 1·2 소관이고, Task 7 E2E 에서 한 줄로 재확인한다 |
 | S (목록) 10행 | 1(DAO) · 3(라우트) |
 | P (랜덤) 12행 | 1(DAO) · 3(라우트·이탈 ㉮) |
-| Q (상세·정답 비노출) 13행 | 3 |
+| Q (상세·정답 비노출) 14행 | 3 |
 | G (채점) 15행 | 2 |
 | T (시도 저장) 13행 | 1(DAO) · 2(요약) · 4(트랜잭션·자르기) |
 | H (이력) 8행 | 1(DAO) · 5(라우트) |

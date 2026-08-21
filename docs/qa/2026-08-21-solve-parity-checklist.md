@@ -7,7 +7,7 @@
 - 작성일: 2026-08-21
 - 대상: `SolveController` 4 + `AttemptController` 1 + `TagController.listInUse` 1 = **6개 엔드포인트**
 - 근거: `SolveServiceImpl.java`(240줄), `TagServiceImpl.java`, MyBatis 매퍼 5개, `GlobalExceptionHandler.java`
-- 총 **85행** (E 7 · S 11 · P 12 · Q 13 · G 15 · T 13 · H 8 · U 6)
+- 총 **86행** (E 7 · S 11 · P 12 · Q 14 · G 15 · T 13 · H 8 · U 6)
 - **실측 상태**: 소스 정독 후 **Spring 인스턴스를 띄워 E·P·Q·G·T·H·U 를 직접 호출해 대조했다.**
   그 과정에서 초안의 **2행(E5·P2)이 틀린 것을 발견해 고쳤다.** 아래 "실측 기록" 참고
 
@@ -82,6 +82,7 @@
 | Q9 | `blankRevealCount` > 실제 빈칸 수 | `min` 이라 전체 반환 — 오류 아님 | 같은 곳. 생성 검증(`ProblemServiceImpl.java:441`)이 `<= blanks.size()` 를 강제하므로 실제로는 도달 불가 |
 | Q10 | `departmentName` | `departmentDao.findById` 로 **별도 조회**. 부서가 없으면 **null** | `SolveServiceImpl.java:84-90` (null 가드 명시) |
 | Q11 | `explanation` | **응답에 없다.** 채점 후에만 나온다 | `ProblemSolveDetailResponse.java` 필드 목록에 없음 |
+| Q12-1 | **상세를 반복 호출하면 제출 없이 모든 정답을 모을 수 있다** | 매 호출마다 다시 뽑고 **선택을 저장하지 않는다.** 빈칸 3개·revealCount 1 이면 한 번에 2개가 공개되고, 두 번이면 사실상 전부 모인다 | `SolveServiceImpl.java:70-77` — Java 도 똑같다. **파리티이므로 막지 마라**(막으려면 무엇을 보여 줬는지 저장하는 새 상태가 필요하다). 다만 이 구간의 목표가 "정답 비노출"이므로 **한계를 알고 있어야 한다** — 서브플랜 6(통계)이 부정행위 탐지를 다룬다면 여기가 출발점이다. 컷오버 이월 |
 | Q12 | `imageUrl` | 저장된 값 그대로 | `SolveServiceImpl.java:88`. **비공개 버킷 조회 경로는 아직 미결정 — 아래 "미결정" 절 참고** |
 
 ---
@@ -208,8 +209,14 @@
 **실측으로 새로 얻어 행이 된 것:** Q6-1(빈 배열 vs null), G7-1(공백 접힘의 판별자),
 T2-1(저장은 제출 원문), T3 의 순서 판별(`[10,9]` → `가, 나`).
 
-**정답 비노출 확인:** 5개 유형 전부 상세 응답에 `correct`·`answerText`·`explanation` 키가
-하나도 없다. `explanation` 은 채점 응답에서만 나오는 것을 해설 있는 문제(id 35)로 확인했다.
+**정답 비노출 확인:** 5개 유형 전부 상세 응답에 `correct`·`explanation` 키가 하나도 없다.
+`explanation` 은 채점 응답에서만 나오는 것을 해설 있는 문제(id 35)로 확인했다. **`answerText`
+는 예외가 있다 — Q6 이 명시하듯 FILL_BLANK 의 `revealedBlanks[]` 안에는 안 물어보는 칸의
+`answerText` 가 의도적으로 들어간다.** 이 실측 문장이 "5개 유형 전부에 answerText 가 없다"로
+읽히면 그 예외를 버그로 오인해 지우게 된다 — 실제로 측정 당시 호출한 FILL_BLANK 문제가
+`revealCount == blanks.size()`(전부 물어보는 문제)였을 뿐이라 `revealedBlanks`가 우연히
+비어 있었고, 그래서 이 문장이 참으로 보였다. `revealCount < blanks.size()` 인 문제로
+호출하면 `answerText` 가 나온다 — 이것이 정답이다(Q6).
 
 **H4 함정 확인:** 이력의 `correct` 가 boolean 이고 `true` 인 항목이 실제로 있다 — `AS correct`
 별칭이 동작한다는 증거다. 별칭이 없으면 전부 false 가 됐을 것이다.
