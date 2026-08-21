@@ -55,7 +55,14 @@
 | `web/lib/problem/problemImage.ts` | **수정.** 버킷 상수와 클라이언트를 프록시가 재사용하도록 export | 6 |
 | `docs/qa/2026-08-21-solve-e2e-verification.md` | **신규.** E2E 실측 기록 | 7 |
 
-> **경로 주의.** `web/app/api/problems/**` 는 **직원용**이고 `web/app/api/admin/problems/**` 는 관리자용이다. 이름이 비슷하니 헷갈리지 마라 — 직원용에는 `@RequireRole` 이 없고(E1) 부서 스코프도 없다(E4).
+> **경로 주의 ①.** `web/app/api/problems/**` 는 **직원용**이고 `web/app/api/admin/problems/**` 는 관리자용이다. 이름이 비슷하니 헷갈리지 마라 — 직원용에는 `@RequireRole` 이 없고(E1) 부서 스코프도 없다(E4).
+>
+> **경로 주의 ② — `random` 이 `[id]` 로 새면 안 된다.** `app/api/problems/random/route.ts` 와
+> `app/api/problems/[id]/route.ts` 가 형제다. App Router 는 정적 세그먼트를 동적보다 먼저 매칭하므로
+> 정상 동작하고, 이 저장소에 **이미 같은 선례가 있다**(`admin/problems/next-source-number` + `[id]`,
+> 서브플랜 4에서 실측 확인됨). 다만 서브플랜 4가 이걸 **정답지 행과 E2E 행으로 따로 고정한 이유**가
+> 있다 — 새면 `존재하지 않거나 보관된 문제입니다.` 라는 **그럴듯한 오답**이 나와서 아무도 눈치채지
+> 못한다. Task 3 의 라우트 테스트와 Task 7 의 E2E 에 각각 한 줄을 넣는다.
 
 ---
 
@@ -115,23 +122,30 @@
 // web/lib/db/solveProblems.test.ts
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
-import { departments, problems, tags, problemTags } from "./schema";
+import { departments, problems, tags, problemTags, users } from "./schema";
 import { findActiveSolveProblems, findRandomActiveProblems } from "./solveProblems";
 
 const db = testDb();
 let deptId = 0;
+let userId = 0;
 
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
   await truncateAll();
   [{ id: deptId }] = await db.insert(departments)
     .values({ name: "가팀", code: "A", status: "ACTIVE" }).returning({ id: departments.id });
+  // problems.created_by 는 NOT NULL + users FK 다(schema.ts). 문제를 만들려면 사용자가 먼저다 —
+  // 기존 lib/db/problems.test.ts:30-36 과 같은 형태를 쓴다.
+  [{ id: userId }] = await db.insert(users).values({
+    employeeNo: "admin", name: "관리자", email: "a@b.c", passwordHash: "x",
+    departmentId: deptId, role: "SUPER_ADMIN", status: "ACTIVE", mustChangePassword: false,
+  }).returning({ id: users.id });
 });
 
 async function seed(over: Partial<typeof problems.$inferInsert> = {}) {
   const [row] = await db.insert(problems).values({
     type: "OX", content: "본문", departmentId: deptId, status: "ACTIVE",
-    createdBy: null, sourceNumber: null, ...over,
+    createdBy: userId, sourceNumber: null, ...over,
   }).returning({ id: problems.id });
   return row.id;
 }
@@ -310,7 +324,16 @@ it("H1: 남의 시도는 안 나온다", async () => {
   expect(await findAttemptsByUserId(db, userId)).toEqual([]);
 });
 
-it("H2: submitted_at 내림차순", async () => { /* 두 건을 시간차를 두고 넣고 순서를 단언 */ });
+it("H2: submitted_at 내림차순", async () => {
+  // submittedAt 을 **명시적으로** 넣는다. defaultNow() 에 맡기면 두 insert 가 같은 값을 받을 수
+  // 있고, ORDER BY 에 타이브레이커가 없어(H2) 순서가 흔들린다. 서브플랜 4 에서 정렬을 고정하지
+  // 않은 단언이 플래키로 두 번의 리뷰를 통과한 전례가 있다.
+  await db.insert(attempts).values([
+    { userId, problemId, submittedAnswer: "먼저", isCorrect: false, submittedAt: new Date("2026-01-01T00:00:00Z") },
+    { userId, problemId, submittedAnswer: "나중", isCorrect: true,  submittedAt: new Date("2026-01-02T00:00:00Z") },
+  ]);
+  expect((await findAttemptsByUserId(db, userId)).map((r) => r.submittedAnswer)).toEqual(["나중", "먼저"]);
+});
 
 it("H5: 응답 필드가 정확히 7개다", async () => {
   await insertAttempt(db, { userId, problemId, submittedAnswer: "x", isCorrect: false });
@@ -407,12 +430,14 @@ git commit -m "feat: add solve list, random set, and attempt data access"
   export interface GradeResult {
     correct: boolean;
     submittedAnswerSummary: string | null;
-    selectedChoices: { id: number; choiceText: string | null }[];  // 문제 정의 순서
+    selectedChoices: { id: number; choiceText: string }[];  // 문제 정의 순서
     blankResults: BlankResult[] | null;
   }
   export type GradeInput =
     | { type: "MCQ_SINGLE" | "MCQ_MULTI" | "OX";
-        choices: { id: number; choiceText: string | null; isCorrect: boolean }[];
+        // problem_choices.choice_text 는 NOT NULL 이다(schema.ts) — null 을 받을 필요가 없다.
+        // 반면 attempt_choices.choice_text 는 nullable 이므로 저장 쪽 타입과 다르다.
+        choices: { id: number; choiceText: string; isCorrect: boolean }[];
         selectedChoiceIds: number[] | null }
     | { type: "SHORT_ANSWER"; answers: string[]; submittedText: string | null }
     | { type: "FILL_BLANK";
@@ -772,6 +797,7 @@ it("Q10: 부서명은 별도 조회다", async () => {
 const NOT_FOUND_MESSAGE = "존재하지 않거나 보관된 문제입니다.";
 
 /** SolveServiceImpl.selectRandomBlankKeys(java:94-98) 미러 — shuffle 후 앞에서 count 개. */
+// import { randomInt } from "node:crypto";  ← Java 의 SecureRandom 대응. Math.random() 을 쓰지 마라.
 export function selectRandomBlankKeys(keys: string[], count: number): string[] {
   const shuffled = [...keys];
   for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -866,12 +892,22 @@ export async function GET(request: Request): Promise<Response> {
 
 - [ ] **Step 4: 라우트 테스트 — 역할과 봉투**
 
+> **테스트 골격은 `web/app/api/admin/problems/[id]/route.test.ts:1-40` 을 그대로 따른다.**
+> `vi.hoisted` 로 `state.currentUser` 를 만들고 `lib/db/client` 의 `getDb` 를 `testDb()` 로,
+> `lib/auth/session` 의 `getAuthUser` 를 그 상태로 목한다. 아래 조각의 `state`·`req`·`employee` 는
+> 그 파일의 관용구를 가리킨다 — 새로 발명하지 마라.
+
 ```typescript
 it("E1: EMPLOYEE 도 통과한다 — 이 엔드포인트에는 역할 제한이 없다", async () => {
   state.currentUser = employee;
   expect((await GET(req("/api/problems"))).status).toBe(200);
 });
-it("E1: DEPT_ADMIN·SUPER_ADMIN 도 같다", async () => { /* 셋 다 200 */ });
+it("E1: DEPT_ADMIN·SUPER_ADMIN 도 같다", async () => {
+  for (const role of ["DEPT_ADMIN", "SUPER_ADMIN"] as const) {
+    state.currentUser = { ...employee, role };
+    expect((await GET(req("/api/problems"))).status).toBe(200);
+  }
+});
 it("㉮: count 가 없으면 400/1000 이다(승인된 이탈)", async () => {
   const res = await GET(req("/api/problems/random"));
   expect(res.status).toBe(400);
@@ -883,7 +919,16 @@ it("P3/P4: 범위를 벗어나면 문제 수 문구다", async () => {
       .toMatchObject({ resultMsg: "문제 수는 1 이상 50 이하여야 합니다." });
   }
 });
-it("P5: 1 과 50 은 통과한다(경계 포함)", async () => { /* 둘 다 200 */ });
+it("P5: 1 과 50 은 통과한다(경계 포함)", async () => {
+  for (const c of [1, 50]) {
+    expect((await GET(req(`/api/problems/random?count=${c}`))).status).toBe(200);
+  }
+});
+it("random 이 [id] 로 새지 않는다", async () => {
+  // 새면 "존재하지 않거나 보관된 문제입니다." 라는 그럴듯한 오답이 나온다(경로 주의 ②).
+  const res = await GET(req("/api/problems/random?count=1"));
+  expect(await res.json()).not.toMatchObject({ resultMsg: "존재하지 않거나 보관된 문제입니다." });
+});
 ```
 
 - [ ] **Step 5: 전체 스위트 + Commit**
@@ -899,17 +944,38 @@ git commit -m "feat: add solve list, random set, and answer-free detail endpoint
 ## Task 4: 채점 제출 (트랜잭션)
 
 **Files:**
+- Create: `web/lib/solve/attemptRequestBody.ts`, `web/lib/solve/attemptRequestBody.test.ts`
 - Create: `web/lib/solve/attemptService.ts`, `web/lib/solve/attemptService.test.ts`
 - Create: `web/app/api/problems/[id]/attempts/route.ts`, `.../route.test.ts`
 
 **Interfaces:**
-- Consumes: `grade`(Task 2), Task 1 의 시도 DAO, `findProblemById`·`findChoicesByProblemId`·`findAnswersByProblemId`·`findBlanksByProblemId`
+- Consumes: `grade`(Task 2), Task 1 의 시도 DAO, `findProblemById`·`findChoicesByProblemId`·`findAnswersByProblemId`·`findBlanksByProblemId`, `readJsonStrict`(`lib/http/body`), `MessageNotReadableError`(`lib/http/errors`)
 - Produces:
   ```ts
+  // AttemptSubmitRequest.java 미러. 세 필드 모두 선택적이다 — 유형에 따라 하나만 쓴다.
+  export interface AttemptSubmitBody {
+    selectedChoiceIds: number[] | null;
+    submittedText: string | null;
+    blankAnswers: { blankKey: string; submittedAnswer: string | null }[] | null;
+  }
+  export function toAttemptSubmitBody(body: Record<string, unknown>): AttemptSubmitBody;
+
   export interface AttemptResult { correct: boolean; explanation: string | null; blankResults: BlankResult[] | null }
   export async function submitAttempt(
     db: Db, problemId: number, body: AttemptSubmitBody, actor: AuthUser): Promise<AttemptResult>;
   ```
+
+**본문을 어떻게 읽는가 — E6 이 여기 걸려 있다.**
+
+- `readJson` 이 **아니라 `readJsonStrict`** 를 쓴다. `readJson` 은 깨진 본문을 `{}` 로 삼켜 버리는데,
+  그건 로그인 라우트가 "사번과 비밀번호를 입력하세요." 를 내기 위한 특례다(`lib/http/body.ts:3-9` 주석).
+  문제 라우트처럼 본문을 DTO 로 매핑하는 곳은 엄격한 쪽을 써야 `MessageNotReadableError` →
+  **200 / 1000 / `errorList` 없음**(E6)이 나온다.
+- 필드 변환은 `lib/problem/problemRequestBody.ts` 의 관용구를 따른다 — 값이 기대한 타입이 아니면
+  `MessageNotReadableError` 를 던지고, 오류 메시지에 `blankAnswers[2].blankKey` 같은 **필드 경로**를
+  남긴다(로그용이며 사용자에게는 안 나간다). Jackson 이 역직렬화에 실패하는 자리를 그대로 미러한다.
+- **`toAttemptSubmitBody` 는 셀(엑셀)에 쓰지 마라.** 서브플랜 4 의 `problemRequestBody` 와 같은
+  경계다 — 이건 JSON 본문 전용이다.
   **첫 인자가 `Db` 다 — `DbConn` 이 아니다.** 이 함수가 트랜잭션을 **연다**. 이미 열린 핸들을 받으면 Drizzle 이 SAVEPOINT 로 중첩시켜 의도가 깨지므로 타입으로 막는다(서브플랜 4 Task 9 와 같은 이유).
 
 - [ ] **Step 1: 실패 테스트 — 이탈 ㉯ 가 여기서 고정된다**
@@ -933,12 +999,15 @@ it("㉯/T8-1: 빈칸 답이 500자를 넘어도 실패하지 않는다 — 자�
 });
 
 it("㉯: 자식 insert 가 실패하면 attempts 도 남지 않는다", async () => {
-  // 변이로 검증할 성질이다 — 트랜잭션을 벗기면 이 테스트가 빨개져야 한다.
-  const broken = { ...validBlankBody };
-  // attempt_blank_answers.blank_key 는 varchar(50) 이다. 60자 키는 정의된 키가 아니라
-  // grade 단계에서 걸리므로, FK 를 깨는 쪽으로 유도한다(problemId 를 지운 뒤 제출).
-  await expect(submitAttempt(db, deletedProblemId, validBlankBody, actor)).rejects.toThrow();
-  expect(await db.select().from(attempts)).toHaveLength(0);
+  // **부모가 커밋된 뒤 자식이 죽는 상황**을 만들어야 한다. 존재하지 않는 문제로는 안 된다 —
+  // submitAttempt 가 문제를 먼저 조회해 "존재하지 않거나 보관된 문제입니다." 로 끝나므로
+  // insert 자체가 일어나지 않아 **틀린 이유로 통과한다.**
+  // 정상 경로로는 유도할 수 없으니(자르기가 컬럼 초과를 막는다) 자식 DAO 를 한 번 던지게 한다.
+  const spy = vi.spyOn(attemptDao, "insertAttemptBlankAnswers")
+    .mockRejectedValueOnce(new Error("자식 insert 실패"));
+  await expect(submitAttempt(db, blankId, validBlankBody, actor)).rejects.toThrow("자식 insert 실패");
+  expect(await db.select().from(attempts)).toHaveLength(0);   // 롤백됐다
+  spy.mockRestore();
 });
 
 it("T5: 선택지가 없으면 attempt_choices 를 만들지 않는다", async () => {
@@ -1058,13 +1127,33 @@ export async function GET(): Promise<Response> {
 - [ ] **Step 2: 테스트**
 
 ```typescript
-it("H1: 다른 사람의 이력은 안 나온다", async () => { /* 두 사용자로 시도를 만들고 각자 조회 */ });
-it("U1: 보관된 문제에만 붙은 태그는 빠진다", async () => { /* tags.test.ts 의 두 케이스를 HTTP 로 재확인 */ });
+it("H1: 다른 사람의 이력은 안 나온다", async () => {
+  await db.insert(attempts).values([
+    { userId: meId,    problemId, submittedAnswer: "내 것",   isCorrect: true },
+    { userId: otherId, problemId, submittedAnswer: "남의 것", isCorrect: true },
+  ]);
+  state.currentUser = { ...employee, userId: meId };
+  const body = await (await GET()).json();
+  expect(body.data.map((r: { submittedAnswer: string }) => r.submittedAnswer)).toEqual(["내 것"]);
+});
+it("U1: 보관된 문제에만 붙은 태그는 빠진다", async () => {
+  // lib/db/tags.test.ts:74 와 같은 상황을 HTTP 로 한 번 더 본다 — DAO 는 맞는데 라우트가
+  // findAllTags 를 부르는 실수를 잡는 것이 목적이다(U4 와 짝).
+  const archived = await seed({ status: "ARCHIVED" });
+  const [t] = await db.insert(tags).values({ name: "죽은태그" }).returning({ id: tags.id });
+  await db.insert(problemTags).values({ problemId: archived, tagId: t.id });
+  const body = await (await GET()).json();
+  expect(body.data).toEqual([]);
+});
 it("U4: /api/tags 와 /api/tags/in-use 가 다른 결과를 낸다", async () => {
   // 같은 DAO 를 재사용하는 실수를 잡는 판별자다.
   expect((await tagsAll()).length).toBeGreaterThan((await tagsInUse()).length);
 });
-it("E1: EMPLOYEE 도 두 엔드포인트를 쓸 수 있다", async () => { /* 둘 다 200 */ });
+it("E1: EMPLOYEE 도 두 엔드포인트를 쓸 수 있다", async () => {
+  state.currentUser = { ...employee, role: "EMPLOYEE" };
+  expect((await historyGET()).status).toBe(200);
+  expect((await inUseGET()).status).toBe(200);
+});
 ```
 
 - [ ] **Step 3: 전체 스위트 + Commit**
@@ -1130,6 +1219,11 @@ it("응답 봉투를 쓰지 않는다 — 바이너리다", async () => {
 ```typescript
 // web/app/api/problem-images/[key]/route.ts
 import { getStorageClient, PROBLEM_IMAGE_BUCKET } from "@/lib/problem/problemImage";
+// ↑ 이 두 이름은 **아직 export 되어 있지 않다.** problemImage.ts 에 `getStorageClient` 는
+// 같은 이름의 모듈 내부 함수로 존재하고(:27), 버킷 상수는 `BUCKET` 이라는 이름이다(:12).
+// 이 Task 가 할 일: 함수에 `export` 를 붙이고, 상수를 `PROBLEM_IMAGE_BUCKET` 으로 바꿔 export 한 뒤
+// problemImage.ts 안의 사용처를 함께 고친다. 이름을 바꾸기 싫으면 `BUCKET` 을 그대로 export 하고
+// 여기 import 를 맞춰라 — 둘 중 하나로 통일하면 된다.
 
 export const runtime = "nodejs";
 
@@ -1210,6 +1304,9 @@ cd web && pnpm build && pnpm start
 | 12 | 이력 | 본인 것만, `correct` 에 true 가 실제로 있다(H4) |
 | 13 | 보관된 문제의 이력 | **나온다**(H7). 목록에는 안 나온다(S2) |
 | 14 | 이미지 프록시 | 업로드 → 프록시로 받기 → 바이트 일치 → 삭제 → 버킷 빔 확인 |
+| 15 | `/api/problems/random?count=1` | 랜덤 세트가 나온다 — `존재하지 않거나 보관된 문제입니다.` 가 나오면 `[id]` 로 샌 것이다(경로 주의 ②) |
+| 16 | `?count=` · `?count=1.5` | 둘 다 `요청 값의 형식이 올바르지 않습니다: count` (P9·P10). **누락(㉮)과 문구가 다르다** |
+| 17 | `?count=1&departmentId=99999` | 200 / 0건 — 없는 부서는 오류가 아니다(P11) |
 
 - [ ] **Step 3: 정답지 대조**
 
@@ -1237,7 +1334,7 @@ git commit -m "docs: record the solve end-to-end verification results"
 
 | 정답지 절 | Task |
 |---|---|
-| E (권한·공통) 6행 | 3·4·5 의 라우트 테스트 |
+| E (권한·공통) 6행 | E1·E4·E5·E6 은 3·4·5 의 라우트 테스트. **E2(401)·E3(비밀번호 변경 강제)는 미들웨어가 이미 고정한 동작이라 새 테스트를 만들지 않는다** — 서브플랜 1·2 소관이고, Task 7 E2E 에서 한 줄로 재확인한다 |
 | S (목록) 10행 | 1(DAO) · 3(라우트) |
 | P (랜덤) 11행 | 1(DAO) · 3(라우트·이탈 ㉮) |
 | Q (상세·정답 비노출) 13행 | 3 |
@@ -1262,7 +1359,34 @@ git commit -m "docs: record the solve end-to-end verification results"
 - 이력에는 `p.status` 조건이 없다(H7). 목록과 다르다.
 - `findInUseTags` 는 **이미 있다.** 새로 만들지 마라(U6).
 
-**계획서를 쓰다 고친 것 (Self-Review 가 잡은 실제 결함)**
+**푸시 전 재검토가 찾은 것 (2026-08-21, 코드베이스와 1:1 대조)**
+
+서브플랜 4에서 같은 검토가 시그니처 불일치 8건을 잡았기에, 계획서가 코드베이스에 대해 주장하는
+것을 전부 실제 파일과 대조했다. **결함 3건**이 나왔다.
+
+| # | 문제 | 확인 |
+|---|---|---|
+| 1 | Task 1 의 seed 헬퍼가 `createdBy: null` 이었다 | `problems.created_by` 는 **NOT NULL + users FK**(`schema.ts`). 첫 insert 부터 죽는다. 기존 `lib/db/problems.test.ts:30-36` 처럼 사용자를 먼저 만들도록 고쳤다 |
+| 2 | `AttemptSubmitBody`·`buildGradeInput` 을 쓰면서 **어디에도 정의하지 않았다** | 위장된 placeholder 다. `attemptRequestBody.ts` 를 Task 4 의 산출물로 추가하고 타입과 변환 규칙을 명시했다 |
+| 3 | 요청 본문을 어떤 리더로 읽는지 안 적었다 | E6(200/1000/`errorList` 없음)은 `readJsonStrict` 라야 나온다. `readJson` 은 깨진 본문을 `{}` 로 삼킨다(`lib/http/body.ts:3-9`) — 로그인 라우트 전용 특례다 |
+
+**보강한 것**
+
+- **정적/동적 라우트 우선순위**(`random` vs `[id]`)를 아예 안 적었다. 저장소에 선례가 있어 동작은
+  하지만, 새면 "존재하지 않거나 보관된 문제입니다." 라는 **그럴듯한 오답**이 나온다 — 서브플랜 4가
+  이걸 따로 고정한 이유다. 경로 주의 ② + 라우트 테스트 + E2E 행 15 를 넣었다.
+- **H2 테스트가 플래키였다.** `defaultNow()` 에 맡기면 두 insert 가 같은 타임스탬프를 받을 수 있고
+  `ORDER BY` 에 타이브레이커가 없다. `submittedAt` 을 명시하도록 고쳤다.
+- **㉯ 의 롤백 테스트가 틀린 이유로 통과할 참이었다.** 없는 문제 id 를 쓰면 `submitAttempt` 가
+  조회 단계에서 먼저 끝나 insert 자체가 일어나지 않는다. 자식 DAO 를 한 번 던지게 바꿨다.
+- Task 6 의 import 두 이름은 **아직 export 되어 있지 않다**(`getStorageClient` 는 내부 함수,
+  상수는 `BUCKET`). 무엇을 고쳐야 하는지 적었다.
+- `randomInt` 의 출처(`node:crypto`)와 `Math.random()` 금지를 명시했다.
+- `problem_choices.choice_text` 는 NOT NULL 이라 `string | null` 이 과했다. 저장 쪽
+  (`attempt_choices`)은 nullable 이라 서로 다르다는 것도 적었다.
+- E2·E3 은 미들웨어가 이미 고정한 동작이라 새 테스트 대상이 아님을 커버리지 표에 명시했다.
+
+**계획서를 쓰다 고친 것 (초안 Self-Review 가 잡은 실제 결함)**
 
 초안은 `count` 를 `raw === null` 하나로만 갈랐다. 그런데 `parseNumericParam` 은 **빈 문자열을
 `null`(미지정)로 돌려주므로**, `?count=` 가 이탈 ㉮ 로 새거나 `count=null` 이 그대로 흘러가
