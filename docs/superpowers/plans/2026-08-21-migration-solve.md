@@ -36,6 +36,7 @@
 | **㉰** | 목록·이력에 페이지네이션 없음(S1·H3) | 전체 반환 | **그대로 이식** | 프론트 계약이 바뀐다. 성능은 컷오버 후 실측해 판단 |
 | **㉲** | 숫자 파라미터 변환(P10-1) | `NumberUtils.parseNumber` — 공백을 전부 지운 뒤 `Integer.valueOf`(16진수는 `decode`). `1e2`·공백 거부, `"1 0"` → **10** | JS `Number()` + `Number.isSafeInteger`. `1e2` → 100, `" "` → 0, `"1 0"` → 거부 | `parseNumericParam` 은 **서브플랜 3·4가 이미 쓰는 공유 헬퍼**다. 지금 바꾸면 검증이 끝난 두 서브플랜의 동작이 함께 움직인다. 실무상 문제되는 입력은 화면에서 생성되지 않는다 — **컷오버 이월.** Task 7 은 이 행들을 파리티 위반으로 보고하지 마라 |
 | **㉱** | 비공개 버킷 이미지 조회 | 로컬 디스크를 정적 리소스로 서빙 | **프록시 라우트 `GET /api/problem-images/[key]`** | 이탈 ①(이미지 저장 이관)의 연장. 근거는 Task 6 |
+| **㉳** | `submit` 본문 `blankAnswers` 배열의 `null` 원소(예: `blankAnswers: [null]`, Task 4) | `BlankAnswerInput::getBlankKey` 를 null 에 호출해 NPE → catch-all → **200 / -1 / `처리 중 오류가 발생하였습니다.`** | **`{blankKey: null, submittedAnswer: null}` 로 매핑해 살려 둔다 → `grade()` 의 G9-G11 검증이 정의된 키가 아니라며 자연 실패 → 400 / 1000 / `제출한 빈칸 개수가 올바르지 않습니다.`** | `problemRequestBody.ts` 의 `readChoices`/`readBlanks` 와 같은 관용구 — null 원소를 던지지 않고 검증기로 넘겨 자연스러운 실패 문구를 내게 한다. `-1` 을 없애는 것이 이 서브플랜에서 반복되는 목적과 일치한다(㉮ 참고). `web/lib/solve/attemptRequestBody.ts` 의 `readBlankAnswers` 주석과 `attemptService.test.ts` 의 "㉳" 테스트가 근거다 |
 
 ---
 
