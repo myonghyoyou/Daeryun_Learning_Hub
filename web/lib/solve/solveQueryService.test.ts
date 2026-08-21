@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { departments, problemBlanks, problemChoices, problems, users } from "../db/schema";
 import { BizError } from "../http/errors";
+import { ErrorCode } from "../http/errorCode";
 import {
   getSolveDetail, listSolveProblems, randomSolveSet, selectRandomBlankKeys,
 } from "./solveQueryService";
@@ -175,7 +176,11 @@ describe("getSolveDetail", () => {
     } catch (e) {
       caught = e;
     }
+    // 코드까지 본다. MSG_PROC_FAIL 은 200/-1 이고 INPUT_VALUE_INVALID 는 400/1000 이라
+    // 봉투가 완전히 다르다 — 이 가드의 목적이 Java 의 결과(200/-1)를 맞추는 것이므로
+    // "BizError 이기만 하면 된다"로 두면 가드가 지키려던 것을 안 지킨다.
     expect(caught).toBeInstanceOf(BizError);
+    expect((caught as BizError).errorCode).toBe(ErrorCode.MSG_PROC_FAIL);
     expect(JSON.stringify(caught)).not.toContain("answerText");
     expect(JSON.stringify(caught)).not.toContain("정답-");
   });
@@ -186,7 +191,7 @@ describe("getSolveDetail", () => {
       { problemId: id, blankKey: "a", answerText: "정답-a", displayOrder: 1 },
       { problemId: id, blankKey: "b", answerText: "정답-b", displayOrder: 2 },
     ]);
-    await expect(getSolveDetail(db, id)).rejects.toBeInstanceOf(BizError);
+    await expect(getSolveDetail(db, id)).rejects.toMatchObject({ errorCode: ErrorCode.MSG_PROC_FAIL });
   });
 
   it("Q10: 부서명은 별도 조회다", async () => {
