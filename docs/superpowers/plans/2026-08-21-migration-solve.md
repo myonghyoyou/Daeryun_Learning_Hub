@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-정답지: `docs/qa/2026-08-21-solve-parity-checklist.md` (86행). 아래는 그 위에 얹히는 프로젝트 규칙이다.
+정답지: `docs/qa/2026-08-21-solve-parity-checklist.md` (87행). 아래는 그 위에 얹히는 프로젝트 규칙이다.
 
 - **한글 메시지는 글자 단위로 일치해야 한다.** 여러 규칙이 동시에 깨졌을 때 **어느 메시지가 먼저 나오는지도 계약**이다.
 - **파리티 문자열 단언에 `toThrow("문자열")` 을 쓰지 마라.** Vitest 에서 부분 문자열 매칭이다. `rejects.toMatchObject({ message: "..." })` 를 쓴다.
@@ -36,6 +36,7 @@
 | **㉰** | 목록·이력에 페이지네이션 없음(S1·H3) | 전체 반환 | **그대로 이식** | 프론트 계약이 바뀐다. 성능은 컷오버 후 실측해 판단 |
 | **㉲** | 숫자 파라미터 변환(P10-1) | `NumberUtils.parseNumber` — 공백을 전부 지운 뒤 `Integer.valueOf`(16진수는 `decode`). `1e2`·공백 거부, `"1 0"` → **10** | JS `Number()` + `Number.isSafeInteger`. `1e2` → 100, `" "` → 0, `"1 0"` → 거부 | `parseNumericParam` 은 **서브플랜 3·4가 이미 쓰는 공유 헬퍼**다. 지금 바꾸면 검증이 끝난 두 서브플랜의 동작이 함께 움직인다. 실무상 문제되는 입력은 화면에서 생성되지 않는다 — **컷오버 이월.** Task 7 은 이 행들을 파리티 위반으로 보고하지 마라 |
 | **㉱** | 비공개 버킷 이미지 조회 | 로컬 디스크를 정적 리소스로 서빙 | **프록시 라우트 `GET /api/problem-images/[key]`** | 이탈 ①(이미지 저장 이관)의 연장. 근거는 Task 6 |
+| **㉳** | `submit` 본문 `blankAnswers` 배열의 `null` 원소(예: `blankAnswers: [null]`, Task 4) | `BlankAnswerInput::getBlankKey` 를 null 에 호출해 NPE → catch-all → **200 / -1 / `처리 중 오류가 발생하였습니다.`** | **`{blankKey: null, submittedAnswer: null}` 로 매핑해 살려 둔다 → `grade()` 의 G9-G11 검증이 정의된 키가 아니라며 자연 실패 → 400 / 1000 / `제출한 빈칸 개수가 올바르지 않습니다.`** | `problemRequestBody.ts` 의 `readChoices`/`readBlanks` 와 같은 관용구 — null 원소를 던지지 않고 검증기로 넘겨 자연스러운 실패 문구를 내게 한다. `-1` 을 없애는 것이 이 서브플랜에서 반복되는 목적과 일치한다(㉮ 참고). `web/lib/solve/attemptRequestBody.ts` 의 `readBlankAnswers` 주석과 `attemptService.test.ts` 의 "㉳" 테스트가 근거다 |
 
 ---
 
@@ -48,7 +49,7 @@
 | `web/lib/db/solveProblems.ts` | **신규.** 풀이 목록·랜덤 세트 조회 | 1 |
 | `web/lib/db/attempts.ts` | **신규.** 시도·선택지·빈칸답 저장 + 내 이력 | 1 |
 | `web/lib/solve/solveQueryService.ts` | **신규.** 목록·랜덤·상세(정답 비노출) | 3 |
-| `web/lib/solve/attemptService.ts` | **신규.** 채점 제출(트랜잭션) + 내 이력 | 4 |
+| `web/lib/solve/attemptService.ts` | **신규.** 채점 제출(트랜잭션). 내 이력은 라우트 → DAO 직행이라 여기 없다 | 4 |
 | `web/app/api/problems/route.ts` | **신규.** `GET` 풀이 목록 | 3 |
 | `web/app/api/problems/random/route.ts` | **신규.** `GET` 랜덤 세트 | 3 |
 | `web/app/api/problems/[id]/route.ts` | **신규.** `GET` 풀이 상세 | 3 |
@@ -76,7 +77,7 @@
 |---|---|---|---|
 | **M1 채점 코어** | 1 + 2 | 데이터 계층 + 채점 순수 함수. 엔드포인트 0개, 파리티 위험의 대부분이 여기서 고정된다. 테스트 441 → 498 | ☑ 2026-08-21 |
 | **M2 조회** | 3 | 목록·랜덤·상세 3개. **정답 비노출이 성립한다**. 테스트 498 → 544 | ☑ 2026-08-21 |
-| **M3 제출·이력** | 4 + 5 | 채점 제출·이력·활성태그 3개. 6개 엔드포인트 완성 | ☐ |
+| **M3 제출·이력** | 4 + 5 | 채점 제출·이력·활성태그 3개. **6개 엔드포인트 완성**. 테스트 544 → 603 | ☑ 2026-08-21 |
 | **M4 이미지·검증** | 6 + 7 | 이미지 프록시 + E2E + 정답지 대조 | ☐ |
 
 **구간을 마칠 때마다** `cd web && pnpm test && pnpm build` 가 통과해야 머지한다. 구간이 끝나면 위 표의 ☐ 를 ☑ 로 바꾸고 그 변경도 함께 커밋한다.
@@ -1396,7 +1397,7 @@ M6 이 접두어를 `/api/problem-images/` 로 고른 것이 **정확히 프록�
 
 ```typescript
 it("정상 키는 오브젝트를 그대로 내보낸다", async () => {
-  const res = await GET(req("/api/problem-images/" + key), { params: { key } });
+  const res = await GET(req("/api/problem-images/" + key), { params: Promise.resolve({ key }) });
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toBe("image/png");
   expect(Buffer.from(await res.arrayBuffer())).toEqual(PNG);
@@ -1405,13 +1406,13 @@ it("정상 키는 오브젝트를 그대로 내보낸다", async () => {
 it("삭제된 오브젝트는 404 다", async () => {
   // 실제로 이 상태의 행이 하나 있다 — M7 이 버킷을 비우면서 생겼다
   // (2026-08-19-problem-bank-e2e-verification.md I12). 첫 테스트 케이스다.
-  expect((await GET(req("/api/problem-images/" + missingKey), { params: { key: missingKey } })).status).toBe(404);
+  expect((await GET(req("/api/problem-images/" + missingKey), { params: Promise.resolve({ key: missingKey }) })).status).toBe(404);
 });
 
 it("키 형식이 아니면 스토리지를 건드리지 않고 404 다", async () => {
   // 경로 탈출·임의 오브젝트 열람을 키 형식으로 막는다.
   for (const bad of ["../secret.png", "a/b.png", "not-a-uuid.png", key + ".png.exe"]) {
-    expect((await GET(req("/api/problem-images/" + bad), { params: { key: bad } })).status).toBe(404);
+    expect((await GET(req("/api/problem-images/" + bad), { params: Promise.resolve({ key: bad }) })).status).toBe(404);
     expect(storageState.downloads).toEqual([]);   // 호출 자체가 없어야 한다
   }
 });
@@ -1429,6 +1430,16 @@ it("응답 봉투를 쓰지 않는다 — 바이너리다", async () => {
 > 이미지, 서버 로그에는 이유가 남는다) 아니면 이 경로만 matcher 에서 빼고 라우트가 직접 세션을
 > 볼지 **의식적으로 정하고 그 근거를 남겨라.** 기본값은 "그대로 둔다" 다 — 로그인하지 않은
 > 사용자에게 이미지가 안 보이는 것은 올바른 결과이고, 봉투를 벗기면 인증 게이트를 손대게 된다.
+>
+> **다만 두 분기를 같이 놓고 판단하라.** 비로그인은 **401** 이라 서버 로그에 흔적이 남지만,
+> `mustChangePassword` 사용자는 **200 + JSON(1012)** 이다(`gate.ts:19-22`). 200 을 달고 오는
+> 깨진 이미지는 서버 쪽에 아무 신호도 남기지 않는다 — "이유는 로그에 남는다"는 근거가 이
+> 분기에는 성립하지 않는다. 두 분기를 모두 근거에 적어라.
+
+> **기존 목을 재사용하라.** `@supabase/supabase-js` 는 이미
+> `app/api/admin/problems/images/route.test.ts` 와 `lib/problem/problemImage.test.ts` 에서
+> 목킹돼 있다. `BUCKET` → `PROBLEM_IMAGE_BUCKET` 개명은 `problemImage.ts` 안의 사용처 두 곳과
+> 저 두 테스트 파일을 먼저 확인하고 움직여라.
 
 - [ ] **Step 2: 실패 확인 → 구현 → 통과 확인**
 
@@ -1460,8 +1471,19 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
   const { key } = await context.params;
   if (!KEY_PATTERN.test(key)) return new Response(null, { status: 404 });
 
-  const { data, error } = await getStorageClient().storage.from(PROBLEM_IMAGE_BUCKET).download(key);
-  if (error || !data) return new Response(null, { status: 404 });
+  // getStorageClient() 는 SUPABASE_URL/SERVICE_ROLE_KEY 가 없으면 **평범한 Error 를 던진다**
+  // (problemImage.ts:33-35). 이 라우트는 handleRoute 를 안 쓰므로 잡아 주는 사람이 없다 —
+  // 환경변수가 빠진 배포에서 사이트의 모든 <img> 가 Next 500 HTML 페이지가 된다.
+  let data: Blob | null = null;
+  try {
+    const result = await getStorageClient().storage.from(PROBLEM_IMAGE_BUCKET).download(key);
+    if (result.error) return new Response(null, { status: 404 });
+    data = result.data;
+  } catch (error) {
+    console.error("이미지 프록시: 스토리지 클라이언트를 만들 수 없습니다", error);
+    return new Response(null, { status: 500 });
+  }
+  if (!data) return new Response(null, { status: 404 });
 
   return new Response(data, {
     status: 200,
@@ -1520,13 +1542,29 @@ cd web && pnpm build && pnpm start
 | 12 | 이력 | 본인 것만, `correct` 에 true 가 실제로 있다(H4) |
 | 13 | 보관된 문제의 이력 | **나온다**(H7). 목록에는 안 나온다(S2) |
 | 14 | 이미지 프록시 | 업로드 → 프록시로 받기 → 바이트 일치 → 삭제 → 버킷 빔 확인 |
+| 15 | **제출 라우트의 메시지 순서(E5-1) 네 줄 전부** | 잘못된 id + 깨진 본문 → `요청 값의 형식이 올바르지 않습니다: id`(400) / **없는 문제 + 깨진 본문 → 200/1000/`잘못된 파라미터를 입력했습니다.`** / 없는 문제 + 정상 본문 → 400/`존재하지 않거나 보관된 문제입니다.` / 잘못된 id + 정상 본문 → id 문구. **이 구간에서 가장 재배치에 취약한 계약**이다 — 한 줄만 옮겨도 두 번째가 뒤집힌다 |
+| 16 | `blankAnswers: [null]` (이탈 ㉳) | 400 / 1000 / `제출한 빈칸 개수가 올바르지 않습니다.` — Java 는 NPE → 200/-1 이다. **파리티 위반으로 보고하지 마라** |
+| 17 | 채점 응답의 키 집합 | 정확히 `correct`·`explanation`·`blankResults`(G14). `blankResults[i]` 는 `blankKey`·`submittedAnswer`·`correct`·`correctAnswer` 4개 |
+| 18 | 태그 응답의 키 집합 | 정확히 `id`·`name`·`createdAt`(U3) |
+| 19 | 이력의 `submittedAt` 문자열 | **관측한 값을 그대로 붙여라.** `timestamp without time zone` + postgres.js + Node 프로세스 TZ 조합이라 서버 TZ 가 바뀌면 표시가 어긋난다. 추정하지 말 것 |
 | 15 | `/api/problems/random?count=1` | 랜덤 세트가 나온다 — `존재하지 않거나 보관된 문제입니다.` 가 나오면 `[id]` 로 샌 것이다(경로 주의 ②) |
 | 16 | `?count=` · `?count=1.5` | 둘 다 `요청 값의 형식이 올바르지 않습니다: count` (P9·P10). **누락(㉮)과 문구가 다르다** |
 | 17 | `?count=1&departmentId=99999` | 200 / 0건 — 없는 부서는 오류가 아니다(P11) |
 
 - [ ] **Step 3: 정답지 대조**
 
-정답지 86행을 한 줄씩 짚어 실측값과 대조한다. **대조하지 않은 행이 남으면 안 된다** — 재현 불가한 행은 사유를 적고 단위 테스트로 대체됐음을 밝힌다.
+정답지 87행을 한 줄씩 짚어 실측값과 대조한다. **대조하지 않은 행이 남으면 안 된다** — 재현 불가한 행은 사유를 적고 단위 테스트로 대체됐음을 밝힌다.
+
+**E2E 로 재현할 수 없는 행과 그 표기** — "파리티 확인"으로 적으면 안 되는 것들이다:
+
+| 행 | 왜 재현 불가한가 | 어떻게 적을 것인가 |
+|---|---|---|
+| T8 · T8-1 · T8-2 | 포트가 **이탈 ㉯ 로 일부러 다르게 동작한다.** Spring 의 고아 행은 구조상 재현할 수 없다 | **"이탈로 대체"** — 절대 "파리티 확인"이 아니다 |
+| T9 · T10 | 구조상 도달 불가(빈 배열 가드, 유일 제약) | "도달 불가 — 단위 테스트로 고정" |
+| H4 | MyBatis 별칭 메커니즘이라 포트에 대응물이 없다. **관측 가능한 결과**만 잴 수 있다 | 항목 12가 그 결과를 잰다고 밝힌다 |
+| H6 | INNER vs LEFT 가 관측 불가 — 문제는 보관만 되고 삭제되지 않는다(정답지 본문이 그렇게 적고 있다) | "관측 불가 — 스키마가 보증" |
+| S7 · H2 의 타이브레이커 부재 | 페이지네이션이 없어 관측 불가 | "관측 불가" |
+| U6 | 동작이 아니라 현황 기록 행이다 | "해당 없음" |
 
 - [ ] **Step 4: 전체 검증**
 
@@ -1555,7 +1593,7 @@ git commit -m "docs: record the solve end-to-end verification results"
 | P (랜덤) 12행 | 1(DAO) · 3(라우트·이탈 ㉮) |
 | Q (상세·정답 비노출) 14행 | 3 |
 | G (채점) 15행 | 2 |
-| T (시도 저장) 13행 | 1(DAO) · 2(요약) · 4(트랜잭션·자르기) |
+| T (시도 저장) 14행 | 1(DAO) · 2(요약) · 4(트랜잭션·자르기) |
 | H (이력) 8행 | 1(DAO) · 5(라우트) |
 | U (활성 태그) 6행 | 5 |
 | 미결정(이미지 조회) | 6 |
