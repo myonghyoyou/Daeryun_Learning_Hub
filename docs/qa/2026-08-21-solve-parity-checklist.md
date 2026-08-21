@@ -7,7 +7,7 @@
 - 작성일: 2026-08-21
 - 대상: `SolveController` 4 + `AttemptController` 1 + `TagController.listInUse` 1 = **6개 엔드포인트**
 - 근거: `SolveServiceImpl.java`(240줄), `TagServiceImpl.java`, MyBatis 매퍼 5개, `GlobalExceptionHandler.java`
-- 총 **79행** (E 6 · S 10 · P 8 · Q 13 · G 15 · T 13 · H 8 · U 6)
+- 총 **82행** (E 6 · S 10 · P 11 · Q 13 · G 15 · T 13 · H 8 · U 6)
 - **실측 상태**: 소스 정독 후 **Spring 인스턴스를 띄워 E·P·Q·G·T·H·U 를 직접 호출해 대조했다.**
   그 과정에서 초안의 **2행(E5·P2)이 틀린 것을 발견해 고쳤다.** 아래 "실측 기록" 참고
 
@@ -55,6 +55,9 @@
 | P6 | 조건에 맞는 문제가 `count` 보다 적음 | **오류가 아니다.** 있는 만큼 반환 | `SolveServiceImpl.java:55-56` (주석에 명시) |
 | P7 | `departmentId` | 선택적. 주면 `AND p.department_id = #{departmentId}` | `ProblemMapper.xml:29` |
 | P8 | 정렬·필터 | `ORDER BY random() LIMIT #{count}`. **keyword·tag 필터는 없다** | 같은 곳. 응답 형식은 목록과 동일(`solveProblemListItemMap`, `ProblemMapper.xml:9`) |
+| P9 | **`?count=` (값이 빈 문자열)** | **400 / 1000 / `요청 값의 형식이 올바르지 않습니다: count`** — P1(누락)과 **다른 경로다.** 값은 있으나 `int` 로 변환되지 않는 쪽이다 | 실측. 포트의 `parseNumericParam` 은 빈 문자열을 **null(미지정)** 로 취급하므로 그대로 쓰면 이 분기가 P1 로 새거나 `count=null` 이 흘러간다 — 라우트에서 갈라야 한다 |
+| P10 | `?count=1.5` | 400 / 1000 / `요청 값의 형식이 올바르지 않습니다: count` | 실측. 포트의 `parseNumericParam` 은 `Number.isSafeInteger` 로 거르므로 그대로 일치한다 |
+| P11 | `departmentId` 의 빈 문자열·없는 부서 | `departmentId=` → **필터 미적용**(200). `departmentId=99999` → **200 / 0건** (부서 존재 검증 없음). `departmentId=abc` → 400 / `요청 값의 형식이 올바르지 않습니다: departmentId` | 실측. `count` 와 **비대칭**이다 — `count` 는 필수 원시형이라 빈 문자열이 오류지만 `departmentId` 는 선택적 `Long` 이라 무시된다 |
 
 ---
 
@@ -92,7 +95,7 @@
 | G6 | SHORT_ANSWER 판정 | 허용 정답 중 **하나라도** normalize 일치하면 정답 | `SolveServiceImpl.java:130-132` (`anyMatch`) |
 | G7 | `normalize` 규칙 | `trim().toLowerCase().replaceAll("\\s+", " ")`, null → `""` | `SolveServiceImpl.java:209-211` |
 | G7-1 | **공백은 접히지만 없어지지는 않는다** | 정답 `보정계수` 에 `  보정계수  ` 제출 → **정답**. `보정 계수` 제출 → **오답** | 실측(문제 44). `\s+` → `" "` 는 연속 공백을 하나로 줄일 뿐 제거하지 않는다. 구현이 공백을 **삭제**하면 오답이 정답이 된다 — 이 두 케이스가 판별자다 |
-| G8 | `toLowerCase()` 로케일 | **로케일 무관 `toLowerCase()`** 다. `toLocaleLowerCase()` 는 결과가 갈릴 수 있다 | 같은 곳. 서브플랜 4 `normalizeTags` 와 동일한 주의 |
+| G8 | `toLowerCase()` 로케일 | 포트는 **JS `toLowerCase()`** 를 쓴다. **`toLocaleLowerCase()` 를 쓰지 마라** | 정확히 말하면 Java 의 무인자 `String.toLowerCase()` 는 **`Locale.getDefault()` 를 쓰므로 로케일에 의존한다**(터키어 `I`→`ı`). JS `toLowerCase()` 는 유니코드 기본 변환이라 로케일과 무관하다. **한글·ASCII 에서는 두 결과가 같으므로** 실무상 차이가 없고, JS 쪽이 서버 로케일 설정에 흔들리지 않아 더 안전하다. `toLocaleLowerCase()` 를 쓰면 그 안전성을 스스로 버리는 것이다 |
 | G9 | FILL_BLANK — 중복 키 제출 | 400 / 1000 / **`제출한 빈칸 개수가 올바르지 않습니다.`** | `SolveServiceImpl.java:144` (`submittedKeys.size() != submitted.size()`) |
 | G10 | FILL_BLANK — 정의되지 않은 키 | **같은 문구** | `SolveServiceImpl.java:145` (`!definedKeys.containsAll(...)`) |
 | G11 | FILL_BLANK — 개수 불일치 | **같은 문구** | `SolveServiceImpl.java:146` (`!= blankRevealCount`). **세 조건이 한 `if` 로 묶여 있어 문구가 구분되지 않는다 — 나눠서 다른 문구를 내면 파리티 위반** |
