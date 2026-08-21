@@ -67,9 +67,18 @@ export async function getSolveDetail(db: DbConn, problemId: number): Promise<Sol
 
   if (problem.type === "FILL_BLANK") {
     const blanks = await findBlanksByProblemId(db, problemId);
-    // ?? 0 으로 덮지 않는다 — FILL_BLANK 는 생성 검증이 >= 1 을 강제하므로 null 이 될 수
-    // 없고, 0 으로 덮으면 "물어볼 빈칸이 없다"는 조용히 틀린 화면이 나온다.
-    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount!);
+    // 생성 검증은 blankRevealCount >= 1 을 강제하지만, 그 검증을 우회한 행(수기 삽입,
+    // 마이그레이션 잔재 등)이 NULL 이나 음수를 들고 있을 수 있다. `!` 는 타입 단언일
+    // 뿐 방어가 아니다 — `Math.min(null, n)` 은 `0` 을 내므로 assertion 만으로 넘기면
+    // blanksToAnswer 가 [] 로 접히고 모든 빈칸이 정답째로 revealedBlanks 에 실려 나간다
+    // (0으로 덮어쓴 것과 같은 결과). 음수도 `slice(0, -1)` 이 끝에서부터 잘라내 사실상
+    // 전부를 공개한다. Java 는 `int` 원시형이라 NULL 이 언박싱 NPE 로 죽어 catch-all
+    // (200/-1/처리 중 오류가 발생하였습니다.)로 떨어진다 — 우리는 그 실패를 명시적으로
+    // 재현해야 한다. `!` 를 방어로 착각하지 말 것: 아래 가드가 실제 방어다.
+    if (problem.blankRevealCount == null || problem.blankRevealCount < 0) {
+      throw new BizError(ErrorCode.MSG_PROC_FAIL);
+    }
+    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount);
     blanksToAnswer = selected;
     // Q6: 안 물어보는 칸은 정답째로 내보낸다. 정답 비노출의 승인된 예외다.
     // Q6-1: filter 결과라 항상 배열이다 — 전부 물어보면 [] 이지 null 이 아니다.

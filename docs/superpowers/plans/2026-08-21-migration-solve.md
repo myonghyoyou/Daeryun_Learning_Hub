@@ -19,6 +19,9 @@
 - 모든 `pnpm` 명령 앞에 `export NODE_EXTRA_CA_CERTS="C:/Users/dda2220017/.certs/corp-root-ca.pem"` — 없으면 몇 분간 멈춘다.
 - 착수 시점 스위트: **441 통과 / 40 파일**. 각 Task 마다 늘어난다.
 - `backend/**` 는 읽기만 한다. 절대 수정하지 않는다.
+- **TS 의 `!` 는 런타임 가드가 아니다.** 이 서브플랜에서 `!` 를 믿었다가 실제 결함이 한 번
+  나왔다(NULL 이 `Math.min` 을 통과해 0 이 되고 정답이 전부 새어 나갔다). Java 가 그 자리에서
+  NPE 로 죽는다면 포트도 **명시적으로 던져** 결과를 맞춰라.
 - 서비스 롤 키를 출력·로그·커밋하지 않는다.
 - 응답 봉투는 성공 `resultCode: 200`, 실패는 `ErrorCode` 의 코드. **이미지 프록시 라우트만 예외** — 바이너리를 그대로 내보낸다(Task 6 참고).
 
@@ -891,9 +894,15 @@ export async function getSolveDetail(db: DbConn, problemId: number): Promise<Sol
 
   if (problem.type === "FILL_BLANK") {
     const blanks = await findBlanksByProblemId(db, problemId);
-    // ?? 0 으로 덮지 않는다 — FILL_BLANK 는 생성 검증이 >= 1 을 강제하므로 null 이 될 수
-    // 없고, 0 으로 덮으면 "물어볼 빈칸이 없다"는 조용히 틀린 화면이 나온다(buildGradeInput 주석 참고).
-    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount!);
+    // **`!` 는 아무것도 지켜 주지 않는다.** 초판 계획서가 여기서 틀렸다 — `!` 를 쓰면 NULL 이
+    // 알아서 터질 거라고 가정했는데, `Math.min(null, n)` 은 **0** 이다. 그러면 물어보는 빈칸이
+    // 0개가 되고 필터가 **모든 빈칸을 정답째로 내보낸다.** 오류 없이 200 으로.
+    // Java 는 `selectRandomBlankKeys(List, int)` 가 원시형이라 언박싱 NPE → catch-all →
+    // 200/-1 이고 정답은 하나도 안 나간다. 명시적으로 막아 그 결과를 맞춘다.
+    if (problem.blankRevealCount == null || problem.blankRevealCount < 0) {
+      throw new BizError(ErrorCode.MSG_PROC_FAIL);
+    }
+    const selected = selectRandomBlankKeys(blanks.map((b) => b.blankKey), problem.blankRevealCount);
     blanksToAnswer = selected;
     // Q6: 안 물어보는 칸은 정답째로 내보낸다. 정답 비노출의 승인된 예외다.
     // Q6-1: filter 결과라 항상 배열이다 — 전부 물어보면 [] 이지 null 이 아니다.
@@ -1092,11 +1101,13 @@ async function buildGradeInput(
     case "FILL_BLANK":
       return { type: "FILL_BLANK",
         blanks: await findBlanksByProblemId(db, problem.id),
-        // FILL_BLANK 문제는 생성 검증이 blankRevealCount >= 1 을 강제하므로 여기서 null 이
-        // 될 수 없다(ProblemServiceImpl.java:441). 그래도 ?? 0 으로 덮지 마라 — Java 는
-        // 이 자리에서 Integer 언박싱 NPE 로 죽는데, 0 으로 덮으면 "빈칸 0개를 제출해야
-        // 정답"이라는 **조용히 틀린 채점**이 된다. 도달 불가 경로는 시끄럽게 두는 편이 낫다.
-        blankRevealCount: problem.blankRevealCount!,
+        // `!` 로 넘기지 마라 — Task 3 에서 같은 자리가 실제 결함이 됐다. `!` 는 타입만
+        // 잠재울 뿐 런타임에서 NULL 을 막지 않는다. 생성 검증이 >= 1 을 강제하므로
+        // (ProblemServiceImpl.java:441) 도달 불가지만, 도달하면 Java 는 언박싱 NPE 로
+        // 죽는다(200/-1). 그 결과를 명시적으로 맞춘다:
+        //   if (problem.blankRevealCount == null || problem.blankRevealCount < 0)
+        //     throw new BizError(ErrorCode.MSG_PROC_FAIL);
+        blankRevealCount: problem.blankRevealCount,
         blankAnswers: body.blankAnswers };
     default:
       // 열거형상 도달 불가. Java 도 여기서 MSG_PROC_FAIL 을 던진다

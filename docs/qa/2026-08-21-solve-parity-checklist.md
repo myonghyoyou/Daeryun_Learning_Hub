@@ -208,8 +208,14 @@
 **실측으로 새로 얻어 행이 된 것:** Q6-1(빈 배열 vs null), G7-1(공백 접힘의 판별자),
 T2-1(저장은 제출 원문), T3 의 순서 판별(`[10,9]` → `가, 나`).
 
-**정답 비노출 확인:** 5개 유형 전부 상세 응답에 `correct`·`answerText`·`explanation` 키가
-하나도 없다. `explanation` 은 채점 응답에서만 나오는 것을 해설 있는 문제(id 35)로 확인했다.
+**정답 비노출 확인:** 5개 유형 전부 상세 응답에 `correct`·`explanation` 키가 하나도 없다.
+`explanation` 은 채점 응답에서만 나오는 것을 해설 있는 문제(id 35)로 확인했다. **`answerText`
+는 예외가 있다 — Q6 이 명시하듯 FILL_BLANK 의 `revealedBlanks[]` 안에는 안 물어보는 칸의
+`answerText` 가 의도적으로 들어간다.** 이 실측 문장이 "5개 유형 전부에 answerText 가 없다"로
+읽히면 그 예외를 버그로 오인해 지우게 된다 — 실제로 측정 당시 호출한 FILL_BLANK 문제가
+`revealCount == blanks.size()`(전부 물어보는 문제)였을 뿐이라 `revealedBlanks`가 우연히
+비어 있었고, 그래서 이 문장이 참으로 보였다. `revealCount < blanks.size()` 인 문제로
+호출하면 `answerText` 가 나온다 — 이것이 정답이다(Q6).
 
 **H4 함정 확인:** 이력의 `correct` 가 boolean 이고 `true` 인 항목이 실제로 있다 — `AS correct`
 별칭이 동작한다는 증거다. 별칭이 없으면 전부 false 가 됐을 것이다.

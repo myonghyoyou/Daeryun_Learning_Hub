@@ -39,6 +39,15 @@ async function seedMcq() {
   return id;
 }
 
+async function seedOx() {
+  const id = await seed({ type: "OX" });
+  await db.insert(problemChoices).values([
+    { problemId: id, choiceText: "O", isCorrect: true, displayOrder: 1 },
+    { problemId: id, choiceText: "X", isCorrect: false, displayOrder: 2 },
+  ]);
+  return id;
+}
+
 async function seedShort() {
   return seed({ type: "SHORT_ANSWER" });
 }
@@ -72,9 +81,28 @@ describe("getSolveDetail", () => {
     expect(JSON.stringify(detail)).not.toContain("choiceText");
   });
 
+  // 리뷰 지적 3: {...row} 스프레드로 바뀌어도(내부 id/problemId/displayOrder 유출) 예전엔
+  // 아무 것도 못 잡았다 — 키 집합을 정확히 못박는다.
+  it("Q2/Q3-1: choices 항목의 키 집합이 정확히 {id, text} 다 — 다른 필드가 섞이면 안 된다", async () => {
+    const mcqId = await seedMcq();
+    const detail = await getSolveDetail(db, mcqId);
+    for (const c of detail.choices!) expect(Object.keys(c).sort()).toEqual(["id", "text"]);
+  });
+
+  // 리뷰 지적 2: denylist(문자열 3개) 만으로는 다른 키 이름으로 새는 값(예: hint: explanation)을
+  // 못 잡는다 — Java DTO 는 정확히 10개 필드다. 전체 키 집합을 못박는다.
+  it("Q11-1: 상세 응답의 최상위 키 집합이 정확히 열 개다", async () => {
+    const mcqId = await seedMcq();
+    const detail = await getSolveDetail(db, mcqId);
+    expect(Object.keys(detail).sort()).toEqual([
+      "blanksToAnswer", "choices", "content", "departmentName", "id",
+      "imageUrl", "referenceText", "revealedBlanks", "sourceNumber", "type",
+    ]);
+  });
+
   it("Q11: 응답 전체에 정답성 키가 하나도 없다", async () => {
     const mcqId = await seedMcq();
-    const oxId = await seed({ type: "OX" });
+    const oxId = await seedOx(); // 리뷰 지적 5: 보기 없는 OX 는 매핑 코드를 전혀 안 거친다.
     const shortId = await seedShort();
     const blankId = await seedFillBlank(["a", "b"], 1);
     for (const id of [mcqId, oxId, shortId, blankId]) {
@@ -92,12 +120,28 @@ describe("getSolveDetail", () => {
   });
 
   it("Q5/Q6: 빈칸은 revealCount 개만 묻고 나머지는 정답째로 공개한다", async () => {
+    // 리뷰 지적 4: 단일 무작위 추출값에 대한 not.toContain 은 인덱스 기반 필터 회귀를
+    // 3번 중 1번만 잡는다(추출된 인덱스가 우연히 검사 대상과 겹치지 않으면 통과) — 매
+    // 실행마다 결정적으로 성립하는 형태로 바꾼다: 묻는 칸과 공개된 칸이 서로소이고,
+    // 합쳐서 전체 빈칸 집합을 정확히 분할(partition)해야 한다.
+    for (let i = 0; i < 20; i += 1) {
+      const blank3Id = await seedFillBlank(["a", "b", "c"], 1);
+      const d = await getSolveDetail(db, blank3Id);
+      expect(d.blanksToAnswer!.length).toBe(1);
+      expect(d.revealedBlanks!.length).toBe(2);
+      expect(d.revealedBlanks![0].answerText).toBeTruthy();
+      const asked = new Set(d.blanksToAnswer!);
+      expect(d.revealedBlanks!.some((b) => asked.has(b.blankKey))).toBe(false);
+      expect(new Set([...asked, ...d.revealedBlanks!.map((b) => b.blankKey)]).size).toBe(3);
+    }
+  });
+
+  // 리뷰 지적 3: {...row} 스프레드로 바뀌어도(내부 id/problemId/displayOrder 유출) 예전엔
+  // 아무 것도 못 잡았다 — Java 의 RevealedBlank 는 두 필드뿐이다.
+  it("Q6-2: revealedBlanks 항목의 키 집합이 정확히 {blankKey, answerText} 다", async () => {
     const blank3Id = await seedFillBlank(["a", "b", "c"], 1);
     const d = await getSolveDetail(db, blank3Id);
-    expect(d.blanksToAnswer!.length).toBe(1);
-    expect(d.revealedBlanks!.length).toBe(2);
-    expect(d.revealedBlanks![0].answerText).toBeTruthy();
-    expect(d.revealedBlanks!.map((b) => b.blankKey)).not.toContain(d.blanksToAnswer![0]);
+    for (const b of d.revealedBlanks!) expect(Object.keys(b).sort()).toEqual(["answerText", "blankKey"]);
   });
 
   it("Q6-1: 전부 묻는 문제면 revealedBlanks 는 빈 배열이지 null 이 아니다", async () => {
@@ -109,6 +153,40 @@ describe("getSolveDetail", () => {
   it("Q7: FILL_BLANK 는 choices 가 null 이다", async () => {
     const blankId = await seedFillBlank(["a"], 1);
     expect((await getSolveDetail(db, blankId)).choices).toBeNull();
+  });
+
+  // Critical(리뷰): blankRevealCount 가 NULL 인 행은 생성 검증(>=1)을 정상 경로로는
+  // 통과할 수 없지만, 그 검증을 우회한 행(수기 삽입 등)이 존재할 수 있다. API 경로로는
+  // 만들 수 없으므로 테스트 DB 에 직접 NULL 행을 심는다. `problem.blankRevealCount!` 는
+  // 타입 단언일 뿐이라 `Math.min(null, n)` 이 조용히 0 을 내고 — blanksToAnswer 가 [],
+  // revealedBlanks 가 전체 — 모든 정답이 새 나가는 것이 Critical 결함이었다.
+  // Java 는 int 언박싱 NPE 로 죽어 200/-1/처리 중 오류가 발생하였습니다 로 떨어지므로,
+  // 포트도 명시적으로 실패해야 하고 그 실패 응답에 answerText 가 실리면 안 된다.
+  it("Critical: blankRevealCount 가 NULL 이면 던지고, 정답이 새 나가지 않는다", async () => {
+    const id = await seed({ type: "FILL_BLANK", blankRevealCount: null });
+    await db.insert(problemBlanks).values([
+      { problemId: id, blankKey: "a", answerText: "정답-a", displayOrder: 1 },
+      { problemId: id, blankKey: "b", answerText: "정답-b", displayOrder: 2 },
+      { problemId: id, blankKey: "c", answerText: "정답-c", displayOrder: 3 },
+    ]);
+    let caught: unknown;
+    try {
+      await getSolveDetail(db, id);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(BizError);
+    expect(JSON.stringify(caught)).not.toContain("answerText");
+    expect(JSON.stringify(caught)).not.toContain("정답-");
+  });
+
+  it("Critical: blankRevealCount 가 음수여도 같은 방식으로 던진다 — slice(0,-1) 로 전부 새지 않는다", async () => {
+    const id = await seed({ type: "FILL_BLANK", blankRevealCount: -1 });
+    await db.insert(problemBlanks).values([
+      { problemId: id, blankKey: "a", answerText: "정답-a", displayOrder: 1 },
+      { problemId: id, blankKey: "b", answerText: "정답-b", displayOrder: 2 },
+    ]);
+    await expect(getSolveDetail(db, id)).rejects.toBeInstanceOf(BizError);
   });
 
   it("Q10: 부서명은 별도 조회다", async () => {
