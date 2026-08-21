@@ -130,8 +130,9 @@ Foundation(1)은 이후 모든 서브플랜의 선행 조건이다. 서브플랜
 | 1 Foundation | ✅ 완료·master 병합 | 계획 `2026-08-15-migration-foundation.md`, web/ 31 테스트 |
 | 2 Auth | ✅ 완료·master 병합 | 계획 `2026-08-16-migration-auth.md`, 정답지+E2E, 누적 73 테스트 |
 | 3 부서·계정 | ✅ 완료·master 병합 | 계획 `2026-08-16-migration-dept-users.md`, 정답지 41행+E2E 23행, 누적 116 테스트 |
-| **4 문제은행** | ▶ **진행 중 (7구간 중 4구간 완료)** | 계획 `2026-08-19-migration-problem-bank.md`, 정답지 136행, 누적 361 테스트. M1 기반·M2 데이터계층·M3 CRUD·M4 목록/이동 완료, M5 엑셀·M6 이미지·M7 검증 남음 |
-| 5 풀이 / 6 통계 / 7 컷오버 | 미착수 | 4 이후 순차 |
+| **4 문제은행** | ✅ **완료·master 병합** | 계획 `2026-08-19-migration-problem-bank.md`, 정답지 138행+E2E, 누적 441 테스트. 7구간(M1~M7) 전부 완료, `ProblemController` 9개 엔드포인트 이관, 정답지 138행 중 133행 실측 대조 — `docs/qa/2026-08-19-problem-bank-e2e-verification.md` |
+| **5 풀이** | ▶ **진행 중** | `SolveController` 4 + `AttemptController` 1 + `GET /api/tags/in-use` = **6개 엔드포인트**. `SolveServiceImpl` 240줄 — 서브플랜 4(5,303줄/31개)보다 훨씬 작다 |
+| 6 통계 / 7 컷오버 | 미착수 | 5 이후 순차 |
 
 > **서브플랜 5 착수 시 놓치기 쉬운 것 — `GET /api/tags/in-use`.**
 > 위 배정표가 `TagController` 를 "4(관리자 태그) + 5(풀이 활성 태그)"로 나눴다. 서브플랜 4 가
@@ -191,3 +192,24 @@ Foundation(1)은 이후 모든 서브플랜의 선행 조건이다. 서브플랜
 - Foundation 착수 시 확정: Node 런타임(Vercel Node vs Edge — DB 드라이버·bcrypt 때문에 **Node 런타임**이 유력), 패키지 매니저, Drizzle 마이그레이션 디렉터리 구조.
 - Vercel 함수 리전 고정 방법(`vercel.json` `regions: ["icn1"]`).
 - 로컬 통합 테스트용 Postgres(기존 `probank-postgres` Docker 재사용).
+
+## 컷오버 결정 (2026-08-21)
+
+컷오버 착수 여부를 검토하다 아래를 정했다. 컷오버 시점에 다시 논의하지 않는다.
+
+| # | 결정 | 근거 |
+|---|---|---|
+| K1 | **컷오버는 서브플랜 5·6 뒤로 미룬다** | 지금 배포하면 관리자 기능만 올라간다(풀이·통계 없음). 직원 공개까지 가는 것이 목표이므로 완성된 제품을 한 번에 올린다 |
+| K2 | **도메인은 `*.vercel.app` 우선** | 바로 쓸 수 있고 HTTPS 기본이라 `SESSION_COOKIE_SECURE=true` 가 그대로 성립한다. 사내 커스텀 도메인은 나중에 붙여도 쿠키 설정이 바뀌지 않는다 |
+| K3 | **Vercel 프로젝트는 아직 없다** | 컷오버 때 생성한다. Supabase 프로젝트는 이미 있고 Storage 만 쓰는 중이며, DB 는 여전히 로컬 도커다 |
+
+**배포 스펙 §5 중 이미 죽었거나 해결된 항목** — 컷오버 때 다시 열지 말 것:
+
+- §5-2(빌드 방식: Nixpacks vs Dockerfile, Java 버전) — **소멸.** Railway·Spring 배포가 사라졌다
+- §5-7(직결 vs 풀러) — **결정됨.** Q4 가 트랜잭션 풀러(6543)로 못 박았다
+- §5-6(요청 본문 크기 제한) — **절반 해결.** 서브플랜 4 M7 이 Next 쪽 상한(`middlewareClientMaxBodySize`
+  기본 10 MiB, 초과 시 **거부가 아니라 잘라냄**)을 실측했다. 플랫폼 자체 상한은 아직 미측정 —
+  두 상한이 서로를 가릴 수 있으므로 컷오버에서 같은 세션에 함께 잰다
+
+**컷오버 이월 목록**(서브플랜 4 에서 파킹된 것 포함)은
+`docs/qa/2026-08-19-problem-bank-e2e-verification.md` 의 "컷오버 핸드오프" 절에 모아 뒀다.
