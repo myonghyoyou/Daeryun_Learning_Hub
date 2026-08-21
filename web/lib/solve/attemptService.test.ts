@@ -9,6 +9,7 @@ import type { AuthUser } from "../auth/types";
 import * as attemptDao from "../db/attempts";
 import { submitAttempt } from "./attemptService";
 import { toAttemptSubmitBody } from "./attemptRequestBody";
+import { ErrorCode } from "../http/errorCode";
 
 const db = testDb();
 let deptId = 0;
@@ -232,6 +233,29 @@ describe("submitAttempt — 응답", () => {
     const { problemId } = await seedMcq();
     const r = await submitAttempt(db, problemId, { selectedChoiceIds: [], submittedText: null, blankAnswers: null }, actor);
     expect(r.blankResults).toBeNull();
+  });
+});
+
+describe("submitAttempt — buildGradeInput 의 FILL_BLANK 가드(blankRevealCount)", () => {
+  // solveQueryService.ts:81 과 같은 자리지만 리뷰(fix wave item A)가 지적했듯 이 파일은
+  // 두 경계 중 하나도 핀에 박지 않았었다 — `< 0` → `< 1` 로 조여도, `== null ||` 절을
+  // 통째로 지워도 스위트가 전부 초록이었다. 아래 두 테스트가 그 구멍을 메운다.
+  it("blankRevealCount: 0 이면 던지지 않는다 — 가드는 < 0 에서 멈춰야 한다(< 1 로 조이면 여기서 걸린다)", async () => {
+    const blankId = await seedBlank("a", "가", 0);
+    const r = await submitAttempt(db, blankId, {
+      selectedChoiceIds: null, submittedText: null, blankAnswers: [],
+    }, actor);
+    expect(r.correct).toBe(true);
+    // T9: insertAttemptBlankAnswers([]) 가 조기 반환하므로 자식 행은 안 남는다.
+    expect(await db.select().from(attemptBlankAnswers)).toHaveLength(0);
+    expect(await db.select().from(attempts)).toHaveLength(1);
+  });
+
+  it("blankRevealCount: null 이면 던진다 — 에러 코드까지 확인한다(`== null ||` 절이 지워지면 여기서 걸린다)", async () => {
+    const blankId = await seedBlank("a", "가", null as unknown as number);
+    await expect(
+      submitAttempt(db, blankId, { selectedChoiceIds: null, submittedText: null, blankAnswers: [] }, actor),
+    ).rejects.toMatchObject({ errorCode: ErrorCode.MSG_PROC_FAIL });
   });
 });
 

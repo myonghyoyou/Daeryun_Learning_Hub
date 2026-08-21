@@ -44,6 +44,14 @@ async function buildGradeInput(
       // `!` 로 넘기지 마라 — Task 3 에서 같은 자리가 실제 결함이 됐다. `!` 는 타입만 잠재울 뿐
       // 런타임에서 NULL 을 막지 않는다. 생성 검증이 >= 1 을 강제하므로(ProblemServiceImpl.java:441)
       // 도달 불가지만, 도달하면 Java 는 언박싱 NPE 로 죽는다(200/-1). 그 결과를 명시적으로 맞춘다.
+      //
+      // 0 은 통과해야 하는 값이다 — solveQueryService.ts:81 과 같은 가드지만 결과는 갈린다.
+      // 여기서 0 이면: 검증 통과(0 != 0 은 false) → blankResults 가 빈 non-null 배열 →
+      // attempts 행이 커밋된 뒤 insertAttemptBlankAnswers([]) 가 T9 가드(빈 배열 조기 반환)에
+      // 걸려 아무것도 안 한다 → 200/correct:true. Java 는 여기서 <foreach> 가 빈 컬렉션에
+      // SQL 문법 오류를 내 200/-1/고아 attempts 행으로 갈라진다(SolveServiceImpl.java:143-198,
+      // 실측 T9) — 그 이탈은 승인된 이탈 ㉯ 와 T9 가드의 조합이 낳은 결과이지, 이 가드가
+      // Java 의 결과를 재현해서가 아니다.
       if (problem.blankRevealCount == null || problem.blankRevealCount < 0) {
         throw new BizError(ErrorCode.MSG_PROC_FAIL);
       }

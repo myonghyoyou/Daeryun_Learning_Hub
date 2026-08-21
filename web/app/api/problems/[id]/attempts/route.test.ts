@@ -77,6 +77,24 @@ describe("POST /api/problems/[id]/attempts", () => {
     expect((await res.json()).resultCode).toBe(980);
   });
 
+  it("D(fix wave): 비로그인 + 잘못된 id 여도 401/980 이다 — 400/파싱 오류가 아니다", async () => {
+    // 리뷰(fix wave item D): route.ts:25 의 requireActor() 를 submitAttempt 호출 직전으로
+    // 옮겨도(파싱 이후로 미뤄도) 이 파일의 기존 케이스들은 전부 초록이었다 — E2 는 정상적인
+    // id("1")로만 인증 여부를 보고, E5 류는 로그인된 상태로만 파싱 실패를 본다. 인증 검사가
+    // 파싱보다 먼저 실행된다는 것 자체를 겨눈 케이스가 없었다. 여기서는 로그인하지 않은 채
+    // 잘못된 id 를 보낸다 — 순서가 지켜지면 requireActor() 가 먼저 던져 401/980, 순서가
+    // 뒤집히면(파싱이 먼저면) parseNumericParam 이 먼저 던져 400/"요청 값의 형식이
+    // 올바르지 않습니다: id" 가 된다. 프로덕션에서는 미들웨어가 먼저 막아 도달 불가지만,
+    // 라우트 자체의 방어 심층(defense in depth) 을 검증한다.
+    const { POST } = await import("./route");
+    const res = await POST(
+      reqJson("/api/problems/abc/attempts", { selectedChoiceIds: [] }),
+      { params: Promise.resolve({ id: "abc" }) },
+    );
+    expect(res.status).toBe(401);
+    expect((await res.json()).resultCode).toBe(980);
+  });
+
   it("E5: 잘못된 id + 정상 본문 → 400/1000/요청 값의 형식이 올바르지 않습니다: id", async () => {
     await seedEmployee();
     const { POST } = await import("./route");

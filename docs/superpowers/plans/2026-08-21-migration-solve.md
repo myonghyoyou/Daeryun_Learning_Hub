@@ -49,7 +49,7 @@
 | `web/lib/db/solveProblems.ts` | **신규.** 풀이 목록·랜덤 세트 조회 | 1 |
 | `web/lib/db/attempts.ts` | **신규.** 시도·선택지·빈칸답 저장 + 내 이력 | 1 |
 | `web/lib/solve/solveQueryService.ts` | **신규.** 목록·랜덤·상세(정답 비노출) | 3 |
-| `web/lib/solve/attemptService.ts` | **신규.** 채점 제출(트랜잭션) + 내 이력 | 4 |
+| `web/lib/solve/attemptService.ts` | **신규.** 채점 제출(트랜잭션). 내 이력은 라우트 → DAO 직행이라 여기 없다 | 4 |
 | `web/app/api/problems/route.ts` | **신규.** `GET` 풀이 목록 | 3 |
 | `web/app/api/problems/random/route.ts` | **신규.** `GET` 랜덤 세트 | 3 |
 | `web/app/api/problems/[id]/route.ts` | **신규.** `GET` 풀이 상세 | 3 |

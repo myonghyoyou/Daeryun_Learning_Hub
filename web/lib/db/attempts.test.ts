@@ -61,10 +61,22 @@ describe("attempts DAO", () => {
     expect((await findAttemptsByUserId(db, userId)).map((r) => r.submittedAnswer)).toEqual(["나중", "먼저"]);
   });
 
-  it("H5: 응답 필드가 정확히 7개다", async () => {
-    await insertAttempt(db, { userId, problemId, submittedAnswer: "x", isCorrect: false });
-    expect(Object.keys((await findAttemptsByUserId(db, userId))[0]).sort()).toEqual(
+  it("H5: 응답 필드가 정확히 7개고, 값도 각 컬럼과 일치한다", async () => {
+    // 리뷰(fix wave item B): 모양만 고정하고 값을 안 본 세 컬럼이 있었다 — select 맵에서
+    // `attempts.problemId` → `attempts.userId`, `problems.sourceNumber` → `problems.departmentId`,
+    // `attempts.submittedAt` → `problems.createdAt` 으로 바꿔치기해도 셋 다 스위트가 초록이었다.
+    // sourceNumber 는 문제와 다른 값을 심어야 우연히 겹치지 않는다.
+    const numberedId = await seed({ sourceNumber: 42 });
+    const explicitSubmittedAt = new Date("2026-03-15T09:30:00Z");
+    await db.insert(attempts).values({
+      userId, problemId: numberedId, submittedAnswer: "x", isCorrect: false, submittedAt: explicitSubmittedAt,
+    });
+    const rows = await findAttemptsByUserId(db, userId);
+    expect(Object.keys(rows[0]).sort()).toEqual(
       ["correct", "departmentName", "problemContent", "problemId", "sourceNumber", "submittedAnswer", "submittedAt"]);
+    expect(rows[0].problemId).toBe(numberedId);
+    expect(rows[0].sourceNumber).toBe(42);
+    expect(rows[0].submittedAt).toEqual(explicitSubmittedAt);
   });
 
   it("H7: 보관된 문제의 이력도 나온다 — 목록(S2)과 정반대다", async () => {

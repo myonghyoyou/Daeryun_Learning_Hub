@@ -44,6 +44,12 @@ beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => {
   await truncateAll();
   state.currentUser = null;
+  // 리뷰(fix wave item C): departments 와 users 는 별도 시퀀스라 부서를 하나만 심으면
+  // deptId === meId === problemId === 1 로 우연히 겹친다. 겹치면 findAttemptsByUserId(getDb(),
+  // actor.userId) 를 actor.departmentId 로 바꿔치기해도(둘 다 값이 1이라) H1 이 초록으로
+  // 남는다 — attemptService.test.ts:164-182 가 이미 겪은 함정과 같다. 던지는 부서 하나를
+  // 먼저 심어 실제 deptId 를 meId 와 어긋나게 한다(users 시퀀스는 영향받지 않는다).
+  await db.insert(departments).values({ name: "버림", code: "Z" });
   [{ id: deptId }] = await db.insert(departments).values({ name: "가팀", code: "A" }).returning({ id: departments.id });
   meId = await seedUser("me");
   otherId = await seedUser("other");
@@ -52,6 +58,9 @@ beforeEach(async () => {
 
 describe("attempts/me route", () => {
   it("H1: 다른 사람의 이력은 안 나온다", async () => {
+    // id 공간이 겹치지 않는다는 전제를 명시적으로 단언한다 — 미래에 beforeEach 가 바뀌어
+    // 이 전제가 조용히 재붕괴하면 여기서 먼저 실패해야 한다(전제가 깨지면 아래 본검사가 무의미해진다).
+    expect(meId).not.toBe(deptId);
     await db.insert(attempts).values([
       { userId: meId, problemId, submittedAnswer: "내 것", isCorrect: true },
       { userId: otherId, problemId, submittedAnswer: "남의 것", isCorrect: true },
