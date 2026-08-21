@@ -29,6 +29,19 @@ async function seed(over: Partial<typeof problems.$inferInsert> = {}) {
 }
 
 describe("findActiveSolveProblems", () => {
+  it("S9: 부서 필터가 없다 — 직원은 전 부서 문제를 본다", async () => {
+    // 리뷰에서 변이로 드러난 구멍이다. 부서 필터를 하드코딩해도 나머지 테스트가 전부
+    // 통과했다 — 두 번째 부서를 심는 테스트가 하나도 없었기 때문이다.
+    // 정답지 S9 가 "직원이니 자기 부서만 보여 주는 게 맞지 않나 싶어도 넣지 마라" 고
+    // 경고하는 자리라, 그 유혹이 실제로 코드에 들어오면 여기서 잡힌다.
+    const [other] = await db.insert(departments)
+      .values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
+    await seed({ content: "가팀 문제" });
+    await seed({ content: "나팀 문제", departmentId: other.id });
+    const rows = await findActiveSolveProblems(db, {});
+    expect(rows.map((r) => r.departmentName).sort()).toEqual(["가팀", "나팀"]);
+  });
+
   it("S2: ARCHIVED 는 제외한다", async () => {
     await seed({ content: "살아있음" });
     await seed({ content: "보관됨", status: "ARCHIVED" });
