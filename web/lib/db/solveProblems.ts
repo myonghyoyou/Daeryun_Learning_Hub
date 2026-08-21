@@ -27,9 +27,11 @@ export async function findActiveSolveProblems(
   db: DbConn,
   filters: { keyword?: string | null; tag?: string | null },
 ): Promise<SolveListRow[]> {
-  // 빈 문자열은 필터가 아니다 — MyBatis 의 `<if test="... != ''">` 미러(정답지 S5).
-  const keyword = filters.keyword?.trim() ? filters.keyword : null;
-  const tag = filters.tag?.trim() ? filters.tag : null;
+  // 빈 문자열**만** 필터가 아니다 — MyBatis `<if test="... != null and ... != ''">` 미러.
+  // **공백만 있는 값은 필터로 쓴다**(정답지 S5-1). OGNL 의 `"   " != ''` 는 참이라 Spring 은
+  // ILIKE '%   %' 를 걸어 0건을 낸다 — 실측 확인. trim() 후 진리값으로 판단하면 전체가 나온다.
+  const keyword = filters.keyword != null && filters.keyword !== "" ? filters.keyword : null;
+  const tag = filters.tag != null && filters.tag !== "" ? filters.tag : null;
 
   const where = [eq(problems.status, "ACTIVE")];
   if (keyword) where.push(ilike(problems.content, `%${keyword}%`));

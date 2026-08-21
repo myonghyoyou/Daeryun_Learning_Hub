@@ -253,9 +253,11 @@ export async function findActiveSolveProblems(
   db: DbConn,
   filters: { keyword?: string | null; tag?: string | null },
 ): Promise<SolveListRow[]> {
-  // 빈 문자열은 필터가 아니다 — MyBatis 의 `<if test="... != ''">` 미러(정답지 S5).
-  const keyword = filters.keyword?.trim() ? filters.keyword : null;
-  const tag = filters.tag?.trim() ? filters.tag : null;
+  // 빈 문자열**만** 필터가 아니다 — MyBatis 의 `<if test="... != null and ... != ''">` 미러.
+  // **공백만 있는 값은 필터로 쓴다**(정답지 S5-1, 실측): OGNL 의 `"   " != ''` 는 참이라
+  // Spring 은 `ILIKE '%   %'` 를 걸어 0건을 낸다. `trim()` 후 진리값으로 판단하면 65건이 나온다.
+  const keyword = filters.keyword != null && filters.keyword !== "" ? filters.keyword : null;
+  const tag = filters.tag != null && filters.tag !== "" ? filters.tag : null;
 
   const where = [eq(problems.status, "ACTIVE")];
   if (keyword) where.push(ilike(problems.content, `%${keyword}%`));
@@ -715,7 +717,9 @@ export function grade(input: GradeInput): GradeResult {
         selectedChoices: [], blankResults,
         // T4: 답만 잇는다. 키는 화면에 안 나오는 내부 식별자다.
         submittedAnswerSummary: submitted
-          .map((b) => (b.submittedAnswer == null || b.submittedAnswer.trim() === "" ? "(미입력)" : b.submittedAnswer))
+          // javaTrim 이다. JS 의 trim() 은 U+00A0·U+3000 까지 깎아 Java 와 갈린다
+          // — 이 파일이 세 문단 앞에서 금지한 바로 그 실수다(정답지 T4).
+          .map((b) => (b.submittedAnswer == null || javaTrim(b.submittedAnswer) === "" ? "(미입력)" : b.submittedAnswer))
           .join(", "),
       };
     }

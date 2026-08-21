@@ -7,7 +7,7 @@
 - 작성일: 2026-08-21
 - 대상: `SolveController` 4 + `AttemptController` 1 + `TagController.listInUse` 1 = **6개 엔드포인트**
 - 근거: `SolveServiceImpl.java`(240줄), `TagServiceImpl.java`, MyBatis 매퍼 5개, `GlobalExceptionHandler.java`
-- 총 **82행** (E 6 · S 10 · P 11 · Q 13 · G 15 · T 13 · H 8 · U 6)
+- 총 **83행** (E 6 · S 11 · P 11 · Q 13 · G 15 · T 13 · H 8 · U 6)
 - **실측 상태**: 소스 정독 후 **Spring 인스턴스를 띄워 E·P·Q·G·T·H·U 를 직접 호출해 대조했다.**
   그 과정에서 초안의 **2행(E5·P2)이 틀린 것을 발견해 고쳤다.** 아래 "실측 기록" 참고
 
@@ -35,6 +35,7 @@
 | S3 | `keyword` | `p.content ILIKE '%값%'` — **대소문자 무시** | 같은 곳 |
 | S4 | `tag` | `EXISTS (... lower(ft.name) = lower(#{tag}))` — 대소문자 무시, 정확 일치(부분 일치 아님) | 같은 곳 |
 | S5 | `keyword=` 또는 `tag=` (빈 문자열) | 필터 **미적용** — `<if test="... != null and ... != ''">` | 같은 곳. 빈 문자열을 필터로 쓰면 결과가 달라진다 |
+| S5-1 | **`keyword=   ` (공백만)** | **필터를 적용한다** → `ILIKE '%   %'` → **0건**. 빈 문자열(S5)과 **다르다** | 실측. MyBatis `<if test="keyword != null and keyword != ''">` 의 OGNL 비교는 `"   ".equals("")` 가 false 라 **참**이다. `tag=` 한 칸도 같다(0건). 포트가 `trim()` 후 진리값으로 판단하면 이 행이 어긋난다 |
 | S6 | `tags` 필드 | `array_agg(DISTINCT t.name)` → **이름 오름차순**. 태그가 없으면 `'{}'` → 빈 배열(null 아님) | 같은 곳. `COALESCE(..., '{}')` |
 | S7 | 정렬 | `ORDER BY p.created_at DESC` — **`p.id` 타이브레이커가 없다** | 같은 곳. 관리자 목록(`p.created_at DESC, p.id DESC`)과 다르다. 페이지네이션이 없어 중복·누락이 생기지 않으므로 **그대로 이식한다** |
 | S8 | 응답 필드 | `id, type, content, tags, departmentName, sourceNumber` — **정답 관련 필드 없음** | `ProblemSolveListItem.java` |

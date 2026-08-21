@@ -29,6 +29,16 @@ async function seed(over: Partial<typeof problems.$inferInsert> = {}) {
 }
 
 describe("findActiveSolveProblems", () => {
+  it("S5-1: 공백만 있는 keyword·tag 는 필터로 쓴다 — 빈 문자열과 다르다", async () => {
+    // Spring 실측: keyword= 는 65건(필터 미적용), keyword=<공백3> 은 0건(필터 적용).
+    // MyBatis 의 OGNL 은 "   " != '' 를 참으로 보기 때문이다.
+    await seed({ content: "본문" });
+    expect((await findActiveSolveProblems(db, { keyword: "" })).length).toBe(1);
+    expect((await findActiveSolveProblems(db, { keyword: "   " })).length).toBe(0);
+    expect((await findActiveSolveProblems(db, { tag: "" })).length).toBe(1);
+    expect((await findActiveSolveProblems(db, { tag: " " })).length).toBe(0);
+  });
+
   it("S9: 부서 필터가 없다 — 직원은 전 부서 문제를 본다", async () => {
     // 리뷰에서 변이로 드러난 구멍이다. 부서 필터를 하드코딩해도 나머지 테스트가 전부
     // 통과했다 — 두 번째 부서를 심는 테스트가 하나도 없었기 때문이다.
