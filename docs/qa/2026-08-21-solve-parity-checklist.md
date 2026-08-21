@@ -7,7 +7,7 @@
 - 작성일: 2026-08-21
 - 대상: `SolveController` 4 + `AttemptController` 1 + `TagController.listInUse` 1 = **6개 엔드포인트**
 - 근거: `SolveServiceImpl.java`(240줄), `TagServiceImpl.java`, MyBatis 매퍼 5개, `GlobalExceptionHandler.java`
-- 총 **82행** (E 6 · S 10 · P 11 · Q 13 · G 15 · T 13 · H 8 · U 6)
+- 총 **85행** (E 7 · S 11 · P 12 · Q 13 · G 15 · T 13 · H 8 · U 6)
 - **실측 상태**: 소스 정독 후 **Spring 인스턴스를 띄워 E·P·Q·G·T·H·U 를 직접 호출해 대조했다.**
   그 과정에서 초안의 **2행(E5·P2)이 틀린 것을 발견해 고쳤다.** 아래 "실측 기록" 참고
 
@@ -22,6 +22,7 @@
 | E3 | `mustChangePassword=true` 인 사용자 | 200 / PASSWORD_CHANGE_REQUIRED — `/api/auth/**` 외 전부 차단 | `web/lib/auth/gate.ts:19-23` (기존 포트) |
 | E4 | 직원이 **남의 부서** 문제를 상세 조회 | **허용된다.** 부서 스코프가 없다 | `SolveServiceImpl.java:60-91` — `getDetail` 은 `actor` 파라미터 자체가 없다. 관리자 상세(`assertOwnership`)와 정반대다 |
 | E5 | 경로 변수 타입 불일치(`/api/problems/abc`) | 400 / 1000 / **`요청 값의 형식이 올바르지 않습니다: id`** — **파라미터 이름이 문구에 붙는다** | `GlobalExceptionHandler.java:63-72`. 메시지는 `"요청 값의 형식이 올바르지 않습니다: " + exception.getName()` 로 조립된다(`:69`). 실측 확인 |
+| E5-1 | **여러 규칙이 동시에 깨졌을 때의 순서** | **경로변수 → 본문 → 문제 조회** 순으로 먼저 걸린 것이 나간다. 실측: 잘못된 id + 깨진 본문 → `요청 값의 형식이 올바르지 않습니다: id`(400) / 없는 문제 + 깨진 본문 → **`잘못된 파라미터를 입력했습니다.`(200)** / 없는 문제 + 정상 본문 → `존재하지 않거나 보관된 문제입니다.`(400) | Spring 이 `@PathVariable`(0번 인자)을 `@RequestBody`(1번)보다 먼저 해석하고, 서비스는 그 뒤에 들어간다. **라우트가 본문을 문제 조회 뒤에 읽으면 두 번째 줄이 뒤집힌다** |
 | E6 | `submit` 본문이 JSON 이 아님 | 200 / 1000 / `errorList` 없음 | `GlobalExceptionHandler.java:48-50` (`HttpMessageNotReadable` → 필드오류 null) — 서브플랜 4 의 `MessageNotReadableError` 와 같은 모양 |
 
 ---
@@ -35,6 +36,7 @@
 | S3 | `keyword` | `p.content ILIKE '%값%'` — **대소문자 무시** | 같은 곳 |
 | S4 | `tag` | `EXISTS (... lower(ft.name) = lower(#{tag}))` — 대소문자 무시, 정확 일치(부분 일치 아님) | 같은 곳 |
 | S5 | `keyword=` 또는 `tag=` (빈 문자열) | 필터 **미적용** — `<if test="... != null and ... != ''">` | 같은 곳. 빈 문자열을 필터로 쓰면 결과가 달라진다 |
+| S5-1 | **`keyword=   ` (공백만)** | **필터를 적용한다** → `ILIKE '%   %'` → **0건**. 빈 문자열(S5)과 **다르다** | 실측. MyBatis `<if test="keyword != null and keyword != ''">` 의 OGNL 비교는 `"   ".equals("")` 가 false 라 **참**이다. `tag=` 한 칸도 같다(0건). 포트가 `trim()` 후 진리값으로 판단하면 이 행이 어긋난다 |
 | S6 | `tags` 필드 | `array_agg(DISTINCT t.name)` → **이름 오름차순**. 태그가 없으면 `'{}'` → 빈 배열(null 아님) | 같은 곳. `COALESCE(..., '{}')` |
 | S7 | 정렬 | `ORDER BY p.created_at DESC` — **`p.id` 타이브레이커가 없다** | 같은 곳. 관리자 목록(`p.created_at DESC, p.id DESC`)과 다르다. 페이지네이션이 없어 중복·누락이 생기지 않으므로 **그대로 이식한다** |
 | S8 | 응답 필드 | `id, type, content, tags, departmentName, sourceNumber` — **정답 관련 필드 없음** | `ProblemSolveListItem.java` |
@@ -57,6 +59,7 @@
 | P8 | 정렬·필터 | `ORDER BY random() LIMIT #{count}`. **keyword·tag 필터는 없다** | 같은 곳. 응답 형식은 목록과 동일(`solveProblemListItemMap`, `ProblemMapper.xml:9`) |
 | P9 | **`?count=` (값이 빈 문자열)** | **400 / 1000 / `요청 값의 형식이 올바르지 않습니다: count`** — P1(누락)과 **다른 경로다.** 값은 있으나 `int` 로 변환되지 않는 쪽이다 | 실측. 포트의 `parseNumericParam` 은 빈 문자열을 **null(미지정)** 로 취급하므로 그대로 쓰면 이 분기가 P1 로 새거나 `count=null` 이 흘러간다 — 라우트에서 갈라야 한다 |
 | P10 | `?count=1.5` | 400 / 1000 / `요청 값의 형식이 올바르지 않습니다: count` | 실측. 포트의 `parseNumericParam` 은 `Number.isSafeInteger` 로 거르므로 그대로 일치한다 |
+| P10-1 | **`Number()` 는 Spring 의 숫자 변환과 같지 않다** | 실측 — Spring: `1e2`→**거부**, `<공백1>`→**거부**, `"1 0"`→**200/10건**(공백을 전부 지운다), `0x10`→200/16건, `+5`→200/5건. 포트의 `parseNumericParam` 은 앞의 셋에서 갈린다(`1e2`→100, `" "`→0, `"1 0"`→거부) | **승인된 이탈 ㉲.** `parseNumericParam` 은 서브플랜 3·4가 이미 쓰고 있어 지금 바꾸면 파급이 크다. P10(`1.5`)은 우연히 일치할 뿐 **일반적으로 일치하지 않는다** |
 | P11 | `departmentId` 의 빈 문자열·없는 부서 | `departmentId=` → **필터 미적용**(200). `departmentId=99999` → **200 / 0건** (부서 존재 검증 없음). `departmentId=abc` → 400 / `요청 값의 형식이 올바르지 않습니다: departmentId` | 실측. `count` 와 **비대칭**이다 — `count` 는 필수 원시형이라 빈 문자열이 오류지만 `departmentId` 는 선택적 `Long` 이라 무시된다 |
 
 ---
@@ -176,6 +179,7 @@
 |---|---|---|---|---|
 | ㉮ | `count` 파라미터 누락(P1) | 200 / **-1** / `처리 중 오류가 발생하였습니다.` | 400 / 1000 / `잘못된 파라미터를 입력했습니다.` | 서브플랜 3·4가 같은 모양(`MissingServletRequestPart` → catch-all)을 **승인된 이탈 ⑥** 으로 개선했다. 같은 원리를 적용하면 세 서브플랜이 일관된다. 반대 의견: 이건 파트가 아니라 파라미터라 별개 이탈 번호가 필요하다 |
 | ㉯ | `submit` 이 비트랜잭션이고 자식 답안을 자르지 않는다(T8·T8-1) | 600자 빈칸 답 → **200 / -1**, 그런데 `attempts` 행은 커밋돼 남는다 | **① 한 트랜잭션으로 묶고 ② 자식도 부모와 같은 규칙(500자)으로 자른다** | **이론이 아니라 실측된 결함이다.** 사용자는 `-1` 을 보고 다시 제출하고, 통계는 고아 시도까지 센다 — 이 이관이 없애려던 QA-1 과 같은 계열이다. 부모의 자르기 주석(`:170`)이 "insert 실패를 막는다"고 밝히고 있으므로, 자식을 자르는 것은 **원저자 의도의 완성**이지 새 동작이 아니다. 트랜잭션은 그 위의 안전망 |
+| ㉲ | 숫자 파라미터 변환(P10-1) | `NumberUtils.parseNumber` — 공백을 전부 제거한 뒤 `Integer.valueOf`(16진수는 `decode`) | JS `Number()` + `Number.isSafeInteger` | `parseNumericParam` 은 **서브플랜 3·4가 이미 쓰는 공유 헬퍼**다. 지금 바꾸면 이미 검증된 두 서브플랜의 동작이 함께 움직인다. 실무상 문제되는 입력(`1e2`·`"1 0"`)은 화면에서 생성되지 않는다 — 컷오버 목록으로 넘긴다 |
 | ㉰ | 목록·이력에 페이지네이션 없음(S1·H3) | 전체 반환 | **그대로 이식** | 722문항 규모에서 전체 반환은 감당 가능하고, 페이지네이션을 넣으면 프론트 계약이 바뀐다. 성능은 컷오버 후 실측해서 판단 |
 
 ---

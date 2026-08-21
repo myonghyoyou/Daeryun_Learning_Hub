@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-정답지: `docs/qa/2026-08-21-solve-parity-checklist.md` (82행). 아래는 그 위에 얹히는 프로젝트 규칙이다.
+정답지: `docs/qa/2026-08-21-solve-parity-checklist.md` (85행). 아래는 그 위에 얹히는 프로젝트 규칙이다.
 
 - **한글 메시지는 글자 단위로 일치해야 한다.** 여러 규칙이 동시에 깨졌을 때 **어느 메시지가 먼저 나오는지도 계약**이다.
 - **파리티 문자열 단언에 `toThrow("문자열")` 을 쓰지 마라.** Vitest 에서 부분 문자열 매칭이다. `rejects.toMatchObject({ message: "..." })` 를 쓴다.
@@ -70,7 +70,7 @@
 
 | 구간 | Task | 끝났을 때 동작하는 것 | 상태 |
 |---|---|---|---|
-| **M1 채점 코어** | 1 + 2 | 데이터 계층 + 채점 순수 함수. 엔드포인트 0개, 파리티 위험의 대부분이 여기서 고정된다 | ☐ |
+| **M1 채점 코어** | 1 + 2 | 데이터 계층 + 채점 순수 함수. 엔드포인트 0개, 파리티 위험의 대부분이 여기서 고정된다. 테스트 441 → 498 | ☑ 2026-08-21 |
 | **M2 조회** | 3 | 목록·랜덤·상세 3개. **정답 비노출이 성립한다** | ☐ |
 | **M3 제출·이력** | 4 + 5 | 채점 제출·이력·활성태그 3개. 6개 엔드포인트 완성 | ☐ |
 | **M4 이미지·검증** | 6 + 7 | 이미지 프록시 + E2E + 정답지 대조 | ☐ |
@@ -253,9 +253,11 @@ export async function findActiveSolveProblems(
   db: DbConn,
   filters: { keyword?: string | null; tag?: string | null },
 ): Promise<SolveListRow[]> {
-  // 빈 문자열은 필터가 아니다 — MyBatis 의 `<if test="... != ''">` 미러(정답지 S5).
-  const keyword = filters.keyword?.trim() ? filters.keyword : null;
-  const tag = filters.tag?.trim() ? filters.tag : null;
+  // 빈 문자열**만** 필터가 아니다 — MyBatis 의 `<if test="... != null and ... != ''">` 미러.
+  // **공백만 있는 값은 필터로 쓴다**(정답지 S5-1, 실측): OGNL 의 `"   " != ''` 는 참이라
+  // Spring 은 `ILIKE '%   %'` 를 걸어 0건을 낸다. `trim()` 후 진리값으로 판단하면 65건이 나온다.
+  const keyword = filters.keyword != null && filters.keyword !== "" ? filters.keyword : null;
+  const tag = filters.tag != null && filters.tag !== "" ? filters.tag : null;
 
   const where = [eq(problems.status, "ACTIVE")];
   if (keyword) where.push(ilike(problems.content, `%${keyword}%`));
@@ -715,7 +717,9 @@ export function grade(input: GradeInput): GradeResult {
         selectedChoices: [], blankResults,
         // T4: 답만 잇는다. 키는 화면에 안 나오는 내부 식별자다.
         submittedAnswerSummary: submitted
-          .map((b) => (b.submittedAnswer == null || b.submittedAnswer.trim() === "" ? "(미입력)" : b.submittedAnswer))
+          // javaTrim 이다. JS 의 trim() 은 U+00A0·U+3000 까지 깎아 Java 와 갈린다
+          // — 이 파일이 세 문단 앞에서 금지한 바로 그 실수다(정답지 T4).
+          .map((b) => (b.submittedAnswer == null || javaTrim(b.submittedAnswer) === "" ? "(미입력)" : b.submittedAnswer))
           .join(", "),
       };
     }
@@ -959,6 +963,28 @@ export async function GET(request: Request): Promise<Response> {
 
 > **`requireActor()` 를 인자 없이 부르는 것이 맞다 — 확인했다.** `lib/auth/currentUser.ts:9-14` 가 `if (roles.length > 0) requireRole(...)` 이므로 인자가 없으면 **세션만 검사한다.** E1(역할 제한 없음)이 이 동작 그대로다.
 
+- [ ] **Step 3-1: `[id]` 라우트의 경로변수 파싱 (E5)**
+
+세 라우트 중 `app/api/problems/[id]/route.ts` 만 경로변수를 받는다. **`Number(id)` 나
+`parseInt` 를 쓰지 마라** — `parseNumericParam(id, "id")` 여야 E5 의 문구가 나온다.
+
+```typescript
+// web/app/api/problems/[id]/route.ts
+export const runtime = "nodejs";
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
+  return handleRoute(async () => {
+    await requireActor();
+    const { id } = await context.params;
+    // E5: "요청 값의 형식이 올바르지 않습니다: id". Number(id) 를 쓰면 NaN 이 흘러가
+    // "존재하지 않거나 보관된 문제입니다." 라는 **그럴듯한 오답**이 나온다.
+    return getSolveDetail(getDb(), parseNumericParam(id, "id")!);
+  });
+}
+```
+
+**Task 4 의 `[id]/attempts` 도 같은 문구를 낸다** — `SolveController.java:34` 와 `:39` 가 둘 다
+`@PathVariable Long id` 다. 두 Task 가 서로 상대가 했겠거니 하기 쉬운 자리다.
+
 - [ ] **Step 4: 라우트 테스트 — 역할과 봉투**
 
 > **테스트 골격은 `web/app/api/admin/problems/[id]/route.test.ts:1-40` 을 그대로 따른다.**
@@ -997,6 +1023,11 @@ it("P5: 1 과 50 은 통과한다(경계 포함)", async () => {
   for (const c of [1, 50]) {
     expect((await GET(req(`/api/problems/random?count=${c}`))).status).toBe(200);
   }
+});
+it("E5: /api/problems/abc 는 400/1000 이고 문구에 파라미터 이름이 붙는다", async () => {
+  const res = await GET(req("/api/problems/abc"), { params: Promise.resolve({ id: "abc" }) });
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ resultMsg: "요청 값의 형식이 올바르지 않습니다: id" });
 });
 it("random 이 [id] 로 새지 않는다", async () => {
   // 새면 "존재하지 않거나 보관된 문제입니다." 라는 그럴듯한 오답이 나온다(경로 주의 ②).
@@ -1068,7 +1099,9 @@ async function buildGradeInput(
         blankRevealCount: problem.blankRevealCount!,
         blankAnswers: body.blankAnswers };
     default:
-      // 열거형상 도달 불가(G12). Java 도 여기서 MSG_PROC_FAIL 을 던진다.
+      // 열거형상 도달 불가. Java 도 여기서 MSG_PROC_FAIL 을 던진다
+      // (SolveServiceImpl.java:163-164). 대응하는 G행은 없다 —
+      // `problems.type` 은 varchar 라 TS 가 이 분기를 지워 주지 않으므로 **반드시 남겨라.**
       throw new BizError(ErrorCode.MSG_PROC_FAIL);
   }
 }
@@ -1080,6 +1113,21 @@ async function buildGradeInput(
 > **정의된 키인지만** 본다(G10). 즉 클라이언트가 쉬운 빈칸을 골라 답해도 통과한다.
 > **이것을 "보안 구멍"으로 판단해 막지 마라** — 막으려면 무엇을 보여 줬는지 저장하는
 > 새 상태가 필요하고, 그건 이 서브플랜의 범위가 아니다. 파리티 대상이다.
+
+**메시지 순서가 계약이다 (E5-1, 실측).** Global Constraints 가 "여러 규칙이 동시에 깨졌을 때
+어느 메시지가 먼저 나오는지도 계약"이라고 못 박은 자리가 바로 여기다. Spring 은
+`@PathVariable`(0번 인자) → `@RequestBody`(1번) → 서비스 순으로 처리하므로:
+
+| 요청 | 결과 |
+|---|---|
+| 잘못된 id + 깨진 본문 | **400** / `요청 값의 형식이 올바르지 않습니다: id` |
+| 없는 문제 + 깨진 본문 | **200** / 1000 / `잘못된 파라미터를 입력했습니다.` ← 조회보다 본문이 먼저다 |
+| 없는 문제 + 정상 본문 | 400 / `존재하지 않거나 보관된 문제입니다.` |
+| 잘못된 id + 정상 본문 | 400 / `요청 값의 형식이 올바르지 않습니다: id` |
+
+**따라서 라우트는 이 순서로 써야 한다: 경로변수 파싱 → `readJsonStrict` → `submitAttempt`.**
+본문 읽기를 `submitAttempt` 안으로 넣거나 문제 조회 뒤로 미루면 두 번째 줄이 뒤집힌다.
+네 줄 전부 라우트 테스트로 고정하라.
 
 **본문을 어떻게 읽는가 — E6 이 여기 걸려 있다.**
 
@@ -1440,7 +1488,7 @@ cd web && pnpm build && pnpm start
 
 - [ ] **Step 3: 정답지 대조**
 
-정답지 82행을 한 줄씩 짚어 실측값과 대조한다. **대조하지 않은 행이 남으면 안 된다** — 재현 불가한 행은 사유를 적고 단위 테스트로 대체됐음을 밝힌다.
+정답지 85행을 한 줄씩 짚어 실측값과 대조한다. **대조하지 않은 행이 남으면 안 된다** — 재현 불가한 행은 사유를 적고 단위 테스트로 대체됐음을 밝힌다.
 
 - [ ] **Step 4: 전체 검증**
 
@@ -1464,9 +1512,9 @@ git commit -m "docs: record the solve end-to-end verification results"
 
 | 정답지 절 | Task |
 |---|---|
-| E (권한·공통) 6행 | E1·E4·E5·E6 은 3·4·5 의 라우트 테스트. **E2(401)·E3(비밀번호 변경 강제)는 미들웨어가 이미 고정한 동작이라 새 테스트를 만들지 않는다** — 서브플랜 1·2 소관이고, Task 7 E2E 에서 한 줄로 재확인한다 |
+| E (권한·공통) 7행 | E1·E4·E5·E6 은 3·4·5 의 라우트 테스트. **E2(401)·E3(비밀번호 변경 강제)는 미들웨어가 이미 고정한 동작이라 새 테스트를 만들지 않는다** — 서브플랜 1·2 소관이고, Task 7 E2E 에서 한 줄로 재확인한다 |
 | S (목록) 10행 | 1(DAO) · 3(라우트) |
-| P (랜덤) 11행 | 1(DAO) · 3(라우트·이탈 ㉮) |
+| P (랜덤) 12행 | 1(DAO) · 3(라우트·이탈 ㉮) |
 | Q (상세·정답 비노출) 13행 | 3 |
 | G (채점) 15행 | 2 |
 | T (시도 저장) 13행 | 1(DAO) · 2(요약) · 4(트랜잭션·자르기) |
