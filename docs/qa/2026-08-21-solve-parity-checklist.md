@@ -7,7 +7,7 @@
 - 작성일: 2026-08-21
 - 대상: `SolveController` 4 + `AttemptController` 1 + `TagController.listInUse` 1 = **6개 엔드포인트**
 - 근거: `SolveServiceImpl.java`(240줄), `TagServiceImpl.java`, MyBatis 매퍼 5개, `GlobalExceptionHandler.java`
-- 총 **77행** (E 6 · S 10 · P 8 · Q 13 · G 15 · T 11 · H 8 · U 6)
+- 총 **79행** (E 6 · S 10 · P 8 · Q 13 · G 15 · T 13 · H 8 · U 6)
 - **실측 상태**: 소스 정독 후 **Spring 인스턴스를 띄워 E·P·Q·G·T·H·U 를 직접 호출해 대조했다.**
   그 과정에서 초안의 **2행(E5·P2)이 틀린 것을 발견해 고쳤다.** 아래 "실측 기록" 참고
 
@@ -114,7 +114,9 @@
 | T5 | `attempt_choices` | `selectedChoices` 가 비어있지 **않을 때만** insert | `SolveServiceImpl.java:178-187` |
 | T6 | `attempt_choices.choice_text` | 저장 시점 **스냅샷**. 나중에 선택지 문구가 바뀌어도 이력은 안 바뀐다 | `SolveServiceImpl.java:183` + 주석 `:220-221` |
 | T7 | `attempt_blank_answers` | `blankResults != null` 일 때(=FILL_BLANK) insert | `SolveServiceImpl.java:189-199` |
-| T8 | **`submit` 에 `@Transactional` 이 없다** | `attempts` insert 가 먼저 커밋되고 자식 insert 가 뒤따른다. 자식이 실패하면 **부모만 남는다** | `SolveServiceImpl.java:100-101`(애노테이션 없음), 클래스도 `@Service` 뿐(`:15-16`). **이탈 후보 ㉯ 참고** |
+| T8 | **`submit` 에 `@Transactional` 이 없다** | `attempts` insert 가 먼저 커밋되고 자식 insert 가 뒤따른다. 자식이 실패하면 **부모만 남는다** | `SolveServiceImpl.java:100-101`(애노테이션 없음), 클래스도 `@Service` 뿐(`:15-16`). **이탈 ㉯ 참고** |
+| T8-1 | **빈칸 답이 500자를 넘으면 실제로 그 상태가 된다 — 실측된 결함** | **200 / -1 / `처리 중 오류가 발생하였습니다.`** 를 받지만 `attempts` 행은 **이미 커밋돼 남는다.** 채점 결과가 기록되고 빈칸 상세는 0행 | 부모는 500자로 **자르지만**(`SolveServiceImpl.java:170-172`, 주석이 "insert 실패를 막는다"고 밝힌다) 자식은 **자르지 않는다**(`:194` 가 `r.getSubmittedAnswer()` 원문을 그대로 넣는다). 컬럼은 둘 다 `varchar(500)`. **실측**: 600자 제출 → `attempts` 18→19, 마지막 시도(id 47) `submitted_answer` 500자 · 빈칸행 **0개** |
+| T8-2 | T8-1 의 실질 피해 | 사용자는 실패로 보이니 **다시 제출한다** → 시도가 2건이 되고 하나는 고아다. 서브플랜 6 통계가 둘 다 센다 | `SolveServiceImpl.java:176-177` 주석이 `attempt_choices` 를 "통계의 유일한 소스"라고 못 박는다. 빈칸도 같은 구조 |
 | T9 | `insertAll` 의 빈 컬렉션 | `<foreach>` 에 가드가 없어 `VALUES` 뒤가 비면 **SQL 문법 오류**. `blankRevealCount >= 1` 검증(`ProblemServiceImpl.java:441`) 때문에 도달 불가 | `AttemptChoiceMapper.xml:5`, `AttemptBlankAnswerMapper.xml:5`. 포트는 **이 경로를 도달 가능하게 만들지 말 것** |
 | T10 | `attempt_choices` 유일성 | `(attempt_id, choice_id)` unique — 중복 제출이 `HashSet` 에서 접히므로 위반 불가 | `web/lib/db/schema.ts` `uqAttemptChoice` |
 
@@ -170,7 +172,7 @@
 | # | 항목 | Spring | 제안 | 근거 |
 |---|---|---|---|---|
 | ㉮ | `count` 파라미터 누락(P1) | 200 / **-1** / `처리 중 오류가 발생하였습니다.` | 400 / 1000 / `잘못된 파라미터를 입력했습니다.` | 서브플랜 3·4가 같은 모양(`MissingServletRequestPart` → catch-all)을 **승인된 이탈 ⑥** 으로 개선했다. 같은 원리를 적용하면 세 서브플랜이 일관된다. 반대 의견: 이건 파트가 아니라 파라미터라 별개 이탈 번호가 필요하다 |
-| ㉯ | `submit` 이 비트랜잭션(T8) | 부모 커밋 후 자식 insert | **한 트랜잭션으로 묶는다** | 자식 insert 실패 시 "정답 처리됐는데 선택 분포에는 없는" 시도가 남는다. 통계(서브플랜 6)가 `attempt_choices` 를 유일한 소스로 쓰므로(`SolveServiceImpl.java:176-177` 주석) 조용한 집계 오차가 된다. 반대 의견: Spring 동작을 그대로 옮기는 것이 파리티다 |
+| ㉯ | `submit` 이 비트랜잭션이고 자식 답안을 자르지 않는다(T8·T8-1) | 600자 빈칸 답 → **200 / -1**, 그런데 `attempts` 행은 커밋돼 남는다 | **① 한 트랜잭션으로 묶고 ② 자식도 부모와 같은 규칙(500자)으로 자른다** | **이론이 아니라 실측된 결함이다.** 사용자는 `-1` 을 보고 다시 제출하고, 통계는 고아 시도까지 센다 — 이 이관이 없애려던 QA-1 과 같은 계열이다. 부모의 자르기 주석(`:170`)이 "insert 실패를 막는다"고 밝히고 있으므로, 자식을 자르는 것은 **원저자 의도의 완성**이지 새 동작이 아니다. 트랜잭션은 그 위의 안전망 |
 | ㉰ | 목록·이력에 페이지네이션 없음(S1·H3) | 전체 반환 | **그대로 이식** | 722문항 규모에서 전체 반환은 감당 가능하고, 페이지네이션을 넣으면 프론트 계약이 바뀐다. 성능은 컷오버 후 실측해서 판단 |
 
 ---
@@ -214,5 +216,10 @@ T2-1(저장은 제출 원문), T3 의 순서 판별(`[10,9]` → `가, 나`).
 **검증 중 만든 데이터:** `probank_dev` 에 admin 계정의 **시도 18건**(+ `attempt_choices` 10행,
 `attempt_blank_answers` 4행)이 생겼다. 개발 환경이고 H 절 검증에 필요해 **그대로 뒀다.**
 
-**아직 실측하지 않은 것:** T2(500자 초과 잘림), T8(비트랜잭션 상황에서 자식 insert 실패),
-T9(빈 컬렉션 insert). 셋 다 정상 경로로는 유도되지 않는다 — 계획서에서 단위 테스트로 고정할 것.
+**정답지를 쓰다 Spring 결함을 하나 찾았다 — T8-1.** 빈칸 답을 600자로 제출하면 `200/-1` 이
+나오는데 `attempts` 행은 이미 커밋돼 남는다(실측: 18→19건, 마지막 시도 id 47 이 빈칸행 0개인
+고아 상태). 부모는 500자로 자르면서 자식은 자르지 않기 때문이다. 사용자는 실패로 보고 다시
+제출하므로 시도가 중복되고, 서브플랜 6 통계가 둘 다 센다. **이탈 ㉯ 가 이걸 닫는다.**
+
+**아직 실측하지 않은 것:** T2(주관식 요약 500자 초과 잘림 — 정상 경로), T9(빈 컬렉션 insert).
+둘 다 정상 경로로는 유도되지 않는다 — 계획서에서 단위 테스트로 고정할 것.
