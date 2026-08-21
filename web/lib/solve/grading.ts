@@ -127,6 +127,10 @@ export function grade(input: GradeInput): GradeResult {
     }
     // Java 는 default 분기에서 MSG_PROC_FAIL 를 던진다. 여기서는 GradeInput 이 판별 조합 타입이라
     // switch 가 정적으로 완전해져(exhaustive) default 가 도달 불가능하다 —
-    // 잘못된 type 값은 라우트 계층의 zod 검증을 통과하지 못해 handleRoute 가 같은 봉투를 만든다.
+    // 잘못된 type 값을 실제로 막는 것은 zod 가 아니라 buildGradeInput(Task 4)의 default 분기다.
+// `type` 은 요청 필드가 아니라 problems.type(varchar) 에서 온다 — 라우트 검증을 거치지 않는다.
+// 여기까지 흘러오면 grade 가 undefined 를 돌려주고 호출부가 TypeError 로 죽는데, handleRoute 가
+// 그것을 -1 / "처리 중 오류가 발생하였습니다." 로 바꾸므로 Java 의 MSG_PROC_FAIL 과 결과는 같다.
+// 다만 **우연히 같은 것이지 설계된 것이 아니다.** buildGradeInput 의 default 를 지우지 마라.
   }
 }

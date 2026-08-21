@@ -197,6 +197,14 @@ describe("FILL_BLANK (G9~G13)", () => {
   it("G3: null 도 같은 문구(개수 0 != 2)", () =>
     expect(() => fb(null)).toThrow(expect.objectContaining({ message: MSG })));
 
+  it("T4: null 과 빈 문자열도 (미입력) 이다 — 가장 흔한 입력이다", () => {
+    // 최종 리뷰 지적: 공백·U+00A0·U+3000 은 고정돼 있었지만 null 과 "" 이 빠져 있었다.
+    // `b.submittedAnswer == null ||` 절을 지우면 javaTrim(null) 이 TypeError 를 던지는데
+    // 그걸 잡는 테스트가 없었다.
+    const r = fb([{ blankKey: "a", submittedAnswer: null }, { blankKey: "b", submittedAnswer: "" }]);
+    expect(r.submittedAnswerSummary).toBe("(미입력), (미입력)");
+  });
+
   it("T4: 요약은 답만 잇고, 빈 칸은 (미입력) 이다", () => {
     const r = fb([
       { blankKey: "a", submittedAnswer: "서울" },

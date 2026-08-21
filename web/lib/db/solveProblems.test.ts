@@ -29,6 +29,15 @@ async function seed(over: Partial<typeof problems.$inferInsert> = {}) {
 }
 
 describe("findActiveSolveProblems", () => {
+  it("S7: created_at 내림차순이다", async () => {
+    // 최종 리뷰가 변이로 드러낸 구멍이다. desc → asc 로 뒤집어도 14개 테스트가 전부 통과했다.
+    // 타이브레이커가 없는 것은 파리티지만(S7), **정렬 자체가 사라지거나 뒤집히는 것**은 다르다.
+    // createdAt 은 defaultNow() 라 명시적으로 넣어야 두 행이 같은 값을 받지 않는다.
+    await seed({ content: "먼저", createdAt: new Date("2026-01-01T00:00:00Z") });
+    await seed({ content: "나중", createdAt: new Date("2026-01-02T00:00:00Z") });
+    expect((await findActiveSolveProblems(db, {})).map((r) => r.content)).toEqual(["나중", "먼저"]);
+  });
+
   it("S5-1: 공백만 있는 keyword·tag 는 필터로 쓴다 — 빈 문자열과 다르다", async () => {
     // Spring 실측: keyword= 는 65건(필터 미적용), keyword=<공백3> 은 0건(필터 적용).
     // MyBatis 의 OGNL 은 "   " != '' 를 참으로 보기 때문이다.
