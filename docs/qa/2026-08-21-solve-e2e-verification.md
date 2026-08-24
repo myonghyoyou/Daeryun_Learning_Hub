@@ -458,7 +458,7 @@ data[0] = {"id":10,"type":"MCQ_SINGLE","content":"이탈6 대상","departmentNam
 | H4 | ◻ | MyBatis `AS correct` 별칭 메커니즘에 포트 대응물이 없다(Drizzle 은 select 키가 곧 별칭). **관측 가능한 결과만** 잴 수 있고 그것이 항목 12 다 — `correct:true` 가 20건 중 7건 실제로 나온다 |
 | H3 | ✅ | `?page=2&size=1` 에도 24건 전체 |
 | H5 | ✅ | 키 집합 정확히 7개, `AttemptHistoryItem.java` 와 동일 |
-| H6 | ◻ | INNER vs LEFT 는 **관측 불가** — 문제는 보관만 되고 삭제되지 않는다(정답지 본문이 그렇게 적고 있고, 보관 라우트도 `status` 만 바꾼다). **스키마의 FK 가 보증**하고 단위 테스트 `H6: problems·departments 는 INNER JOIN 이다` 가 고정 |
+| H6 | ◻ | INNER vs LEFT 는 **관측 불가** — 문제는 보관만 되고 삭제되지 않는다(정답지 본문이 그렇게 적고 있고, 보관 라우트도 `status` 만 바꾼다). **스키마의 FK 가 보증한다**(`problems.department_id`·`attempts.problem_id` 모두 NOT NULL). **단위 테스트는 이걸 고정하지 못한다** — 최종 리뷰가 `innerJoin` 두 곳을 `leftJoin` 으로 바꿔도 10/10 이 통과함을 확인했다. FK 가 NOT NULL 인 한 두 조인이 같은 행을 내므로 원리상 구분할 수 없다(M1 원장이 같은 판정을 했다). 테스트 이름을 근거로 읽지 말 것 |
 | H7 | ✅ | 항목 13 — 보관 후에도 이력에 남는다 |
 | H8 | ✅ | 시도 전 `emp01` 이력 = `[]`(항목 12 이전 관측) |
 
@@ -573,3 +573,34 @@ FILL_BLANK(문제 12)가 `revealCount == 빈칸 수`라 조합이 하나뿐이�
 
 기존 픽스처는 **하나도 수정·삭제하지 않았다.** 특히 **시도 47**(Spring 이 남긴 고아 FILL_BLANK
 시도, `attempt_blank_answers` 0행)은 이탈 ㉯ 의 대조 증거이므로 그대로 보존했다.
+
+---
+
+## 컷오버 핸드오프 (서브플랜 5가 넘기는 전체 목록, 한 곳에 모음)
+
+> 서브플랜 4의 같은 절과 같은 규칙이다 — **이 문서만 보고도 컷오버 담당자가 전부 찾을 수
+> 있어야 한다.** 흩어져 있으면 없는 것과 같다.
+
+### 이 서브플랜이 새로 만든 것
+
+| # | 항목 | 무엇을 해야 하나 |
+|---|---|---|
+| C1 | **`SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY` 가 사용자용 GET 의 하드 런타임 의존이 됐다** | 이미지 프록시(`/api/problem-images/[key]`)가 이 둘 없이는 **500** 을 낸다. 라우트가 깨끗하게 처리하지만(그게 try/catch 의 존재 이유다) **"모든 문제 이미지가 500"** 은 배포 전제조건이다. 배포 환경변수 점검표에 넣어라 |
+| C2 | **프록시가 이미지 렌더링을 같은 사이트 배포에 묶었다 — Spring 에는 없던 제약이다** | Spring 은 `/uploads/images/<file>` 을 **인증 없는 정적 리소스**로 서빙했다(`StaticResourceConfig`, `/api/**` 세션 필터 **밖**). 포트는 같은 이미지를 `/api/problem-images/…` 에서, 미들웨어 matcher **안**에서, `SameSite=lax` 쿠키 뒤에서 서빙한다. 그런데 `frontend/src/components/solve/ProblemSolveCard.jsx:96` 은 `<img src={problem.imageUrl}>` 로 **저장된 경로를 그대로** 쓴다 — 프론트 오리진 기준으로 풀린다. API 클라이언트는 `VITE_API_BASE_URL` 기준이다(`frontend/src/api/client.js:8`).<br>**실패 시나리오:** Vite 번들을 정적 호스트에, Next 를 다른 호스트명에 올리면 모든 `<img>` 가 프론트 오리진을 때려 404 가 나고, API 오리진으로 고쳐 써도 **Lax 쿠키는 교차 사이트 하위 리소스에 안 실려** 401 이 된다.<br>게이트 자체는 옳고 승인됐다(이탈 ㉱ + 이관 설계 Q8) — **문서화되지 않은 것은 배포 결합이다.** 같은 오리진에 올리거나, 프론트가 이미지 URL 도 API 베이스로 풀도록 고쳐야 한다 |
+| C3 | **`timestamp without time zone` 표시 (F1)** | Java `LocalDateTime` 은 TZ 없이 직렬화하고 포트는 UTC `Z` 를 붙인다. **민감한 것은 Node 프로세스 TZ 가 아니라 DB 세션 TZ 다** — Drizzle 은 `value + "+0000"` 으로 항상 UTC 파싱한다(`drizzle-orm/pg-core/columns/timestamp.js`). 현재 `current_setting('TimeZone')` = `Etc/UTC`. 운영에서 이 값을 확인하라 |
+
+### 이전 구간에서 이월된 것
+
+| # | 항목 | 상태 |
+|---|---|---|
+| C4 | **이탈 ㉲ — 숫자 파라미터 변환** (P10-1) | `parseNumericParam` 이 서브플랜 3·4 공유 헬퍼라 이 서브플랜에서 바꾸지 않았다. Spring 은 `1e2`·공백을 거부하고 `"1 0"` 을 10 으로 읽는다 |
+| C5 | **Q12-1 — 상세를 반복 호출하면 제출 없이 정답을 모을 수 있다** | Java 도 같으므로 파리티다. 막으려면 무엇을 보여 줬는지 저장하는 새 상태가 필요하다 |
+| C6 | **이탈 ㉰ — 목록·이력에 페이지네이션 없음** | 722문항 규모에서 전체 반환의 실측 성능을 컷오버 후 확인 |
+| C7 | **미들웨어의 1012 분기가 조용하다** | `mustChangePassword` 사용자는 `200 + JSON(1012)` 을 받는다 — 이미지 프록시에서는 **성공 상태를 단 깨진 이미지**이고 서버에 신호가 안 남는다. 비로그인(401)과 달리 진단 불가 |
+
+### 서브플랜 6(통계)이 먼저 알아야 할 DB 사실
+
+| # | 사실 | 왜 중요한가 |
+|---|---|---|
+| C8 | **`attempts` 47 번은 일부러 남긴 Spring 시대 고아 행이다** | FILL_BLANK 인데 `attempt_blank_answers` 가 **0행**이다. "모든 FILL_BLANK 시도는 자식이 1행 이상"이라는 단언을 세우면 여기서 깨지고, **포트 버그처럼 읽힌다.** 이탈 ㉯ 가 막으려던 바로 그 상태의 표본이다 |
+| C9 | **선택지 0개인 시도가 계약상 존재한다** (시도 59·60) | T5 — 자식 행은 비어 있지 않을 때만 쓴다. `INNER JOIN attempt_choices` 하는 집계는 이 시도들을 **조용히 누락**한다. Java 도 동일하므로 파리티지만, 기본값으로 틀리기 쉬운 모양이다 |
