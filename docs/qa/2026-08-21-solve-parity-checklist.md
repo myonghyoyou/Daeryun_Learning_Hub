@@ -246,3 +246,31 @@ T2-1(저장은 제출 원문), T3 의 순서 판별(`[10,9]` → `가, 나`).
 
 **아직 실측하지 않은 것:** T2(주관식 요약 500자 초과 잘림 — 정상 경로), T9(빈 컬렉션 insert).
 둘 다 정상 경로로는 유도되지 않는다 — 계획서에서 단위 테스트로 고정할 것.
+
+---
+
+## 실측 대조 결과 (2026-08-24, Task 7)
+
+포트(`feat/migration-solve-m4`, `next start` 프로덕션 빌드)를 띄워 **87행을 한 줄씩 실측 대조했다.**
+전문과 응답 원문은 `docs/qa/2026-08-21-solve-e2e-verification.md`.
+
+| 표기 | 행 수 | 행 |
+|---|---|---|
+| 파리티 확인(E2E 실측) | 73 | — |
+| 승인된 이탈이 의도대로 나오는 것을 실측 | 3 | P1(㉮) · P10-1(㉲) · T11(㉳) |
+| **이탈로 대체**(포트가 일부러 다르게 동작 — "파리티 확인"이 아니다) | 3 | T8 · T8-1 · T8-2 |
+| 도달 불가 — 단위 테스트로 고정 | 2 | Q9 · T9 |
+| 관측 불가 | 5 | S7·H2(타이브레이커 부재) · Q10(부서 NOT NULL) · H4(MyBatis 별칭 대응물 없음, 결과만 관측) · H6(INNER vs LEFT) |
+| 해당 없음(현황 기록 행) | 1 | U6 |
+| **합계** | **87** | 미대조 **0**, 파리티 위반 **0** |
+
+**정답 비노출**: 5개 유형 상세·목록 응답 전부에 `correct`·`isCorrect`·`explanation` 이 한 번도
+나오지 않고, 키 집합도 `ProblemSolveDetailResponse`·`ChoiceOption`·`RevealedBlank`·
+`ProblemSolveListItem`·`AttemptHistoryItem`·`AttemptResult`·`BlankAnswerResult`·`Tag` 와 정확히 같다.
+Q6 의 `revealedBlanks[].answerText` 는 설계상 예외이며 그대로 유지된다.
+
+**새로 얻은 관측 1건(F1)**: `submittedAt`·`createdAt` 등 `LocalDateTime` 필드의 직렬화 형식이
+Spring(`2026-08-21T11:20:19.907937`)과 포트(`"2026-08-21T11:20:19.907Z"`)에서 다르다. 순간 자체는
+포트가 정확하지만(DB 세션 TZ 는 `Etc/UTC`), 프론트의 `new Date(...).toLocaleString()` 해석이
+달라진다. **이 서브플랜 고유가 아니라 이관 전반의 성질**이라 코드를 바꾸지 않고 컷오버 이월로 올린다 —
+근거와 선택지는 검증 문서 3절 F1.
