@@ -29,7 +29,7 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
   if (!KEY_PATTERN.test(key)) return new Response(null, { status: 404 });
 
   // getStorageClient() 는 SUPABASE_URL/SERVICE_ROLE_KEY 가 없으면 **평범한 Error 를 던진다**
-  // (problemImage.ts:33-35). 이 라우트는 handleRoute 를 안 쓰므로 잡아 주는 사람이 없다 —
+  // (problemImage.ts:34-36). 이 라우트는 handleRoute 를 안 쓰므로 잡아 주는 사람이 없다 —
   // 환경변수가 빠진 배포에서 사이트의 모든 <img> 가 Next 500 HTML 페이지가 된다.
   let data: Blob | null = null;
   try {
@@ -37,7 +37,9 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
     if (result.error) return new Response(null, { status: 404 });
     data = result.data;
   } catch (error) {
-    console.error("이미지 프록시: 스토리지 클라이언트를 만들 수 없습니다", error);
+    // 여기 잡히는 건 getStorageClient() 의 환경변수 누락 throw 뿐만이 아니다 — download() 의
+    // 네트워크/SDK 오류도 같은 catch 로 떨어진다. 환경변수만 지목하면 운영자가 엉뚱한 곳을 본다.
+    console.error("이미지 프록시: 스토리지 클라이언트 생성 또는 다운로드에 실패했습니다", error);
     return new Response(null, { status: 500 });
   }
   if (!data) return new Response(null, { status: 404 });

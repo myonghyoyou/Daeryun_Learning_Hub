@@ -47,7 +47,18 @@ describe("GET /api/problem-images/[key]", () => {
     const res = await GET(req("/api/problem-images/" + key), { params: Promise.resolve({ key }) });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("content-disposition")).toBe("inline");
     expect(Buffer.from(await res.arrayBuffer())).toEqual(PNG);
+  });
+
+  it("Blob 의 content-type 이 비어 있으면 application/octet-stream 으로 대체한다", async () => {
+    // 업로드는 content-type 허용목록을 강제하지만, 그 밖에서 올라온 오브젝트나 스토리지 SDK
+    // 변경으로 빈 타입이 내려오면 fallback 이 실제로 쓰인다 — 앱 원점에서 text/html 로 나가면
+    // problemImage.ts 의 svg 배제와 같은 종류의 저장형 XSS 통로가 된다.
+    storageState.objects[key] = { type: "" };
+    const { GET } = await import("./route");
+    const res = await GET(req("/api/problem-images/" + key), { params: Promise.resolve({ key }) });
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
   });
 
   it("삭제된 오브젝트는 404 다", async () => {
@@ -59,14 +70,27 @@ describe("GET /api/problem-images/[key]", () => {
   });
 
   it("키 형식이 아니면 스토리지를 건드리지 않고 404 다", async () => {
-    // 경로 탈출·임의 오브젝트 열람을 키 형식으로 막는다.
+    // 경로 탈출·임의 오브젝트 열람을 키 형식으로 막는다. 네 항목은 각각 KEY_PATTERN 의 서로
+    // 다른 제약 하나씩만 깨뜨린다 — 문자 클래스가 아니라 그 제약 자체가 지켜지는지를 본다.
     storageState.objects[key] = { type: "image/png" }; // 형식이 맞았다면 통과했을 오브젝트를 심어둔다
     const { GET } = await import("./route");
-    for (const bad of ["../secret.png", "a/b.png", "not-a-uuid.png", key + ".png.exe"]) {
+    const badKeys = [
+      // uuid 부분이 35 자(마지막 hex 한 글자를 뺐다) — 문자 종류는 전부 유효하다.
+      // {36} 을 지우면(예: `+`) 이 키만 통과한다.
+      "11111111-1111-1111-1111-11111111111.png",
+      // 하이픈 하나를 슬래시로 바꿔치기 — 길이는 그대로 36 이다.
+      // 문자 클래스에 슬래시를 허용하면(예: [0-9a-f-/]) 이 키만 통과한다.
+      "11111111-1111/1111-1111-111111111111.png",
+      // 확장자 자리에 점이 하나 더 있다 — 확장자 문자 클래스가 점을 허용하면 이 키만 통과한다.
+      key + ".png",
+      // uuid 마지막 글자가 대문자다 — 문자 클래스가 대소문자를 가리지 않으면 이 키만 통과한다.
+      "11111111-1111-1111-1111-11111111111A.png",
+    ];
+    for (const bad of badKeys) {
       const res = await GET(req("/api/problem-images/" + bad), { params: Promise.resolve({ key: bad }) });
       expect(res.status).toBe(404);
     }
-    expect(storageState.downloads).toEqual([]); // 호출 자체가 없어야 한다
+    expect(storageState.downloads).toEqual([]); // 네 경우 모두 스토리지 호출 자체가 없어야 한다
   });
 
   it("응답 봉투를 쓰지 않는다 — 바이너리다", async () => {
@@ -87,10 +111,15 @@ describe("GET /api/problem-images/[key]", () => {
     const original = process.env.SUPABASE_URL;
     delete process.env.SUPABASE_URL;
     vi.resetModules();
-    const { GET } = await import("./route");
-    const res = await GET(req("/api/problem-images/" + key), { params: Promise.resolve({ key }) });
-    expect(res.status).toBe(500);
-    process.env.SUPABASE_URL = original;
-    vi.resetModules();
+    try {
+      const { GET } = await import("./route");
+      const res = await GET(req("/api/problem-images/" + key), { params: Promise.resolve({ key }) });
+      expect(res.status).toBe(500);
+    } finally {
+      // 단언이 실패해도 이후 테스트를 위해 반드시 복원한다 — 그렇지 않으면 이 파일의 남은
+      // 모든 테스트에서 SUPABASE_URL 이 계속 지워진 채로 남는다.
+      process.env.SUPABASE_URL = original;
+      vi.resetModules();
+    }
   });
 });
