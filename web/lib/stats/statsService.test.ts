@@ -277,3 +277,40 @@ describe("getProblemStatDetail", () => {
     expect(Object.keys(d.recentWrongSamples[0]).sort()).toEqual(["submittedAnswer", "submittedAt"]);
   });
 });
+
+describe("listProblemStats — 페이징이 SQL 정렬 위에서 잘린다 (승인된 이탈 ㉠ 의 안전망)", () => {
+  it("페이지를 이어 붙인 순서가 전체 정렬과 정확히 같다", async () => {
+    // 이탈 ㉠ 으로 Java 의 서비스 재정렬(no-op)을 뺐다. 그래서 "페이지 안에서만 맞고 전체로는
+    // 틀린" 상태를 잡을 것이 여기밖에 없다 — 원저자 주석이 경고한 바로 그 상태다.
+    //
+    // 정답률을 전부 다르게 만들어 정렬이 실제로 일을 하게 한다. 동률이면 타이브레이커만
+    // 시험하게 되고, 그건 이미 DAO 테스트가 본다(N1).
+    for (const [correct, wrong] of [[0, 7], [1, 6], [2, 5], [3, 4], [4, 3], [5, 2], [6, 1]]) {
+      await seedWithAttempts({ content: `${correct}/7` }, correct, wrong);
+    }
+    const q = { departmentId: null, status: null };
+    const pages = [];
+    for (const page of [1, 2, 3]) {
+      pages.push(await listProblemStats(db, superAdmin, { ...q, page, size: 3 }));
+    }
+    const concatenated = pages.flatMap((p) => p.items.map((i) => i.problemId));
+    const whole = await listProblemStats(db, superAdmin, { ...q, page: 1, size: 100 });
+
+    expect(concatenated).toHaveLength(7);
+    expect(new Set(concatenated).size).toBe(7);          // 중복·누락 없음
+    expect(concatenated).toEqual(whole.items.map((i) => i.problemId));   // **순서까지 같다**
+    // 정렬이 실제로 오름차순인지도 여기서 함께 본다 — 순서 단언만으로는 두 목록이 나란히
+    // 틀려도 통과한다.
+    const rates = whole.items.map((i) => i.accuracyRate!);
+    expect(rates).toEqual([...rates].sort((a, b) => a - b));
+    expect(rates[0]).toBe(0);
+  });
+
+  it("totalCount 는 페이지 크기와 무관하게 전체 건수다", async () => {
+    for (let i = 0; i < 7; i++) await seedWithAttempts({ content: `q${i}` }, 1, 1);
+    for (const size of [3, 100]) {
+      expect((await listProblemStats(db, superAdmin, { departmentId: null, status: null, page: 1, size })).totalCount)
+        .toBe(7);
+    }
+  });
+});
