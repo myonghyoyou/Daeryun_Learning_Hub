@@ -8,7 +8,7 @@
 - 대상: `StatsController` 2 + `DashboardController` 1 = **3개 엔드포인트**
 - 근거: `StatsServiceImpl.java`(131줄), `DashboardServiceImpl.java`(74줄), `StatsMapper.xml`(85줄),
   DTO 8종, `AttemptMapper.findRecentWrong`, `ProblemMapper.findRecent`
-- 총 **62행** (R 8 · L 14 · D 16 · B 16 · X 8)
+- 총 **65행** (R 8 · L 17 · D 16 · B 16 · X 8)
 - **실측 상태**: 소스 정독 후 **Spring 인스턴스를 띄워 R·L·D·B 를 직접 호출해 대조했다.**
   초안이 틀린 곳은 없었고, 실측이 판별자 두 개를 실물 데이터에서 찾아냈다(X4·B3). 아래 "실측 기록" 참고
 
@@ -50,6 +50,9 @@
 | L11 | `totalCount` | `count(*) FROM problems p` — **`attempts` 조인 없음** | `StatsMapper.xml:49-55`. 주석: 조인한 채 `count(*)` 하면 시도 수만큼 부풀어 총건수가 틀린다 |
 | L12 | `accuracyRate` 계산 | `totalAttempts == 0 ? null : correct/total` (Java `double` 나눗셈) | `ProblemStatItem.java` `from()` |
 | L13 | 응답 형태 | `{items, totalCount, page, size}` | `ProblemStatPageResponse.java`. 주석: 문제 목록과 **같은 모양**을 유지해 화면이 같은 Pagination 을 쓴다 |
+| L15 | **`?page=`·`?size=` (빈 문자열)** | **기본값이 적용된다** — `page=1`, `size=20`, 200 | 실측. **서브플랜 5의 `count` 와 다르다** — 거긴 `@RequestParam int count`(필수 원시형)라 빈 문자열이 **타입 불일치**였다. 여기는 `@RequestParam(defaultValue=...)` 라 값이 없으면 기본값으로 떨어진다. 포트의 `parseNumericParam` 이 빈 문자열을 `null` 로 주므로 `?? 1` / `?? 20` 이면 일치한다 |
+| L16 | `?page=abc` · `?size=1.5` | 400 / 1000 / **`요청 값의 형식이 올바르지 않습니다: page`**(또는 `: size`) | 실측. `departmentId=abc` 도 `: departmentId`, 상세의 `/abc` 도 `: id` |
+| L17 | **`?status=BOGUS`** (유효하지 않은 상태값) | **200 / 0건.** 검증하지 않고 그냥 안 맞을 뿐이다 | 실측. `p.status = 'BOGUS'` 가 아무것도 안 맞춘다. **오류로 만들면 파리티 위반** |
 | L14 | `items[i]` 필드 | `problemId, content, type, status, departmentId, departmentName, totalAttempts, correctAttempts, accuracyRate, lastAttemptAt` — **10개** | `ProblemStatItem.java`. `id` 가 아니라 **`problemId`** 다 |
 
 ---
