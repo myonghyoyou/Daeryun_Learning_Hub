@@ -1,3 +1,5 @@
 export default function Home() {
-  return <main>문제 은행 Hub</main>;
+  return (
+    <main className="bg-brand-dark text-ink-muted rounded-sm">문제 은행 Hub</main>
+  );
 }
