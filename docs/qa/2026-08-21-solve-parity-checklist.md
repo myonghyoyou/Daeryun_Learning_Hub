@@ -158,6 +158,24 @@
 
 ---
 
+## V. 부서 선택지 — `GET /api/departments` (서브플랜 6에서 뒤늦게 채움)
+
+> **이 엔드포인트는 서브플랜 5가 빠뜨렸다.** 설계 스펙의 컨트롤러 배정표가 이걸 서브플랜 5에
+> 배정했는데, 정답지가 `SolveController`·`AttemptController` 를 읽어 범위를 잡으면서 배정표를
+> 보지 않았다. 착수 전 전체 검토에서 **Spring 31개 vs 포트 28개** 대조로 발견됐다.
+> 구현은 서브플랜 6 Task 2 다.
+
+| # | 시나리오 | 기대 | 근거 |
+|---|---|---|---|
+| V1 | 범위 | **활성 부서만** | `DepartmentMapper.xml:24-26` |
+| V2 | 정렬 | 이름 오름차순 | 같은 곳 |
+| V3 | 응답 필드 | 정확히 `{id, name, code}` — **`status`·`createdAt` 은 빠진다** | `DepartmentOptionServiceImpl` 이 3필드로 줄인다 |
+| V4 | 권한 | `@RequireRole` 없음 — 로그인만 하면 누구나 | `DepartmentOptionController` 클래스 주석 |
+| V5 | 관리자 목록과의 차이 | `/api/admin/departments` 는 SUPER_ADMIN 전용이고 전체 행을 준다 — **다른 쿼리·다른 DTO** | 같은 주석 |
+| V6 | 프론트 소비처 | `RandomSetupPage.jsx:34` 의 부서 드롭다운 | 이 라우트가 없으면 "부서 목록을 불러오지 못했습니다." |
+
+---
+
 ## ~~미결정~~ **결정됨** — 비공개 버킷의 이미지 조회 경로
 
 > **2026-08-21 결정: 프록시 라우트 `GET /api/problem-images/[key]` (승인된 이탈 ㉱).**
