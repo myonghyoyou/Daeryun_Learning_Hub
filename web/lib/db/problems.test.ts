@@ -4,7 +4,7 @@ import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import {
   insertProblem, findProblemById, findMaxSourceNumber,
   updateProblem, updateProblemStatus, updateDepartmentAndSourceNumber,
-  listProblems, countProblems, type ProblemListFilters,
+  listProblems, countProblems, findRecent, type ProblemListFilters,
 } from "./problems";
 import { insertChoices, findChoicesByProblemId } from "./problemParts";
 import { findAllTags, findOrCreateTagsByNames, findTagNamesByProblemId, replaceProblemTags } from "./tags";
@@ -291,5 +291,66 @@ describe("problems DAO — 목록·총건수", () => {
     };
     expect(await countProblems(db, filters)).toBe(1);
     expect(await listProblems(db, { ...filters, limit: 100, offset: 0 })).toHaveLength(1);
+  });
+});
+
+describe("problems DAO — findRecent (B13·B14·B16)", () => {
+  async function seed(values: {
+    content: string; status?: "ACTIVE" | "ARCHIVED"; departmentId?: number;
+    sourceNumber?: number | null; createdAt?: string; tags?: string[];
+  }) {
+    const id = await insertProblem(db, {
+      type: "OX", content: values.content, status: values.status ?? "ACTIVE",
+      departmentId: values.departmentId ?? deptA, sourceNumber: values.sourceNumber ?? null, createdBy: userId,
+    });
+    if (values.createdAt) {
+      await db.update(problems).set({ createdAt: sql`${values.createdAt}::timestamp` }).where(eq(problems.id, id));
+    }
+    if (values.tags?.length) {
+      await replaceProblemTags(db, id, await findOrCreateTagsByNames(db, values.tags));
+    }
+    return id;
+  }
+
+  it("B14: 상태 필터가 없다 — 보관 문제도 나온다", async () => {
+    const archived = await seed({ content: "보관", status: "ARCHIVED", sourceNumber: 1, createdAt: "2026-08-19 10:00:00" });
+    const active = await seed({ content: "활성", sourceNumber: 2, createdAt: "2026-08-18 10:00:00" });
+    const items = await findRecent(db, null, 5);
+    expect(items.map((i) => i.id)).toEqual([archived, active]); // 최신순 — 보관본이 더 최근이면 먼저 나온다
+  });
+
+  it("B13: created_at DESC, p.id DESC — 동시각은 id 로 끊는다", async () => {
+    const sameInstant = "2026-08-19 09:00:00";
+    const ids: number[] = [];
+    for (const n of [1, 2, 3]) ids.push(await seed({ content: `행 ${n}`, sourceNumber: n, createdAt: sameInstant }));
+    const items = await findRecent(db, null, 10);
+    expect(items.map((i) => i.id)).toEqual([...ids].sort((a, b) => b - a));
+  });
+
+  it("B13: 최대 5건으로 잘린다", async () => {
+    for (let n = 1; n <= 7; n++) await seed({ content: `행 ${n}`, sourceNumber: n, createdAt: `2026-08-${10 + n} 09:00:00` });
+    expect(await findRecent(db, null, 5)).toHaveLength(5);
+  });
+
+  it("departmentId 로 거르면 다른 부서는 안 나온다(B16 이 넘겨줄 scope 를 DAO 가 실제로 적용하는지)", async () => {
+    const own = await seed({ content: "가팀", sourceNumber: 1 });
+    await seed({ content: "나팀", departmentId: deptB, sourceNumber: 1 });
+    const items = await findRecent(db, deptA, 10);
+    expect(items.map((i) => i.id)).toEqual([own]);
+  });
+
+  it("departmentId 가 null 이면 전 부서가 나온다", async () => {
+    await seed({ content: "가팀", sourceNumber: 1 });
+    await seed({ content: "나팀", departmentId: deptB, sourceNumber: 1 });
+    expect(await findRecent(db, null, 10)).toHaveLength(2);
+  });
+
+  it("응답 필드는 ProblemListItem 이다 — id 를 쓴다(정답지 B15 의 비대칭 절반)", async () => {
+    const id = await seed({ content: "본문", sourceNumber: 1, tags: ["태그"] });
+    const [item] = await findRecent(db, null, 5);
+    expect(Object.keys(item).sort()).toEqual(["content", "createdAt", "departmentId",
+      "departmentName", "id", "status", "tags", "type"]);
+    expect(item.id).toBe(id);
+    expect(item.tags).toEqual(["태그"]);
   });
 });

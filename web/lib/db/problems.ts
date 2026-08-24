@@ -177,3 +177,33 @@ export async function countProblems(db: DbConn, filters: ProblemListFilters): Pr
     .where(conditions.length > 0 ? and(...conditions) : undefined);
   return Number(row?.total ?? 0);
 }
+
+/**
+ * `ProblemMapper.xml findRecent`(:117-131) 이식 — 대시보드의 "최근 문제" 목록(정답지 B13).
+ * `findAll` 과 같은 `array_agg` 태그 조립, 같은 `p.id` 타이브레이커를 쓰지만 두 가지가 다르다:
+ * **상태 필터가 없다**(정답지 B14 — 보관 문제도 나온다, `<where>` 에 status 조건이 없다) 그리고
+ * `departmentId` 하나만 거른다(원시 DAO라 부서 스코프를 스스로 강제하지 않는다 — 호출부인
+ * `DashboardServiceImpl.java:44-46` 이 유효 부서 ID 를 계산해 넘긴다, 정답지 R6·B16).
+ */
+export async function findRecent(db: DbConn, departmentId: number | null, limit: number): Promise<ProblemListItem[]> {
+  const rows = await db
+    .select({
+      id: problems.id,
+      type: problems.type,
+      content: problems.content,
+      status: problems.status,
+      departmentId: problems.departmentId,
+      departmentName: departments.name,
+      createdAt: problems.createdAt,
+      tags: sql<string[]>`COALESCE(array_agg(DISTINCT ${tags.name}) FILTER (WHERE ${tags.name} IS NOT NULL), '{}')`,
+    })
+    .from(problems)
+    .innerJoin(departments, eq(departments.id, problems.departmentId))
+    .leftJoin(problemTags, eq(problemTags.problemId, problems.id))
+    .leftJoin(tags, eq(tags.id, problemTags.tagId))
+    .where(departmentId != null ? eq(problems.departmentId, departmentId) : undefined)
+    .groupBy(problems.id, departments.name)
+    .orderBy(desc(problems.createdAt), desc(problems.id))
+    .limit(limit);
+  return rows;
+}
