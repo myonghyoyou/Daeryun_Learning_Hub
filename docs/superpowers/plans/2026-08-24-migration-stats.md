@@ -68,7 +68,7 @@ Task 2 가 이걸 채운다.
 
 | 구간 | Task | 끝났을 때 동작하는 것 | 상태 |
 |---|---|---|---|
-| **N1 기반** | 0 + 1 + 2 | 타임스탬프 컨벤션 확정 + 집계 DAO + `GET /api/departments`. **서브플랜 5의 누락이 닫힌다** | ☐ |
+| **N1 기반** | 0 + 1 + 2 | 타임스탬프 컨벤션 확정 + 집계 DAO + `GET /api/departments`. **서브플랜 5의 누락이 닫혔다**. 테스트 610 → 639 | ☑ 2026-08-24 |
 | **N2 통계** | 3 + 4 | 통계 목록·상세 2개 | ☐ |
 | **N3 대시보드·검증** | 5 + 6 | 대시보드 1개 + E2E + 컷오버 통합 목록. **Spring 표면 31개 전부 이관 완료** | ☐ |
 
@@ -159,6 +159,9 @@ git commit -m "docs: settle the timestamp serialization convention before stats 
   export async function findAllProblemStats(db: DbConn, departmentId?: number | null): Promise<ProblemStatRow[]>;
   export async function countActiveProblems(db: DbConn, departmentId?: number | null): Promise<number>;
   export async function findProblemStat(db: DbConn, problemId: number): Promise<ProblemStatRow | null>;
+  // ↑ **이 함수의 테스트는 문제를 2~3개 심어야 한다.** 하나만 심으면 `WHERE p.id = ...` 를
+  //   통째로 지워도 `rows[0]` 이 우연히 맞는 행이라 통과한다(N1 리뷰에서 실증).
+  //   "없는 문제는 null" 테스트도 아무것도 안 심으면 필터 없이도 통과한다.
   export async function countAnalyzedAttempts(db: DbConn, problemId: number): Promise<number>;
   export async function findChoiceDistribution(
     db: DbConn, problemId: number): Promise<{ choiceId: number; selectedCount: number }[]>;
@@ -219,20 +222,24 @@ describe("findProblemStats — 정렬 (이탈 ㉠: SQL 만 정렬한다)", () =>
     expect(rows[1].totalAttempts).toBe(0);
   });
 
-  it("L8: 동률은 problemId 오름차순", async () => {
-    const a = await seedWithAttempts({ content: "a" }, 1, 1);
-    const b = await seedWithAttempts({ content: "b" }, 2, 2);   // 같은 0.5
+  it("L8: 동률은 problemId 오름차순 — **6행 이상으로 정확한 순서를 단언한다**", async () => {
+    // **동률 2행 + Set.size 로는 이 규칙을 못 잡는다.** 실증됐다(N1 리뷰):
+    //  - Postgres HashAggregate 가 3행 미만에서는 삽입 순서를 우연히 보존한다
+    //  - `new Set(ids).size` 는 "중복 없음"만 보지 **순서를 전혀 안 본다**
+    // 이탈 ㉠ 로 Java 재정렬을 뺐으므로 이 테스트가 L8 의 **유일한** 안전망이다.
+    const ids = [];
+    for (let i = 0; i < 6; i++) ids.push(await seedWithAttempts({ content: `q${i}` }, 1, 1));  // 전부 0.5
     const rows = await findProblemStats(db, { limit: 100, offset: 0 });
-    expect(rows.map((r) => r.problemId)).toEqual([a, b].sort((x, y) => x - y));
+    expect(rows.map((r) => r.problemId)).toEqual([...ids].sort((x, y) => x - y));  // 정확한 순서
   });
 
-  it("L8: 타이브레이커가 페이징 경계에서 중복·누락을 막는다", async () => {
-    // 전부 같은 정답률로 만들어 타이브레이커만이 순서를 결정하게 한다.
-    for (let i = 0; i < 6; i++) await seedWithAttempts({ content: `q${i}` }, 1, 1);
+  it("L8: 페이지를 이어 붙여도 순서가 전체 정렬과 같다", async () => {
+    const ids = [];
+    for (let i = 0; i < 6; i++) ids.push(await seedWithAttempts({ content: `q${i}` }, 1, 1));
     const p1 = await findProblemStats(db, { limit: 3, offset: 0 });
     const p2 = await findProblemStats(db, { limit: 3, offset: 3 });
-    const ids = [...p1, ...p2].map((r) => r.problemId);
-    expect(new Set(ids).size).toBe(6);   // 중복 없음
+    // 중복 없음만 보면 안 된다 — 어떤 안정적 실행계획에서도 성립한다. 순서까지 본다.
+    expect([...p1, ...p2].map((r) => r.problemId)).toEqual([...ids].sort((x, y) => x - y));
   });
 });
 ```
@@ -370,7 +377,7 @@ it("D15: 오답만, submitted_at DESC, id DESC, limit", async () => {
 | 변이 | 빨개져야 하는 테스트 |
 |---|---|
 | `ASC` → `DESC` | L6 |
-| `NULLS LAST` 제거 | L7 |
+| ~~`NULLS LAST` 제거~~ | **잡히지 않는다.** Postgres 의 `ASC` 기본 널 정렬이 이미 nulls-last 라 이 절은 `ASC` 가 고정된 이상 중복이다. **L7 의 실제 보호막은 아래 `NULLIF` 행이다** (N1 리뷰에서 실증). 절 자체는 매퍼 미러이자 방향이 바뀔 때의 문서로 남긴다 |
 | `, p.id` 제거 | L8 (동률·페이징) |
 | `NULLIF(COUNT(a.id), 0)` → `COUNT(a.id)` | L7 (0 나눗셈 → 결과가 달라진다) |
 | `countProblemStats` 에 `LEFT JOIN attempts` 추가 | L11 |
