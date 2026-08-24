@@ -5,6 +5,14 @@ import { departments } from "./schema";
 export async function findAllDepartments(db: DbConn) {
   return db.select().from(departments).orderBy(asc(departments.name));
 }
+// DepartmentMapper.xml:24-26 findAllActive 미러. **관리자 목록(findAllDepartments)과 다른
+// 쿼리다** — 여기는 활성만이고, 서비스가 id·name·code 3필드로 줄인다(DepartmentOptionServiceImpl).
+export async function findActiveDepartments(db: DbConn) {
+  return db.select({ id: departments.id, name: departments.name, code: departments.code })
+    .from(departments)
+    .where(eq(departments.status, "ACTIVE"))
+    .orderBy(asc(departments.name));
+}
 export async function findDepartmentById(db: DbConn, id: number) {
   return (await db.select().from(departments).where(eq(departments.id, id)).limit(1))[0];
 }
