@@ -9,7 +9,8 @@ import type { AuthUser } from "../auth/types";
 
 // Spring 출처: ProblemImageServiceImpl.java. 승인된 이탈 ①(정답지) — Vercel 서버리스에는 영속
 // 디스크가 없어 로컬 uploadDir 저장을 이식할 수 없다. Supabase Storage 의 비공개 버킷으로 간다.
-const BUCKET = "problem-images";
+// 서브플랜 5 Task 6(이미지 프록시 라우트)가 같은 버킷을 조회해야 해서 export 한다.
+export const PROBLEM_IMAGE_BUCKET = "problem-images";
 
 // ProblemImageServiceImpl.java:33-34. svg 는 인라인 <script> 를 담을 수 있어 저장형 XSS 가 된다
 // (I1) — 의도적으로 허용목록에서 뺀다.
@@ -24,7 +25,7 @@ const FILE_TYPE_MESSAGE = "허용되지 않는 파일 형식입니다. png, jpg,
 
 let supabase: ReturnType<typeof createClient> | undefined;
 
-function getStorageClient() {
+export function getStorageClient() {
   if (!supabase) {
     const url = process.env.SUPABASE_URL;
     // 서비스 롤 키. 서버 전용 — NEXT_PUBLIC_ 접두어를 붙이면 브라우저 번들에 들어가 누구나
@@ -96,7 +97,7 @@ export async function storeProblemImage(file: ProblemImageFile, actor: AuthUser)
   const storedName = `${randomUUID()}.${extension}`;
 
   const client = getStorageClient();
-  const { error: uploadError } = await client.storage.from(BUCKET).upload(storedName, file.buffer, {
+  const { error: uploadError } = await client.storage.from(PROBLEM_IMAGE_BUCKET).upload(storedName, file.buffer, {
     contentType: file.contentType,
     upsert: false,
   });
@@ -121,7 +122,7 @@ export async function storeProblemImage(file: ProblemImageFile, actor: AuthUser)
     // (감사 실패 자체는 Java 도 로그하지 않는다). 정리 실패를 조용히 삼키면 "감사도 없고 파일만
     // 남는" I8 이 막으려던 상태가 서버 로그 흔적조차 없이 재발한다.
     try {
-      const { error: removeError } = await client.storage.from(BUCKET).remove([storedName]);
+      const { error: removeError } = await client.storage.from(PROBLEM_IMAGE_BUCKET).remove([storedName]);
       if (removeError) {
         console.warn("감사 로그 기록 실패 후 업로드 파일 정리에도 실패했습니다:", storedName, removeError.message);
       }
