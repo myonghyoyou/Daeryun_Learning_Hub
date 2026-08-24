@@ -90,4 +90,71 @@ describe("GET /api/admin/stats/problems", () => {
     expect(body.data.size).toBe(20);
     expect(body.data.totalCount).toBe(1);
   });
+
+  // 위 테스트는 쿼리스트링을 전혀 안 보낸다 — page·size 둘 다 null 이라 라우트가 어느 쪽이든
+  // 기본값으로 떨어진다. 두 파라미터를 실제로 보내야 라벨이 뒤집혀도 안 잡히는 구멍이 막힌다.
+  it("SUPER_ADMIN 이 departmentId 를 지정하면 그 부서만 나온다 — R5 의 반대 방향(요청값이 그대로 전달돼야 한다)", async () => {
+    const superAdmin = await seedActor("SUPER_ADMIN", deptA);
+    state.currentUser = superAdmin;
+    const [own] = await db.insert(problems).values({
+      type: "OX", content: "가팀", departmentId: deptA, createdBy: superAdmin.userId,
+    }).returning({ id: problems.id });
+    await db.insert(problems).values({
+      type: "OX", content: "나팀", departmentId: deptB, createdBy: superAdmin.userId,
+    });
+    const { GET } = await import("./route");
+    const res = await GET(getRequest(`?departmentId=${deptA}`));
+    const body = await res.json();
+    expect(body.data.totalCount).toBe(1);
+    expect(body.data.items.map((i: { problemId: number }) => i.problemId)).toEqual([own.id]);
+  });
+
+  it("status 필터가 라우트에서 서비스로 전달된다(L5)", async () => {
+    const superAdmin = await seedActor("SUPER_ADMIN", deptA);
+    state.currentUser = superAdmin;
+    await db.insert(problems).values({
+      type: "OX", content: "활성", departmentId: deptA, status: "ACTIVE", createdBy: superAdmin.userId,
+    });
+    const [archived] = await db.insert(problems).values({
+      type: "OX", content: "보관", departmentId: deptA, status: "ARCHIVED", createdBy: superAdmin.userId,
+    }).returning({ id: problems.id });
+    const { GET } = await import("./route");
+    const res = await GET(getRequest("?status=ARCHIVED"));
+    const body = await res.json();
+    expect(body.data.totalCount).toBe(1);
+    expect(body.data.items.map((i: { problemId: number }) => i.problemId)).toEqual([archived.id]);
+  });
+
+  it("L17: 유효하지 않은 status 값은 검증하지 않고 그냥 안 맞는다 — 200/0건", async () => {
+    const superAdmin = await seedActor("SUPER_ADMIN", deptA);
+    state.currentUser = superAdmin;
+    await db.insert(problems).values({
+      type: "OX", content: "문제", departmentId: deptA, createdBy: superAdmin.userId,
+    });
+    const { GET } = await import("./route");
+    const res = await GET(getRequest("?status=BOGUS"));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.totalCount).toBe(0);
+    expect(body.data.items).toEqual([]);
+  });
+
+  it("page/size 가 라우트에서 서비스로 이름이 바뀌지 않고 전달된다", async () => {
+    const superAdmin = await seedActor("SUPER_ADMIN", deptA);
+    state.currentUser = superAdmin;
+    const { GET } = await import("./route");
+    const res = await GET(getRequest("?page=2&size=5"));
+    const body = await res.json();
+    expect(body.data.page).toBe(2);
+    expect(body.data.size).toBe(5);
+  });
+
+  it("L16: ?page=abc 는 요청 값의 형식이 올바르지 않습니다: page", async () => {
+    const superAdmin = await seedActor("SUPER_ADMIN", deptA);
+    state.currentUser = superAdmin;
+    const { GET } = await import("./route");
+    const res = await GET(getRequest("?page=abc"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ resultCode: 1000, resultMsg: "요청 값의 형식이 올바르지 않습니다: page" });
+  });
 });

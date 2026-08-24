@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { departments, problems, users, attempts, problemChoices, attemptChoices } from "../db/schema";
 import { ErrorCode } from "../http/errorCode";
@@ -103,14 +104,23 @@ describe("listProblemStats — 스코프 (R5)", () => {
 });
 
 describe("listProblemStats — 응답 형태", () => {
-  it("L13: 응답 키 4개, items[i] 키 10개(problemId 포함)", async () => {
-    await seedWithAttempts({ content: "문제" }, 1, 0);
+  it("L13: 응답 키 4개, items[i] 키 10개(problemId 포함), accuracyRate 는 실제 DB 값이다(X1·X2·L12 를 순수함수가 아니라 실제 경로로)", async () => {
+    // toStatItem 단위 테스트는 손으로 만든 row 리터럴만 통과시켰다 — listProblemStats 가
+    // 실제로 그 함수를 호출해 결과를 매핑하는지는 아무도 안 봤다. 여기서 세 가지 실제
+    // DB 값(1.0 · 0.0 · null)을 한 응답 안에서 확인한다.
+    const withAttempt = await seedWithAttempts({ content: "문제" }, 1, 0);   // 1.0
+    const allWrong = await seedWithAttempts({ content: "전부오답" }, 0, 2);  // 0.0
+    const noAttempts = await seedWithAttempts({ content: "미응시" }, 0, 0);  // null
     const result = await listProblemStats(db, superAdmin, { departmentId: null, status: null, page: 1, size: 20 });
     expect(Object.keys(result).sort()).toEqual(["items", "page", "size", "totalCount"]);
     expect(Object.keys(result.items[0]).sort()).toEqual([
       "accuracyRate", "content", "correctAttempts", "departmentId", "departmentName",
       "lastAttemptAt", "problemId", "status", "totalAttempts", "type",
     ]);
+    const byId = new Map(result.items.map((i) => [i.problemId, i]));
+    expect(byId.get(withAttempt)?.accuracyRate).toBe(1);
+    expect(byId.get(allWrong)?.accuracyRate).toBe(0);
+    expect(byId.get(noAttempts)?.accuracyRate).toBeNull();
   });
 });
 
@@ -150,6 +160,26 @@ async function seedShortAnswer() {
   return p.id;
 }
 
+// MCQ_MULTI 는 한 시도가 attempt_choices 를 여러 행 남기는 유형이다 — countAnalyzedAttempts 의
+// DISTINCT(N1 D13)가 존재하는 바로 그 이유. 그런데 CHOICE_TYPES 에서 이 유형만 빠져도
+// D7·D8·D11 전부 초록으로 남는다(전부 MCQ_SINGLE·OX 픽스처를 쓴다) — 직접 찍어야 한다.
+async function seedMcqMulti() {
+  const [p] = await db.insert(problems).values({
+    type: "MCQ_MULTI", content: "복수선택", departmentId: deptA, status: "ACTIVE", createdBy: superAdminId,
+  }).returning({ id: problems.id });
+  const [c1] = await db.insert(problemChoices)
+    .values({ problemId: p.id, choiceText: "가", isCorrect: true, displayOrder: 1 }).returning({ id: problemChoices.id });
+  const [c2] = await db.insert(problemChoices)
+    .values({ problemId: p.id, choiceText: "나", isCorrect: true, displayOrder: 2 }).returning({ id: problemChoices.id });
+  const [a1] = await db.insert(attempts)
+    .values({ userId: superAdminId, problemId: p.id, submittedAnswer: "가,나", isCorrect: true }).returning({ id: attempts.id });
+  await db.insert(attemptChoices).values([
+    { attemptId: a1.id, choiceId: c1.id, choiceText: "가" },
+    { attemptId: a1.id, choiceId: c2.id, choiceText: "나" },
+  ]);
+  return p.id;
+}
+
 describe("getProblemStatDetail", () => {
   it("D1: 없는 문제 — 서브플랜 5와 다른 문구다", async () => {
     await expect(getProblemStatDetail(db, 999999, superAdmin)).rejects
@@ -183,6 +213,28 @@ describe("getProblemStatDetail", () => {
     expect(d.excludedAttempts).toBe(0);
   });
 
+  it("D7: MCQ_MULTI 도 CHOICE_TYPES 대상이다 — 분포가 null 이 아니다", async () => {
+    const problemId = await seedMcqMulti();
+    const d = await getProblemStatDetail(db, problemId, superAdmin);
+    expect(d.choiceDistribution).not.toBeNull();
+    expect(d.choiceDistribution!.length).toBe(2);
+    // 한 시도가 두 보기를 골랐으니 분석된 시도는 1건 — excludedAttempts 는 0.
+    expect(d.excludedAttempts).toBe(0);
+  });
+
+  it("D2: 보관된 문제도 상세 조회가 된다 — 상태 필터가 없다", async () => {
+    const { problemId } = await seedMcq();
+    await db.update(problems).set({ status: "ARCHIVED" }).where(eq(problems.id, problemId));
+    const d = await getProblemStatDetail(db, problemId, superAdmin);
+    expect(d.summary.status).toBe("ARCHIVED");
+  });
+
+  it("DEPT_ADMIN 이 자기 부서 문제를 조회하면 통과한다(assertOwnership 재사용의 양성 경로)", async () => {
+    const { problemId } = await seedMcq(); // deptA 소속
+    const d = await getProblemStatDetail(db, problemId, deptAdmin); // deptAdmin 도 deptA
+    expect(d.summary.problemId).toBe(problemId);
+  });
+
   it("D11: excludedAttempts = 전체 시도 − 분석된 시도(옛 선택지 기록은 매칭되지 않는다)", async () => {
     const { problemId } = await seedMcq(); // 이미 시도 1건(분석됨) 있음
     // 문제를 수정해 선택지 ID 가 바뀐 것을 흉내낸다 — 다른 문제의 선택지를 가리키는
@@ -196,7 +248,10 @@ describe("getProblemStatDetail", () => {
     expect(d.excludedAttempts).toBe(1);      // 방금 심은 것만 매칭 안 됨
   });
 
-  it("D15: recentWrongSamples 는 오답만 최대 5건", async () => {
+  // "오답만" 절반은 이 테스트로는 판별력이 없다(오답만 심었다) — 그 절반은
+  // lib/db/stats.test.ts 의 findRecentWrong DAO 테스트가 고정한다. 여기서 실제로 확인하는
+  // 것은 "최대 5건" 뿐이다.
+  it("D15: recentWrongSamples 는 최대 5건으로 잘린다(오답만 필터링은 DAO 테스트가 고정)", async () => {
     const problemId = await seedShortAnswer();
     await db.insert(attempts).values(
       Array.from({ length: 6 }, (_, i) => ({
