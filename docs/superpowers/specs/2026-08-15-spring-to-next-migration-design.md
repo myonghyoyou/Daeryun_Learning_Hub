@@ -131,8 +131,9 @@ Foundation(1)은 이후 모든 서브플랜의 선행 조건이다. 서브플랜
 | 2 Auth | ✅ 완료·master 병합 | 계획 `2026-08-16-migration-auth.md`, 정답지+E2E, 누적 73 테스트 |
 | 3 부서·계정 | ✅ 완료·master 병합 | 계획 `2026-08-16-migration-dept-users.md`, 정답지 41행+E2E 23행, 누적 116 테스트 |
 | **4 문제은행** | ✅ **완료·master 병합** | 계획 `2026-08-19-migration-problem-bank.md`, 정답지 138행+E2E, 누적 441 테스트. 7구간(M1~M7) 전부 완료, `ProblemController` 9개 엔드포인트 이관, 정답지 138행 중 133행 실측 대조 — `docs/qa/2026-08-19-problem-bank-e2e-verification.md` |
-| **5 풀이** | ▶ **진행 중** | `SolveController` 4 + `AttemptController` 1 + `GET /api/tags/in-use` = **6개 엔드포인트**. `SolveServiceImpl` 240줄 — 서브플랜 4(5,303줄/31개)보다 훨씬 작다 |
-| 6 통계 / 7 컷오버 | 미착수 | 5 이후 순차 |
+| **5 풀이** | ✅ **완료·master 병합** | 계획 `2026-08-21-migration-solve.md`, 정답지 87행+E2E, 누적 610 테스트. 4구간(M1~M4) 전부 완료, `SolveController` 4 + `AttemptController` 1 + `tags/in-use` 1 + 이미지 프록시 1 = **7개 라우트**. 정답지 87행 중 미대조 0 — `docs/qa/2026-08-21-solve-e2e-verification.md` |
+| **6 통계·대시보드** | ▶ **다음** | 목록·상세·대시보드 요약·집계 SQL. **착수 전에 읽을 것**: `2026-08-21-solve-e2e-verification.md` 의 C8·C9 — `attempts` 47 번은 일부러 남긴 Spring 시대 고아 행이고, 선택지 0개인 시도가 계약상 존재한다 |
+| 7 컷오버 | 미착수 | 6 이후. 이월 목록은 두 E2E 문서의 컷오버 핸드오프 절 |
 
 > **서브플랜 5 착수 시 놓치기 쉬운 것 — `GET /api/tags/in-use`.**
 > 위 배정표가 `TagController` 를 "4(관리자 태그) + 5(풀이 활성 태그)"로 나눴다. 서브플랜 4 가
