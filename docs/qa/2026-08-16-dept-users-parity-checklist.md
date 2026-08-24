@@ -17,7 +17,7 @@
 | ④ | 파일 상한 하향 | 파일 크기 상한 20MB → 4MB, resultCode 1015. Spring 실측: 20MB 초과는 `MaxUploadSizeExceeded`(Multipart)로 잡혀 HTTP 200, resultCode 1009였다; 포트는 4MB 초과 시 HTTP 400, resultCode 1015로 응답한다(상한값·상태코드·resultCode 모두 이탈) | 이관 스펙 Q7 플랫폼 안전값 |
 | ⑤ | SheetJS 행 번호 어긋남 | SheetJS `blankrows:false`로 인해 빈 행 많은 파일에서 오류 행 번호가 엑셀과 어긋날 수 있음. 동일한 이유로 `totalRows` 집계와 500행 상한 판정에서도 빈 행이 제외된다(Spring `lastRowNum`은 빈 행을 포함해 센다) | 실사용 파일엔 빈 행 없음, 미세 이탈로 기록 |
 | ⑥ | file 필드 부재 통일 | 멀티파트 file 필드 부재 → HTTP 200, resultCode 1009로 통일 (Spring은 catch-all 200/-1) | 의도적 개선 |
-| ⑦ | API 타임스탬프 UTC 직렬화 | API 응답의 타임스탬프는 UTC ISO("Z" 접미사)로 직렬화한다(Spring은 존 정보 없는 KST 벽시계 문자열). 표시층에서 현지화하므로 화면에는 동일하게 노출된다. Plan 5·6에서 타임스탬프가 대량 노출되기 전에 컨벤션으로 고정해 둔다 | 컷오버 전 확정 필요 |
+| ⑦ | API 타임스탬프 UTC 직렬화 | API 응답의 타임스탬프는 UTC ISO("Z" 접미사)로 직렬화한다(Spring은 존 정보 없는 KST 벽시계 문자열). 표시층에서 현지화하므로 화면에는 동일하게 노출된다. **확정**: 컨벤션은 UTC + `Z` 접미사이고 표시 현지화는 프론트 책임이다. Drizzle 이 `timestamp` 텍스트를 항상 `+0000` 으로 파싱하므로(`drizzle-orm/pg-core/columns/timestamp.js`) 포트 내부는 DB 세션 TZ 와 무관하게 일관되며, `web/lib/http/timestamp.test.ts` 로 테스트에 고정했다. **컷오버에서 확인할 것은 서버 TZ 가 아니라 `current_setting('TimeZone')`** 이다(현재 `Etc/UTC`) | 서브플랜 6 Task 0 에서 확정. 근거: `.superpowers/sdd/2026-08-24-migration-stats/task-0-brief.md` |
 
 ---
 
