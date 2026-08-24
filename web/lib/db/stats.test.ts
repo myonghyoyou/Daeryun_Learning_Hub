@@ -53,20 +53,20 @@ describe("findProblemStats — 정렬 (이탈 ㉠: SQL 만 정렬한다)", () =>
     expect(rows[1].totalAttempts).toBe(0);
   });
 
-  it("L8: 동률은 problemId 오름차순", async () => {
+  // 주의(브리핑 원문 그대로 둔 2행 테스트 — 판별력 없음): 이 테스트는 `, p.id` 를 지워도
+  // 계속 초록으로 남는다. HashAggregate 가 그룹 수 2건에서는 우연히 삽입 순서를 보존하기
+  // 때문이다(id 오름차순 == 항상 삽입 순서이므로 이 정도 크기에서는 결과가 우연히 맞는다).
+  // 실제 판별은 바로 아래 6건 테스트가 한다 — 이 테스트를 그 테스트와 같은 무게의 증거로
+  // 읽지 말 것.
+  it("L8: 동률은 problemId 오름차순 (2건 — 브리핑 원문, 판별력 없음. 실제 판별은 아래 6건 테스트)", async () => {
     const a = await seedWithAttempts({ content: "a" }, 1, 1);
     const b = await seedWithAttempts({ content: "b" }, 2, 2);   // 같은 0.5
     const rows = await findProblemStats(db, { limit: 100, offset: 0 });
     expect(rows.map((r) => r.problemId)).toEqual([a, b].sort((x, y) => x - y));
   });
 
-  // 주의: 위 두-행짜리 동률 테스트와 아래 Set 기반 페이징 테스트는 원래(브리핑 원문) 형태로는
-  // `, p.id` 타이브레이커를 지워도 계속 초록으로 남는다 — HashAggregate 가 아주 작은 그룹
-  // 수(2건)에서는 우연히 삽입 순서를 보존하고, Set.size 비교는 "중복이 없다"만 볼 뿐
-  // "오름차순이다"는 보지 않기 때문이다(같은 커넥션·같은 실행계획이면 두 페이지 호출이
-  // 서로 겹치지 않는 것은 타이브레이커 유무와 무관하게 성립한다). 실측(ad-hoc 스크립트, N=6)
-  // 으로 확인: `, p.id` 를 지우면 HashAggregate 출력이 [4,5,6,3,1,2] 처럼 실제로 뒤섞인다.
-  // 그래서 6건 이상 + 정확한 순서 비교로 아래 테스트를 추가해 이탈 ㉠ 을 실제로 고정한다.
+  // 실측(ad-hoc 스크립트, N=6)으로 확인: `, p.id` 를 지우면 HashAggregate 출력이
+  // [4,5,6,3,1,2] 처럼 실제로 뒤섞인다 — 위 2건 테스트로는 못 잡는 것을 여기서 잡는다.
   it("L8: 동률 6건의 순서가 정확히 problemId 오름차순이다 — Set 비교로는 안 잡힌다", async () => {
     const ids: number[] = [];
     for (let i = 0; i < 6; i++) ids.push(await seedWithAttempts({ content: `q${i}` }, 1, 1));
@@ -156,16 +156,38 @@ describe("countActiveProblems", () => {
 });
 
 describe("findProblemStat", () => {
-  it("단일 문제의 집계 행을 반환한다", async () => {
-    const pid = await seedWithAttempts({ content: "단일" }, 2, 1);
+  // 다른 문제를 먼저 심어 서로 다른 시도 수를 준다 — WHERE p.id = ... 가 없어도(예: 부서
+  // 조건 등으로 잘못 바뀌어도) GROUP BY p.id 가 여러 행을 만들어 내고, 그중 하나가 우연히
+  // rows[0] 이 되어 "그럴듯한 문제"를 돌려주는 실패 모드를 이 두 문제의 시도 수 차이가 잡는다.
+  it("요청한 problemId 의 행만 반환한다 — 다른 문제와 섞이지 않는다", async () => {
+    const other = await seedWithAttempts({ content: "다른 문제" }, 5, 0);   // 시도 5건
+    const pid = await seedWithAttempts({ content: "단일" }, 2, 1);          // 시도 3건
     const row = await findProblemStat(db, pid);
+    expect(row?.problemId).toBe(pid);
+    expect(row?.problemId).not.toBe(other);
     expect(row?.totalAttempts).toBe(3);
     expect(row?.correctAttempts).toBe(2);
     expect(row?.departmentId).toBe(deptId);
   });
 
-  it("존재하지 않는 문제는 null", async () => {
+  it("존재하지 않는 문제는 null — 다른 문제가 존재해도", async () => {
+    // 문제를 하나도 안 심으면 WHERE 를 지운 변이도 우연히 빈 배열을 돌려줘 통과한다.
+    // 존재하는 문제를 하나 심어야 "필터가 실제로 걸렸다"가 증명된다.
+    await seedWithAttempts({ content: "있음" }, 1, 0);
     expect(await findProblemStat(db, 999999)).toBeNull();
+  });
+
+  // MAX(a.submitted_at) 미러가 실제로 최댓값을 고르는지, parseUtcTimestamp 변환이 맞는지
+  // 아무 데서도 확인되지 않고 있었다 — MIN 으로 바꿔도 전체 스위트가 초록이었다.
+  it("lastAttemptAt 은 MAX(submitted_at) 이다 — 가장 최근 시도가 나와야 한다", async () => {
+    const pid = await seedWithAttempts({ content: "시각" }, 0, 0);
+    await db.insert(attempts).values([
+      { userId, problemId: pid, submittedAnswer: "가", isCorrect: true, submittedAt: new Date("2026-01-05T00:00:00Z") },
+      { userId, problemId: pid, submittedAnswer: "나", isCorrect: false, submittedAt: new Date("2026-01-10T00:00:00Z") },
+      { userId, problemId: pid, submittedAnswer: "다", isCorrect: true, submittedAt: new Date("2026-01-03T00:00:00Z") },
+    ]);
+    const row = await findProblemStat(db, pid);
+    expect(row?.lastAttemptAt?.toISOString()).toBe("2026-01-10T00:00:00.000Z");
   });
 });
 
@@ -213,6 +235,27 @@ describe("findChoiceDistribution / countAnalyzedAttempts", () => {
     ]);
     // 총 시도는 2건이지만, 문제 A 의 현재 보기와 맞는 것은 a1 뿐이다.
     expect(await countAnalyzedAttempts(db, pidA)).toBe(1);
+  });
+
+  // D13 의 근거는 두 절이다 — 조인 조건(위 테스트)과 DISTINCT(이 테스트). 앞서 붙인 조인
+  // 조건 테스트는 시도마다 attempt_choices 가 정확히 1행이라 DISTINCT 가 no-op 이었다.
+  // MCQ_MULTI 는 시도 하나가 보기를 여러 개 고르면 attempt_choices 가 여러 행이 되므로
+  // DISTINCT 가 없으면 시도 수가 부풀어 excludedAttempts 가 0으로 눌린다(D12 가 막으려는
+  // 바로 그 상태).
+  it("D13: countAnalyzedAttempts 는 DISTINCT 다 — 한 시도가 보기 여러 개를 고른다(MCQ_MULTI)", async () => {
+    const pid = await seedWithAttempts({ content: "복수선택", type: "MCQ_MULTI" }, 0, 0);
+    const [c1] = await db.insert(problemChoices)
+      .values({ problemId: pid, choiceText: "A", isCorrect: true, displayOrder: 1 }).returning({ id: problemChoices.id });
+    const [c2] = await db.insert(problemChoices)
+      .values({ problemId: pid, choiceText: "B", isCorrect: true, displayOrder: 2 }).returning({ id: problemChoices.id });
+    const [a1] = await db.insert(attempts)
+      .values({ userId, problemId: pid, submittedAnswer: "A,B", isCorrect: true }).returning({ id: attempts.id });
+    // 시도 하나(a1)가 attempt_choices 두 행을 남긴다.
+    await db.insert(attemptChoices).values([
+      { attemptId: a1.id, choiceId: c1.id, choiceText: "A" },
+      { attemptId: a1.id, choiceId: c2.id, choiceText: "B" },
+    ]);
+    expect(await countAnalyzedAttempts(db, pid)).toBe(1);   // 2 가 아니다
   });
 });
 
