@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
-import SolveShell from "@/screens/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
 import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
 import { getSolveProblem } from "@/apiClient/solve.js";
@@ -25,8 +24,9 @@ import {
  * 최상단에 두고, 리다이렉트는 렌더 도중이 아니라 useEffect 안에서만 한다.
  */
 export default function RandomPlayPage() {
-  const navigate = useNavigate();
-  const [session, setSession] = useState(() => parseSession(sessionStorage.getItem(SESSION_STORAGE_KEY)));
+  const router = useRouter();
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [session, setSession] = useState(null);
   const [problem, setProblem] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [submittedResult, setSubmittedResult] = useState(null);
@@ -34,15 +34,24 @@ export default function RandomPlayPage() {
 
   const problemId = session ? currentProblemId(session) : null;
 
+  // sessionStorage 는 서버 렌더에 없으므로 useEffect 안에서만 읽는다. 같은 effect 안에서
+  // sessionChecked 를 true 로 세워, 아래 리다이렉트 effect 가 "아직 안 읽음"과 "읽었는데
+  // 없음"을 session 값만으로 구분하지 못해 유효한 세션을 오탐 리다이렉트하는 일을 막는다.
   useEffect(() => {
+    setSession(parseSession(sessionStorage.getItem(SESSION_STORAGE_KEY)));
+    setSessionChecked(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionChecked) return;
     if (!session) {
-      navigate("/solve/random", { replace: true });
+      router.replace("/solve/random");
       return;
     }
     if (isFinished(session)) {
-      navigate("/solve/random/result", { replace: true });
+      router.replace("/solve/random/result");
     }
-  }, [session, navigate]);
+  }, [sessionChecked, session, router]);
 
   useEffect(() => {
     if (problemId === null) return;
@@ -115,19 +124,17 @@ export default function RandomPlayPage() {
     if (!session) return;
     const base = submittedResult ? recordResult(session, submittedResult.correct) : session;
     if (base.index === 0) {
-      navigate("/solve");
+      router.push("/solve");
       return;
     }
     const ended = endSessionEarly(base);
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(ended));
-    navigate("/solve/random/result", { replace: true });
+    router.replace("/solve/random/result");
   }
 
   if (!session || isFinished(session)) {
     return (
-      <SolveShell>
-        <p className="px-1 py-10 text-center text-body text-ink-muted">이동 중...</p>
-      </SolveShell>
+      <p className="px-1 py-10 text-center text-body text-ink-muted">이동 중...</p>
     );
   }
 
@@ -138,32 +145,30 @@ export default function RandomPlayPage() {
 
   if (loadError) {
     return (
-      <SolveShell>
-        <Surface className="p-0">
-          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-            <p className="text-body font-semibold text-ink-strong">문제를 불러오지 못했습니다.</p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button variant="secondary" size="sm" onClick={handleRetry}>
-                다시 시도
-              </Button>
-              {/* handleViewResults 는 (대기 중인 제출을 반영해도) 보여줄 결과가 없으면
-                  결과 화면 대신 학습 홈으로 보낸다 — 진행 화면의 "그만하고 결과 보기"
-                  버튼과 같은 규칙이다. 문구도 그에 맞춘다. 이 화면은 문제를 못 불러온
-                  상태라 submittedResult 가 항상 null 이므로 noResultsToShow 는 사실상
-                  session.index === 0 과 같다. */}
-              <Button variant="secondary" size="sm" onClick={handleViewResults}>
-                {noResultsToShow ? "학습 홈으로" : "결과 보기"}
-              </Button>
-            </div>
+      <Surface className="p-0">
+        <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+          <p className="text-body font-semibold text-ink-strong">문제를 불러오지 못했습니다.</p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button variant="secondary" size="sm" onClick={handleRetry}>
+              다시 시도
+            </Button>
+            {/* handleViewResults 는 (대기 중인 제출을 반영해도) 보여줄 결과가 없으면
+                결과 화면 대신 학습 홈으로 보낸다 — 진행 화면의 "그만하고 결과 보기"
+                버튼과 같은 규칙이다. 문구도 그에 맞춘다. 이 화면은 문제를 못 불러온
+                상태라 submittedResult 가 항상 null 이므로 noResultsToShow 는 사실상
+                session.index === 0 과 같다. */}
+            <Button variant="secondary" size="sm" onClick={handleViewResults}>
+              {noResultsToShow ? "학습 홈으로" : "결과 보기"}
+            </Button>
           </div>
-        </Surface>
-      </SolveShell>
+        </div>
+      </Surface>
     );
   }
 
   if (!problem) {
     return (
-      <SolveShell>
+      <>
         <section className="mb-6 flex items-center justify-between gap-3">
           <p className="text-body-small font-medium text-ink-muted">
             {session.index + 1} / {session.problemIds.length}
@@ -174,12 +179,12 @@ export default function RandomPlayPage() {
         </section>
 
         <ProblemSkeleton />
-      </SolveShell>
+      </>
     );
   }
 
   return (
-    <SolveShell>
+    <>
       <section className="mb-6 flex items-center justify-between gap-3">
         <p className="text-body-small font-medium text-ink-muted">
           {session.index + 1} / {session.problemIds.length}
@@ -203,6 +208,6 @@ export default function RandomPlayPage() {
           </Button>
         </div>
       )}
-    </SolveShell>
+    </>
   );
 }

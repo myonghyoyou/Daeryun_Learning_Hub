@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Select from "@/components/ui/Select.jsx";
 import Button from "@/components/ui/Button.jsx";
-import SolveShell from "@/screens/solve/SolveShell.jsx";
 import { fetchRandomSet } from "@/apiClient/solve.js";
 import { listDepartmentOptions } from "@/apiClient/departments.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
@@ -24,7 +24,7 @@ const COUNT_OPTIONS = [
  * 로그인한 사용자의 부서를 자동으로 선택하거나 그 부서로 제한하지 않는다.
  */
 export default function RandomSetupPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [count, setCount] = useState("10");
   const [departmentId, setDepartmentId] = useState("");
   const [departments, setDepartments] = useState([]);
@@ -46,7 +46,7 @@ export default function RandomSetupPage() {
       }
       const session = createSession(problems);
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-      navigate("/solve/random/play");
+      router.push("/solve/random/play");
     } catch (error) {
       toast.error(resolveErrorMessage(error, "문제를 불러오지 못했습니다."));
     } finally {
@@ -55,8 +55,8 @@ export default function RandomSetupPage() {
   }
 
   return (
-    <SolveShell>
-      <Link to="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+    <>
+      <Link href="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
         <ArrowLeft size={16} aria-hidden="true" />
         학습 홈
       </Link>
@@ -90,6 +90,6 @@ export default function RandomSetupPage() {
           </Button>
         </div>
       </Surface>
-    </SolveShell>
+    </>
   );
 }
