@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { toast } from "react-toastify";
 import { MagnifyingGlass, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
@@ -8,7 +8,6 @@ import Input from "@/components/ui/Input.jsx";
 import Select from "@/components/ui/Select.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
-import SolveShell from "@/screens/solve/SolveShell.jsx";
 import { listSolveProblems } from "@/apiClient/solve.js";
 import { listTagsInUse } from "@/apiClient/problems.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
@@ -48,15 +47,15 @@ export default function SolveProblemListPage() {
   }, []);
 
   return (
-    <SolveShell>
-      <Link to="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+    <>
+      <Link href="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
         <ArrowLeft size={16} aria-hidden="true" />
         학습 홈
       </Link>
 
       <section className="mb-5 flex items-center justify-between gap-3">
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">문제 풀이</h1>
-        <Link to="/solve/history" className="rounded-sm text-body-small font-semibold text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <Link href="/solve/history" className="rounded-sm text-body-small font-semibold text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
           내 풀이 이력
         </Link>
       </section>
@@ -129,7 +128,7 @@ export default function SolveProblemListPage() {
             {problems.map((problem) => (
               <li key={problem.id} className="border-b border-line-default last:border-b-0">
                 <Link
-                  to={`/solve/${problem.id}`}
+                  href={`/solve/${problem.id}`}
                   className="group flex items-center gap-3 p-4 transition-colors hover:bg-surface-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:-outline-offset-[3px] focus-visible:outline-brand-aqua"
                 >
                   <span className="shrink-0 rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
@@ -153,6 +152,6 @@ export default function SolveProblemListPage() {
           </ul>
         </Surface>
       )}
-    </SolveShell>
+    </>
   );
 }

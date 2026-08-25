@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import LogoutButton from "@/components/ui/LogoutButton.jsx";
 import { useLogout } from "@/hooks/useLogout.js";
 
@@ -14,7 +14,7 @@ export default function SolveShell({ children }) {
     <div className="min-h-screen bg-surface-page">
       <header className="flex h-[76px] items-center justify-between border-b border-line-default bg-surface-default px-5 md:px-7">
         <Link
-          to="/solve"
+          href="/solve"
           className="rounded-sm text-card-title font-bold tracking-title text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
         >
           문제 은행 Hub

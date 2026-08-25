@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
-import SolveShell from "@/screens/solve/SolveShell.jsx";
 import RecommendedSetCard from "@/components/solve/RecommendedSetCard.jsx";
 import RoutineCard from "@/components/solve/RoutineCard.jsx";
 
@@ -11,14 +10,14 @@ import RoutineCard from "@/components/solve/RoutineCard.jsx";
  */
 export default function SolveHomePage() {
   return (
-    <SolveShell>
+    <>
       <section className="mb-6">
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">학습 홈</h1>
         <p className="mt-1 text-body text-ink-default">전사 공통 문제를 자유롭게 풀고 즉시 채점 결과를 확인하세요.</p>
       </section>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Surface as={Link} to="/solve/random" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <Surface as={Link} href="/solve/random" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-surface-blue text-brand-blue">
             <Shuffle size={22} aria-hidden="true" />
           </span>
@@ -29,7 +28,7 @@ export default function SolveHomePage() {
           <p className="mt-1 text-body-small text-ink-muted">문제 수와 부서를 정하면 무작위로 뽑아 드립니다.</p>
         </Surface>
 
-        <Surface as={Link} to="/solve/problems" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <Surface as={Link} href="/solve/problems" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-surface-blue text-brand-blue">
             <ListChecks size={22} aria-hidden="true" />
           </span>
@@ -40,7 +39,7 @@ export default function SolveHomePage() {
           <p className="mt-1 text-body-small text-ink-muted">검색·태그로 원하는 문제를 찾아 풉니다.</p>
         </Surface>
 
-        <Surface as={Link} to="/solve/history" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+        <Surface as={Link} href="/solve/history" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-surface-aqua text-info-text">
             <ClockCounterClockwise size={22} aria-hidden="true" />
           </span>
@@ -56,6 +55,6 @@ export default function SolveHomePage() {
         <RecommendedSetCard />
         <RoutineCard />
       </div>
-    </SolveShell>
+    </>
   );
 }

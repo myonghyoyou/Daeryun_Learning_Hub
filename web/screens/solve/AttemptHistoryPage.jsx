@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { toast } from "react-toastify";
 import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
@@ -8,7 +8,6 @@ import EmptyState from "@/components/ui/EmptyState.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
-import SolveShell from "@/screens/solve/SolveShell.jsx";
 import { myAttemptHistory } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { previewContent } from "@/utils/problemPreview.js";
@@ -57,8 +56,8 @@ export default function AttemptHistoryPage() {
   }, []);
 
   return (
-    <SolveShell>
-      <Link to="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+    <>
+      <Link href="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
         <ArrowLeft size={16} aria-hidden="true" />
         학습 홈
       </Link>
@@ -80,7 +79,7 @@ export default function AttemptHistoryPage() {
           <EmptyState
             title="아직 푼 문제가 없습니다."
             description="문제를 풀면 여기에서 정답 여부를 확인할 수 있어요."
-            action={<Link to="/solve/problems" className={buttonClass({ variant: "primary", size: "sm" })}>문제 풀러 가기</Link>}
+            action={<Link href="/solve/problems" className={buttonClass({ variant: "primary", size: "sm" })}>문제 풀러 가기</Link>}
           />
         </Surface>
       ) : (
@@ -126,6 +125,6 @@ export default function AttemptHistoryPage() {
           </ul>
         </>
       )}
-    </SolveShell>
+    </>
   );
 }
