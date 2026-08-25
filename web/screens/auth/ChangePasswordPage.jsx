@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { CheckCircle, Circle, Eye, EyeSlash, SpinnerGap, WarningCircle } from "@phosphor-icons/react";
 import { changePassword } from "@/apiClient/auth.js";
@@ -17,7 +17,7 @@ const inputBaseClass =
   "placeholder:text-ink-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua";
 
 export default function ChangePasswordPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { handleLogout, loggingOut } = useLogout();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,7 +51,7 @@ export default function ChangePasswordPage() {
       // 화면/가드가 여전히 true를 읽어 이 화면으로 되돌아올 수 있다.
       await refetchSession();
       toast.success("비밀번호가 변경되었습니다.");
-      navigate("/", { replace: true });
+      router.replace("/");
     } catch (error) {
       const message = resolveErrorMessage(error, "비밀번호 변경에 실패했습니다.");
       setBanner(message);

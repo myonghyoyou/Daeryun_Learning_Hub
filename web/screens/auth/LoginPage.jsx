@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-toastify";
 import {
   Eye,
@@ -32,8 +32,8 @@ function fieldBorderClass(hasError) {
 }
 
 export default function LoginPage() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [employeeNo, setEmployeeNo] = useState("");
   const [password, setPassword] = useState("");
@@ -78,9 +78,9 @@ export default function LoginPage() {
       // "unauthenticated" 상태를 그대로 읽어 다시 /login으로 돌려보낸다.
       await refetchSession();
       if (result.mustChangePassword) {
-        navigate("/change-password", { replace: true });
+        router.replace("/change-password");
       } else {
-        navigate("/", { replace: true });
+        router.replace("/");
       }
     } catch (error) {
       const message = resolveErrorMessage(error, "로그인에 실패했습니다.");
