@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
@@ -6,8 +7,8 @@ import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
 import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/components/solve/choiceLayout.js";
-import { submitAttempt } from "@/api/solve.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { submitAttempt } from "@/apiClient/solve.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
 import { hasNoAnswer } from "@/utils/answerState.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";

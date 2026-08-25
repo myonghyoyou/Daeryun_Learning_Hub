@@ -1,3 +1,4 @@
+"use client";
 import { SignOut } from "@phosphor-icons/react";
 
 /**

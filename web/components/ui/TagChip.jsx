@@ -1,3 +1,4 @@
+"use client";
 import { X } from "@phosphor-icons/react";
 
 // 디자인 시스템 7.6 TagChip: 이 화면에서는 태그가 모두 "Selected + 제거 가능" 상태로만

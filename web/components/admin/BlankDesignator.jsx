@@ -1,3 +1,4 @@
+"use client";
 import { CaretLeft, CaretRight, X } from "@phosphor-icons/react";
 import { segmentContent } from "@/utils/blankSegments.js";
 

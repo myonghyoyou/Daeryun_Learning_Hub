@@ -1,3 +1,4 @@
+"use client";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";

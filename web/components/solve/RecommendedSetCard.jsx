@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { Sparkle, ArrowRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import { buttonClass } from "@/utils/buttonClass.js";
@@ -22,7 +22,7 @@ export default function RecommendedSetCard() {
         <span className="rounded-xs bg-surface-subtle px-2 py-0.5 text-body-small text-ink-muted">10문제</span>
         <span className="rounded-xs bg-surface-subtle px-2 py-0.5 text-body-small text-ink-muted">전사 공통</span>
       </div>
-      <Link to="/solve/random" className={buttonClass({ variant: "primary", size: "md", className: "mt-4" })}>
+      <Link href="/solve/random" className={buttonClass({ variant: "primary", size: "md", className: "mt-4" })}>
         세트 시작하기
         <ArrowRight size={16} aria-hidden="true" />
       </Link>

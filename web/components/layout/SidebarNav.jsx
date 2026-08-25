@@ -1,4 +1,6 @@
-import { NavLink } from "react-router-dom";
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowSquareOut } from "@phosphor-icons/react";
 
 const menuLinkClass = (isActive) =>
@@ -7,6 +9,11 @@ const menuLinkClass = (isActive) =>
       ? "border-brand-aqua bg-selection-bg text-brand-dark"
       : "border-transparent text-ink-muted hover:bg-[#F0F7FB] hover:text-ink-strong"
   }`;
+
+// NavLink 의 매칭 규칙을 그대로 옮긴다. end:true = 정확히 일치, 그 외 = 세그먼트 접두사.
+function isActivePath(pathname, to, end) {
+  return end ? pathname === to : pathname === to || pathname.startsWith(to + "/");
+}
 
 /**
  * 디자인 시스템 7.2 SidebarNav + 8.6.1 관리자 Shell.
@@ -20,6 +27,7 @@ const menuLinkClass = (isActive) =>
  * 잃는다. overflow-y-auto는 여기 두지 않는다 — 메뉴 영역이 이미 갖고 있어 이중 스크롤이 된다.
  */
 export default function SidebarNav({ groups }) {
+  const pathname = usePathname();
   return (
     <nav
       className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-line-default bg-surface-default"
@@ -36,10 +44,14 @@ export default function SidebarNav({ groups }) {
             <ul className="mt-2 space-y-1">
               {group.items.map((item) => (
                 <li key={item.to}>
-                  <NavLink to={item.to} end={item.end} className={({ isActive }) => menuLinkClass(isActive)}>
+                  <Link
+                    href={item.to}
+                    aria-current={isActivePath(pathname, item.to, item.end) ? "page" : undefined}
+                    className={menuLinkClass(isActivePath(pathname, item.to, item.end))}
+                  >
                     {item.icon && <item.icon size={18} aria-hidden="true" />}
                     {item.label}
-                  </NavLink>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -48,10 +60,14 @@ export default function SidebarNav({ groups }) {
       </div>
 
       <div className="border-t border-line-default p-3">
-        <NavLink to="/solve" className={({ isActive }) => menuLinkClass(isActive)}>
+        <Link
+          href="/solve"
+          aria-current={isActivePath(pathname, "/solve", false) ? "page" : undefined}
+          className={menuLinkClass(isActivePath(pathname, "/solve", false))}
+        >
           <ArrowSquareOut size={18} aria-hidden="true" />
           학습 화면으로 이동
-        </NavLink>
+        </Link>
       </div>
     </nav>
   );

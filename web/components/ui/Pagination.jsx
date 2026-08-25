@@ -1,3 +1,4 @@
+"use client";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { buttonClass } from "@/utils/buttonClass.js";
 import { PAGE_SIZE, pageCount, pageRange } from "@/utils/pagination.js";

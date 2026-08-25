@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useId, useRef } from "react";
 import { X } from "@phosphor-icons/react";
 
