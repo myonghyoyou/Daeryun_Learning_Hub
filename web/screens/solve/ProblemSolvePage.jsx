@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { toast } from "react-toastify";
 import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
-import SolveShell from "@/screens/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
 import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
 import { getSolveProblem } from "@/apiClient/solve.js";
@@ -30,16 +30,14 @@ export default function ProblemSolvePage() {
 
   if (loadError) {
     return (
-      <SolveShell>
-        <Surface className="p-0">
-          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-            <p className="text-body font-semibold text-ink-strong">문제를 불러오지 못했습니다.</p>
-            <Link to="/solve/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
-              목록으로
-            </Link>
-          </div>
-        </Surface>
-      </SolveShell>
+      <Surface className="p-0">
+        <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+          <p className="text-body font-semibold text-ink-strong">문제를 불러오지 못했습니다.</p>
+          <Link href="/solve/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
+            목록으로
+          </Link>
+        </div>
+      </Surface>
     );
   }
 
@@ -48,8 +46,8 @@ export default function ProblemSolvePage() {
   // skeleton 이 막으려던 바로 그 현상이다. 랜덤 세트 진행 화면도 같은 이유로 진행률
   // 헤더를 skeleton 상태에서 함께 그린다(RandomPlayPage).
   return (
-    <SolveShell>
-      <Link to="/solve/problems" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
+    <>
+      <Link href="/solve/problems" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
         <ArrowLeft size={16} aria-hidden="true" />
         문제 목록
       </Link>
@@ -60,7 +58,7 @@ export default function ProblemSolvePage() {
 
           {submittedResult && (
             <div className="mt-4">
-              <Link to="/solve/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
+              <Link href="/solve/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
                 다른 문제 풀기
               </Link>
             </div>
@@ -69,6 +67,6 @@ export default function ProblemSolvePage() {
       ) : (
         <ProblemSkeleton />
       )}
-    </SolveShell>
+    </>
   );
 }
