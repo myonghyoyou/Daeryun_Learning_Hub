@@ -20,6 +20,13 @@ export const useSessionStore = create(() => ({
   session: null,
   fetchPromise: null,
   generation: 0,
+  // Task 7: ProtectedLayout(resolvePrivateRedirect, "/login" 고정)과
+  // Providers(registerSessionRedirects, "/login?reason=session-expired")가
+  // 세션 만료 시 서로 다른 목적지로 동시에 router.replace()를 호출하는 경합이 있다.
+  // 어느 쪽이 마지막에 이기든 URL 파라미터가 유실될 수 있으므로, 파라미터에
+  // 의존하지 않는 별도 신호를 스토어에 남겨 LoginPage가 둘 중 하나만 봐도
+  // 배너를 띄우게 한다.
+  expired: false,
 }));
 
 function applySessionFetch(generation) {
@@ -92,16 +99,23 @@ export function markSessionExpired() {
     status: "unauthenticated",
     session: null,
     fetchPromise: null,
+    expired: true, // 파라미터가 유실돼도 배너가 뜨게 하는 근거
     generation: useSessionStore.getState().generation + 1,
   });
 }
 
+/**
+ * 로그인 성공 직후 호출된다. expired를 여기서 되돌리지 않으면, 만료 후
+ * 재로그인해도 다음에 /login으로 돌아왔을 때(예: 로그아웃) 이전 만료 배너가
+ * 계속 남아 있는 것처럼 보일 수 있다.
+ */
 export function refetchSession() {
   const nextGeneration = useSessionStore.getState().generation + 1;
   useSessionStore.setState({
     status: "loading",
     session: null,
     fetchPromise: null,
+    expired: false,
     generation: nextGeneration,
   });
   return applySessionFetch(nextGeneration);

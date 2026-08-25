@@ -11,13 +11,19 @@ import {
 } from "@phosphor-icons/react";
 import { login } from "@/apiClient/auth.js";
 import { ApiError, resolveErrorMessage } from "@/apiClient/client.js";
-import { refetchSession } from "@/store/sessionStore.js";
+import { refetchSession, useSessionStore } from "@/store/sessionStore.js";
 
 /**
  * 세션 만료로 다시 /login에 진입했음을 알리는 계약.
  * `@/apiClient/sessionRedirects.js`의 setOnSessionExpired 리스너가 resultCode 980을
  * 감지하면 `/login?reason=session-expired`로 이동시키고,
  * 이 페이지가 폼 상단에 "세션이 만료되었습니다" 안내를 표시한다.
+ *
+ * Task 7: 같은 상태 전이에서 ProtectedLayout(resolvePrivateRedirect)도 독립적으로
+ * 하드코딩된 "/login"(파라미터 없음)으로 router.replace()를 호출하는 경합이 있다.
+ * 두 effect 중 어느 쪽이 나중에 이기느냐에 따라 이 쿼리 파라미터가 유실될 수
+ * 있으므로, URL 파라미터 **또는** sessionStore의 expired 플래그 중 하나만 참이어도
+ * 배너를 띄운다 — 파라미터 지원은 유지한다(정답지 L1이 직접 URL 진입 동작을 고정).
  */
 const SESSION_EXPIRED_REASON = "session-expired";
 
@@ -41,7 +47,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [banner, setBanner] = useState(() => {
-    if (searchParams.get("reason") === SESSION_EXPIRED_REASON) {
+    // 둘 중 하나만 참이어도 배너를 띄운다: URL 파라미터(직접 진입 시나리오,
+    // 정답지 L1)와 sessionStore.expired(경합에서 파라미터가 유실된 시나리오, Task 7).
+    const viaParam = searchParams.get("reason") === SESSION_EXPIRED_REASON;
+    const viaStore = useSessionStore.getState().expired;
+    if (viaParam || viaStore) {
       return { tone: "info", message: "세션이 만료되었습니다. 다시 로그인해 주세요." };
     }
     return null;
