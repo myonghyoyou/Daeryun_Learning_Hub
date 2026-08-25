@@ -206,7 +206,7 @@ function validateFillBlank(content: string | null, blanks: BlankInput[], blankRe
   // 정규식(BLANK_MARKER_PATTERN)은 반대 방향(본문의 마커가 선언돼 있는가, :433-440)에만 쓰인다.
   // 두 방향에 같은 정규식 charset([A-Za-z0-9_-]+)을 쓰면, 그 charset 밖의 키(한글, "b.1" 처럼
   // "."을 포함하는 키 등)가 본문에 실제로 있어도 이 방향에서 false 로 거부된다 —
-  // frontend/src/utils/blankSegments.js 가 명시하듯 "서버는 키 형식을 강제하지 않는다".
+  // web/utils/blankSegments.js 가 명시하듯 "서버는 키 형식을 강제하지 않는다".
   const contentValue = content ?? "";
   for (const key of keys) {
     if (!contentValue.includes(`{{${key}}}`)) invalid(`본문에 없는 빈칸 마커입니다: ${key}`);

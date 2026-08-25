@@ -100,7 +100,7 @@ function toDateLiteral(date: Date): string {
  *
  * MyBatis `<if>` 를 글자대로 옮긴다: 빈 문자열 방어(`!= ''`)는 tag·keyword 에만 있다.
  * `?type=` 처럼 빈 값이 오면 Spring 도 `p.type = ''` 로 0건을 낸다 — 화면은 "전체" 를
- * 파라미터 자체를 빼는 방식으로 보내므로(frontend/src/utils/problemListParams.js) 도달하지 않는다.
+ * 파라미터 자체를 빼는 방식으로 보내므로(web/utils/problemListParams.js) 도달하지 않는다.
  */
 function problemFilterConditions(filters: ProblemListFilters): SQL[] {
   const conditions: SQL[] = [];

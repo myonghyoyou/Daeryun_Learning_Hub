@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { apiGet } from "./client.js";
 import {
   registerSessionRedirects,
+  LOGIN_PATH,
   SESSION_EXPIRED_PATH,
   CHANGE_PASSWORD_PATH,
 } from "./sessionRedirects.js";
@@ -85,6 +86,46 @@ test("resultCode 1012 while already on /change-password does not loop", async ()
     await assert.rejects(() => apiGet("/api/problems"));
 
     assert.deepEqual(router.navigations, []);
+  } finally {
+    restore();
+  }
+});
+
+test("세션 만료 리다이렉트는 router.state 를 매번 새로 읽는다 — 첫 등록 시점 경로에 고정되지 않는다", async () => {
+  // providers.tsx 는 router.state 를 getter 로 둔다. 값으로 굳히면(= 이 테스트가
+  // 잡으려는 회귀) 첫 네비게이션 이후에도 등록 시점 경로가 영원히 박제돼, "이미
+  // 목적지에 있다" 판정이 실제 현재 경로가 아니라 그 박제된 경로로 계속 내려진다.
+  let pathname = "/solve";
+  const navigations = [];
+  const router = {
+    navigations,
+    get state() {
+      return { location: { pathname } };
+    },
+    navigate: (to, options) => {
+      navigations.push({ to, options });
+    },
+  };
+  let marked = 0;
+  registerSessionRedirects({ router, markSessionExpired: () => (marked += 1) });
+  const restore = stubFetch({ resultCode: 980, resultMsg: "세션 정보가 없습니다." }, { status: 401 });
+  try {
+    await assert.rejects(() => apiGet("/api/problems"));
+    assert.deepEqual(router.navigations, [{ to: SESSION_EXPIRED_PATH, options: { replace: true } }]);
+
+    // 실제 네비게이션이 SESSION_EXPIRED_PATH 에 도달했다고 가정하고 라우터 경로를 갱신한다.
+    // router.state.location.pathname 은 실제 라우터와 마찬가지로 쿼리스트링을 포함하지
+    // 않으므로 LOGIN_PATH("/login")를 쓴다 — sessionRedirects.js 의 "이미 목적지" 판정도
+    // currentPathname(router) === LOGIN_PATH 로 pathname 만 비교한다.
+    pathname = LOGIN_PATH;
+
+    await assert.rejects(() => apiGet("/api/auth/session"));
+    assert.equal(marked, 2);
+    assert.deepEqual(
+      router.navigations,
+      [{ to: SESSION_EXPIRED_PATH, options: { replace: true } }],
+      "router.state 를 첫 등록 시점 값으로 고정해 읽으면 이미 목적지인데도 다시 이동한다",
+    );
   } finally {
     restore();
   }
