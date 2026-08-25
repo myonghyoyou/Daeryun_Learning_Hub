@@ -18,7 +18,7 @@
  * 테스트 러너에는 Vite 의 "@/" alias 해석기가 없다. client.js 는 자체 import 가
  * 없어 Node 에서 그대로 로드된다.
  */
-import { setOnSessionExpired, setOnPasswordChangeRequired } from "../api/client.js";
+import { setOnSessionExpired, setOnPasswordChangeRequired } from "./client.js";
 
 export const LOGIN_PATH = "/login";
 export const SESSION_EXPIRED_PATH = "/login?reason=session-expired";

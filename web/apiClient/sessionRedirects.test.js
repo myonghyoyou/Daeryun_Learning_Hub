@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { apiGet } from "../api/client.js";
+import { apiGet } from "./client.js";
 import {
   registerSessionRedirects,
   SESSION_EXPIRED_PATH,
