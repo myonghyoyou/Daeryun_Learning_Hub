@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
 import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
-import { getSolveProblem } from "@/api/solve.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { getSolveProblem } from "@/apiClient/solve.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import {
   SESSION_STORAGE_KEY,
   currentProblemId,

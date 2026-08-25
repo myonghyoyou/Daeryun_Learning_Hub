@@ -8,10 +8,10 @@ import Input from "@/components/ui/Input.jsx";
 import Select from "@/components/ui/Select.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
-import { listSolveProblems } from "@/api/solve.js";
-import { listTagsInUse } from "@/api/problems.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
+import { listSolveProblems } from "@/apiClient/solve.js";
+import { listTagsInUse } from "@/apiClient/problems.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { previewContent } from "@/utils/problemPreview.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
 

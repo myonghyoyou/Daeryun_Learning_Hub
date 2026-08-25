@@ -9,11 +9,11 @@ import {
   getProblem,
   updateProblem,
   uploadProblemImage,
-} from "@/api/problems.js";
-import { listDepartments } from "@/api/departments.js";
+} from "@/apiClient/problems.js";
+import { listDepartments } from "@/apiClient/departments.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { buildUploadDepartmentField } from "@/utils/uploadDepartmentField.js";
-import { ApiError, resolveErrorMessage } from "@/api/client.js";
+import { ApiError, resolveErrorMessage } from "@/apiClient/client.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
 import { MAX_CHOICES, MIN_CHOICES, createChoice, setChoiceCorrect } from "@/utils/problemChoices.js";
 import { createBlank } from "@/utils/problemBlanks.js";

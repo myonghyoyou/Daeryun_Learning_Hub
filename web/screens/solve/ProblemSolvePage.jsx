@@ -3,11 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
 import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
-import { getSolveProblem } from "@/api/solve.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { getSolveProblem } from "@/apiClient/solve.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { buttonClass } from "@/utils/buttonClass.js";
 
 export default function ProblemSolvePage() {

@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { Upload } from "@phosphor-icons/react";
-import { uploadUsersExcel } from "@/api/users.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { uploadUsersExcel } from "@/apiClient/users.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseExcelErrorDetail } from "@/utils/excelUploadResult.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";

@@ -8,9 +8,9 @@ import EmptyState from "@/components/ui/EmptyState.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Collapsible from "@/components/ui/Collapsible.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
-import { myAttemptHistory } from "@/api/solve.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
+import { myAttemptHistory } from "@/apiClient/solve.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { previewContent } from "@/utils/problemPreview.js";
 import { buttonClass } from "@/utils/buttonClass.js";
 

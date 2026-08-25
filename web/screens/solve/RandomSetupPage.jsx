@@ -5,10 +5,10 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Select from "@/components/ui/Select.jsx";
 import Button from "@/components/ui/Button.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
-import { fetchRandomSet } from "@/api/solve.js";
-import { listDepartmentOptions } from "@/api/departments.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
+import { fetchRandomSet } from "@/apiClient/solve.js";
+import { listDepartmentOptions } from "@/apiClient/departments.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { createSession, SESSION_STORAGE_KEY } from "@/utils/solveSession.js";
 
 const COUNT_OPTIONS = [

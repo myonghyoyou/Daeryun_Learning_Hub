@@ -9,13 +9,13 @@ import {
   SpinnerGap,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { login } from "@/api/auth.js";
-import { ApiError, resolveErrorMessage } from "@/api/client.js";
+import { login } from "@/apiClient/auth.js";
+import { ApiError, resolveErrorMessage } from "@/apiClient/client.js";
 import { refetchSession } from "@/store/sessionStore.js";
 
 /**
  * 세션 만료로 다시 /login에 진입했음을 알리는 계약.
- * `@/routers/sessionRedirects.js`의 setOnSessionExpired 리스너가 resultCode 980을
+ * `@/apiClient/sessionRedirects.js`의 setOnSessionExpired 리스너가 resultCode 980을
  * 감지하면 `/login?reason=session-expired`로 이동시키고,
  * 이 페이지가 폼 상단에 "세션이 만료되었습니다" 안내를 표시한다.
  */

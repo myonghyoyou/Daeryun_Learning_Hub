@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
 import RecommendedSetCard from "@/components/solve/RecommendedSetCard.jsx";
 import RoutineCard from "@/components/solve/RoutineCard.jsx";
 

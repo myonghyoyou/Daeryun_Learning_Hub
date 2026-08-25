@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Surface from "@/components/ui/Surface.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
-import SolveShell from "@/pages/solve/SolveShell.jsx";
+import SolveShell from "@/screens/solve/SolveShell.jsx";
 import {
   SESSION_STORAGE_KEY,
   summarize,

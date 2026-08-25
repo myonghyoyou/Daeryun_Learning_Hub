@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { Plus } from "@phosphor-icons/react";
-import { createDepartment, listDepartments, updateDepartment } from "@/api/departments.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { createDepartment, listDepartments, updateDepartment } from "@/apiClient/departments.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { filterDepartments } from "@/utils/departmentFilters.js";
 import { validateDepartmentEditForm, validateDepartmentForm } from "@/utils/departmentValidation.js";
 import Surface from "@/components/ui/Surface.jsx";

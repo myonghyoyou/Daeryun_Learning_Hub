@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { Upload } from "@phosphor-icons/react";
-import { uploadProblemsExcel } from "@/api/problems.js";
-import { listDepartments } from "@/api/departments.js";
+import { uploadProblemsExcel } from "@/apiClient/problems.js";
+import { listDepartments } from "@/apiClient/departments.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { buildUploadDepartmentField } from "@/utils/uploadDepartmentField.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseExcelErrorDetail } from "@/utils/excelUploadResult.js";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";

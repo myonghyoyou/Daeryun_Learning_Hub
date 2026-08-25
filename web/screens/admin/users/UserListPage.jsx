@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { Plus } from "@phosphor-icons/react";
-import { createUser, listUsers, updateUser } from "@/api/users.js";
-import { listDepartments } from "@/api/departments.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { createUser, listUsers, updateUser } from "@/apiClient/users.js";
+import { listDepartments } from "@/apiClient/departments.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { filterUsers } from "@/utils/userFilters.js";
 import { validateUserCreateForm, validateUserEditForm } from "@/utils/userValidation.js";
 import { ROLE_OPTIONS, roleLabel } from "@/utils/userRole.js";

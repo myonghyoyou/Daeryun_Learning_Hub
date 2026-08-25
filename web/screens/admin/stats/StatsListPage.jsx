@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { listProblemStats } from "@/api/stats.js";
-import { listDepartments } from "@/api/departments.js";
-import { resolveErrorMessage } from "@/api/client.js";
+import { listProblemStats } from "@/apiClient/stats.js";
+import { listDepartments } from "@/apiClient/departments.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { previewContent } from "@/utils/problemPreview.js";
 import { problemStatusLabel, problemTypeLabel, PROBLEM_STATUS_OPTIONS } from "@/utils/problemLabels.js";
