@@ -4,12 +4,9 @@
 
 ## 구현 진행 상황
 
-- **Plan 1(인증)·Plan 2(부서/계정 관리)는 완료되어 `master`에 병합됐다.**
-- **Plan 3(문제 은행 관리)은 완료됐다** — `worktree-plan3-problem-bank` 브랜치, 아직 `master`에 병합하지 않음. Task 1~9 전부 구현·리뷰·수정 완료.
-- 백엔드 189개, 프론트엔드 170개 테스트 통과. 프로덕션 빌드 성공.
-- Plan 4(풀이)·Plan 5(통계)는 아직 착수하지 않았다.
-- **Plan 4를 시작하기 전에 [`docs/superpowers/plans/2026-07-28-03-problem-bank-management.md`](docs/superpowers/plans/2026-07-28-03-problem-bank-management.md) 상단의 "구현 중 확정된 사항"과 "미해결 — 판단 필요"를 반드시 읽을 것.** 특히 관리자용 `ProblemDetailResponse`에는 정답·해설이 들어 있어 풀이 화면에 그대로 쓰면 학습자에게 정답이 전송되고, `problem_choices.is_correct`는 명시적 resultMap으로만 매핑된다(자동 매핑으로 되돌리면 경고 없이 채점이 망가진다).
-- Plan 1의 전제 사항은 [`2026-07-28-01-foundation-and-auth.md`](docs/superpowers/plans/2026-07-28-01-foundation-and-auth.md) 상단에 정리돼 있다 — 세션 ID 교체, 원자적 로그인 실패 카운터, `resultCode` 1012가 HTTP 200이라는 규약, `refetchSession()` 호출 의무 등.
+기존 Spring 백엔드와 Vite 프론트엔드가 단일 Next.js 애플리케이션(`web/`)으로 완전히 이관됐다. 인증, 부서/계정 관리, 문제 은행 관리, 풀이/응시, 통계를 포함한 전 직원·관리자 화면 20개가 모두 `web/` 아래에서 동작하며, Spring 백엔드는 Next.js의 API 라우트(`web/app/api/**`)로 대체됐다.
+
+이관 과정의 상세 기록은 [`docs/superpowers/plans/`](docs/superpowers/plans/) 아래 각 계획 문서를 참고한다.
 
 ### QA 문서
 
@@ -19,15 +16,15 @@
 
 ### 남은 과제
 
-- **회사 로고 자산이 없다.** 디자인 시스템 8.1이 CSS·텍스트로 로고를 재현하는 것을 금지하므로, `frontend/src/pages/auth/LoginPage.jsx`에 자리만 비워두고 TODO를 남겼다. 실제 로고 파일이 필요하다.
+- **회사 로고 자산이 없다.** 디자인 시스템 8.1이 CSS·텍스트로 로고를 재현하는 것을 금지하므로, `web/screens/auth/LoginPage.jsx`에 자리만 비워두고 TODO를 남겼다. 실제 로고 파일이 필요하다.
 - ⚠️ **운영 배포 시 `SESSION_COOKIE_SECURE=true`를 반드시 설정해야 한다.** 로컬 HTTP 개발을 위해 기본값이 `false`라, 설정하지 않으면 세션 쿠키가 평문으로 전송된다.
 
 ## 로컬 개발 환경 준비
 
 ### 1. 사전 설치
 
-- Java 8 (JDK) — 예: [Eclipse Temurin 8](https://adoptium.net/)
-- Node.js 18+
+- Node.js
+- pnpm — `web/`의 패키지 매니저
 - PostgreSQL — 아래 두 방법 중 하나
 
 ### 2. PostgreSQL 준비 — Docker (권장)
@@ -40,57 +37,70 @@ docker compose up -d
 
 - 호스트 포트: `5434` (로컬에 이미 설치된 Postgres의 기본 포트 5432, `trend_one` 프로젝트의 Docker Postgres가 쓰는 5433과 겹치지 않도록 선택)
 - 계정: `probank` / `probank_dev`, DB명: `probank_dev`
-- 스키마는 별도 초기화 스크립트 없이, 백엔드 앱이 기동 시 `spring.sql.init.mode=always`로 `backend/src/main/resources/schema.sql`을 자동 적용한다.
-- **백엔드의 기본 접속 대상이 이 컨테이너(`localhost:5434`)다.** `DB_URL`을 지정하지 않으면 여기에 붙는다.
 
-> 기본값이 5434인 이유: 예전에는 기본값이 `localhost:5432`였는데, Docker 컨테이너가 내려간 줄 모르고 백엔드가 **로컬에 설치된 다른 Postgres에 조용히 붙는 사고**가 실제로 있었다(2026-08-07 QA, [`docs/qa/2026-08-07-p1-result.md`](docs/qa/2026-08-07-p1-result.md) §0.1). 저장소가 함께 제공하는 `docker-compose.yml`이 5434를 쓰므로 기본값도 그쪽에 맞춘다.
+> 기본값이 5434인 이유: 예전에는 기본값이 `localhost:5432`였는데, Docker 컨테이너가 내려간 줄 모르고 앱이 **로컬에 설치된 다른 Postgres에 조용히 붙는 사고**가 실제로 있었다(2026-08-07 QA, [`docs/qa/2026-08-07-p1-result.md`](docs/qa/2026-08-07-p1-result.md) §0.1). 저장소가 함께 제공하는 `docker-compose.yml`이 5434를 쓰므로 기본값도 그쪽에 맞춘다.
 
 ### 3. PostgreSQL 준비 — 로컬 설치 (대안)
 
-Docker를 쓰지 않고 로컬 PostgreSQL(기본 포트 5432)을 쓰려면 아래를 직접 생성한 뒤, 실행 시 **`DB_URL`로 포트를 명시해야 한다**(기본값이 5434이므로 생략하면 붙지 않는다).
+Docker를 쓰지 않고 로컬 PostgreSQL(기본 포트 5432)을 쓰려면 아래를 직접 생성한 뒤, `DATABASE_URL` 환경변수로 포트를 명시해야 한다(기본값이 5434이므로 생략하면 붙지 않는다).
 
 ```sql
 CREATE USER probank WITH PASSWORD 'probank_dev';
 CREATE DATABASE probank_dev OWNER probank;
 ```
 
-```bash
-DB_URL=jdbc:postgresql://localhost:5432/probank_dev ./gradlew bootRun --args='--spring.profiles.active=dev'
-```
+### 4. 환경변수
 
-### 4. 백엔드 실행
+`web/.env`에 아래 환경변수를 설정한다(이 파일은 실제 비밀값을 담고 있어 `.gitignore`에 포함돼 있다):
 
-```bash
-cd backend
-export JAVA_HOME=/path/to/jdk8
-export PATH="$JAVA_HOME/bin:$PATH"
-./gradlew bootRun --args='--spring.profiles.active=dev'
-```
+- `DATABASE_URL` — PostgreSQL 접속 문자열
+- `SESSION_JWT_SECRET` — 세션 쿠키에 담기는 JWT 서명 비밀키
+- `SESSION_COOKIE_SECURE` — 세션 쿠키의 `Secure` 속성 여부. 운영 배포 시 반드시 `true`
+- `SUPABASE_URL` — Supabase 프로젝트 URL
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase 서비스 역할 키, 문제 이미지 비공개 버킷 접근에 쓰인다
+- `BOOTSTRAP_ADMIN_EMPLOYEE_NO` — 최초 부트스트랩 시 생성되는 총괄관리자 계정의 사번
+- `BOOTSTRAP_ADMIN_PASSWORD` — 위 계정의 초기 비밀번호
+- `BOOTSTRAP_ADMIN_EMAIL` — 위 계정의 이메일
 
-기본 접속 대상이 Docker Postgres(`localhost:5434`)이므로 위 그대로 실행하면 된다. 다른 DB를 쓸 때만 `DB_URL`을 앞에 붙인다 — 예: 로컬 5432를 쓰려면 `DB_URL=jdbc:postgresql://localhost:5432/probank_dev ./gradlew bootRun ...`.
-
-**실행 후 어느 DB에 붙었는지 확인할 것.** 기동 로그의 HikariCP 항목이나 `docker compose ps`로 컨테이너가 떠 있는지 먼저 보면 위 사고를 피할 수 있다.
-
-앱이 처음 기동할 때 `SUPER_ADMIN` 계정이 하나도 없으면 기본 부서(`본사`, 코드 `HQ`)와 총괄관리자 계정을 자동 생성한다. 기본값은 사번 `admin` / 비밀번호 `changeme1234`이며 **최초 로그인 시 비밀번호 변경이 강제된다**. `BOOTSTRAP_ADMIN_EMPLOYEE_NO` / `BOOTSTRAP_ADMIN_PASSWORD` / `BOOTSTRAP_ADMIN_EMAIL` 환경변수로 바꿀 수 있다.
-
-### 5. 프론트엔드 실행
+### 5. 의존성 설치
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd web
+pnpm install
 ```
 
-개발 서버는 5173에서 뜨고 `/api/**`와 `/uploads/**` 요청을 `localhost:8080`으로 프록시한다(`/uploads`가 없으면 문제 이미지 미리보기가 404가 난다). 세션 쿠키 인증이므로 백엔드를 함께 띄워야 로그인이 동작한다.
+이후 단계의 `pnpm drizzle:migrate`·`pnpm bootstrap`·`pnpm dev` 등은 모두 이 설치를 전제로 한다.
 
-### 6. 테스트 실행
+### 6. 데이터베이스 스키마 준비 및 관리자 계정 부트스트랩
 
 ```bash
-# 백엔드 (189개) — 실제 PostgreSQL 통합 테스트를 포함하므로 DB가 떠 있어야 한다
-cd backend && ./gradlew test
-
-# 프론트엔드 (170개)
-cd frontend && npm test
+cd web
+pnpm drizzle:migrate   # 스키마 마이그레이션 적용
+pnpm bootstrap          # 총괄관리자(SUPER_ADMIN) 계정 생성
 ```
 
-> 백엔드 테스트는 아직 전용 테스트 데이터소스가 없어 개발 DB를 그대로 사용한다. `@SpringBootTest` 클래스에는 반드시 `@ActiveProfiles("test")`를 붙여야 한다 — 붙이지 않으면 앱 기동 시 부트스트랩 러너가 실제 개발 DB에 관리자·부서 행을 기록한다.
+스키마를 수정한 뒤에는 `pnpm drizzle:generate`로 마이그레이션 파일을 새로 생성한다.
+
+### 7. 앱 실행
+
+```bash
+cd web
+pnpm dev
+```
+
+개발 서버는 기본 포트(3000)에서 뜬다. 세션 쿠키 인증을 쓰므로 위 환경변수와 DB가 준비돼 있어야 로그인이 동작한다.
+
+프로덕션 모드로 확인하려면:
+
+```bash
+pnpm build
+pnpm start
+```
+
+### 8. 테스트 실행
+
+테스트는 `web/` 아래 한 러너(vitest)로 모인다.
+
+```bash
+cd web && pnpm test
+```
