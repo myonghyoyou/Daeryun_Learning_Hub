@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { toast } from "react-toastify";
 import { Plus } from "@phosphor-icons/react";
 import { getDashboardSummary } from "@/apiClient/dashboard.js";
@@ -70,7 +70,7 @@ export default function DashboardPage() {
           <h1 className="text-page-title font-extrabold tracking-title text-ink-strong">관리자 대시보드</h1>
           <p className="mt-1 text-body-small text-ink-muted">{scopeLabel} · 누적 시도 데이터</p>
         </div>
-        <Link to="/admin/problems/new" className={buttonClass({ variant: "primary", size: "md" })}>
+        <Link href="/admin/problems/new" className={buttonClass({ variant: "primary", size: "md" })}>
           <Plus size={16} aria-hidden="true" />
           문제 등록
         </Link>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
                 <p className="mt-4 text-body-small text-ink-muted">
                   아직 없습니다. 시도가 {REVIEW_MIN_ATTEMPTS}회 이상 쌓인 문제 중 정답률이 낮은 것이 생기면 여기에 나옵니다.{" "}
                   <Link
-                    to="/admin/stats"
+                    href="/admin/stats"
                     className="rounded-sm text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
                   >
                     전체 통계 보기
@@ -147,7 +147,7 @@ export default function DashboardPage() {
                       className="flex items-center justify-between gap-3 border-b border-line-default pb-2 last:border-b-0 last:pb-0"
                     >
                       <Link
-                        to={`/admin/stats/${item.problemId}`}
+                        href={`/admin/stats/${item.problemId}`}
                         className="min-w-0 flex-1 truncate rounded-sm text-body text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
                         title={previewContent(item.content)}
                       >
