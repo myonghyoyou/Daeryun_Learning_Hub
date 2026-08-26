@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { toast } from "react-toastify";
 import { CaretDown, CaretUp, Plus } from "@phosphor-icons/react";
 import { archiveProblem, listProblems, listTags } from "@/apiClient/problems.js";
@@ -108,7 +108,7 @@ export default function ProblemListPage() {
             buttonClass 로 가져다 쓴다. 손으로 복제하던 시절 포커스 링을 빠뜨린 링크가
             있었다(QA D6). */}
         <Link
-          to="/admin/problems/new"
+          href="/admin/problems/new"
           className={buttonClass({ variant: "primary", size: "md" })}
         >
           <Plus size={16} aria-hidden="true" />
@@ -238,7 +238,7 @@ export default function ProblemListPage() {
               <TableCell>
                 <div className="flex gap-2">
                   <Link
-                    to={`/admin/problems/${problem.id}/edit`}
+                    href={`/admin/problems/${problem.id}/edit`}
                     className={buttonClass({ variant: "secondary", size: "sm" })}
                   >
                     수정

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Plus, Trash } from "@phosphor-icons/react";
 import {
@@ -79,7 +80,7 @@ function Textarea({ id, label, required, error, className = "", ...props }) {
 export default function ProblemFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const navigate = useNavigate();
+  const router = useRouter();
   const fileInputRef = useRef(null);
 
   const { session } = useSessionStatus();
@@ -394,7 +395,7 @@ export default function ProblemFormPage() {
         await createProblem(payload, createDepartmentId);
         toast.success("문제가 등록되었습니다.");
       }
-      navigate("/admin/problems");
+      router.push("/admin/problems");
     } catch (error) {
       toast.error(resolveErrorMessage(error, "저장에 실패했습니다."));
     } finally {
@@ -417,7 +418,7 @@ export default function ProblemFormPage() {
         <p className="text-body-small text-ink-muted">
           다른 부서가 등록한 문제는 총괄 관리자만 열람·수정할 수 있습니다.
         </p>
-        <Link to="/admin/problems" className={buttonClass({ variant: "secondary", size: "md" })}>
+        <Link href="/admin/problems" className={buttonClass({ variant: "secondary", size: "md" })}>
           목록으로
         </Link>
       </Surface>
@@ -466,7 +467,7 @@ export default function ProblemFormPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="secondary" disabled={saving} onClick={() => navigate("/admin/problems")}>
+          <Button type="button" variant="secondary" disabled={saving} onClick={() => router.push("/admin/problems")}>
             취소
           </Button>
           <Button type="submit" loading={saving}>
