@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { toast } from "react-toastify";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { getProblemStatDetail } from "@/apiClient/stats.js";
@@ -57,7 +58,7 @@ export default function StatsDetailPage() {
   // 아래 분기 밖에서 항상 렌더링하고, summary 가 필요한 제목·metric·표만 분기 안에 둔다.
   const backLink = (
     <Link
-      to="/admin/stats"
+      href="/admin/stats"
       className="inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
     >
       <ArrowLeft size={16} aria-hidden="true" />
@@ -110,7 +111,7 @@ export default function StatsDetailPage() {
           </p>
         </div>
         <Link
-          to={`/admin/problems/${summary.problemId}/edit`}
+          href={`/admin/problems/${summary.problemId}/edit`}
           className="shrink-0 rounded-sm text-body-small font-medium text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
         >
           이 문제 수정하기

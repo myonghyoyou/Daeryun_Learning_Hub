@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { toast } from "react-toastify";
 import { listProblemStats } from "@/apiClient/stats.js";
 import { listDepartments } from "@/apiClient/departments.js";
@@ -138,7 +138,7 @@ export default function StatsListPage() {
               <TableCell>{problemTypeLabel(item.type)}</TableCell>
               <TableCell className="max-w-xs truncate" title={previewContent(item.content)}>
                 <Link
-                  to={`/admin/stats/${item.problemId}`}
+                  href={`/admin/stats/${item.problemId}`}
                   className="rounded-sm text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
                 >
                   {previewContent(item.content)}
@@ -161,7 +161,7 @@ export default function StatsListPage() {
       <Pagination page={page} totalCount={totalCount} onChange={(next) => refresh(next)} />
 
       <p className="text-body-small text-ink-subtle">
-        <Link to="/admin/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
+        <Link href="/admin/problems" className={buttonClass({ variant: "secondary", size: "sm" })}>
           문제 관리로 이동
         </Link>
       </p>
