@@ -36,7 +36,7 @@ export default function SidebarNav({ groups, accountName, accountRoleLabel, onLo
       aria-label="관리자 메뉴"
     >
       <div className="flex h-[76px] items-center border-b border-line-default px-6">
-        <span className="text-card-title font-bold tracking-title text-ink-strong">문제 은행 Hub</span>
+        <img src="/logo.png" alt="문제 은행 Hub" className="h-12 w-auto" />
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">

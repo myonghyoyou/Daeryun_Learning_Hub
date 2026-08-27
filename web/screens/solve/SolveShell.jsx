@@ -22,9 +22,9 @@ export default function SolveShell({ children }) {
       <header className="flex h-[76px] items-center justify-between border-b border-line-default bg-surface-default px-5 md:px-7">
         <Link
           href="/solve"
-          className="rounded-sm text-card-title font-bold tracking-title text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+          className="rounded-sm focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
         >
-          문제 은행 Hub
+          <img src="/logo.png" alt="문제 은행 Hub" className="h-12 w-auto" />
         </Link>
         <div className="flex items-center gap-4">
           <AccountInfo name={session?.name} roleLabel={roleLabel(session?.role)} className="hidden text-right md:flex" />

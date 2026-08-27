@@ -120,12 +120,8 @@ export default function LoginPage() {
           noValidate
           className="w-full rounded-lg border border-line-default bg-surface-default p-8 shadow-surface"
         >
-          {/*
-            로고 lockup: 디자인 시스템(8.1)은 실제 제공된 로고 자산 사용을 요구하고
-            CSS 도형/텍스트 조합으로 재현하는 것을 명시적으로 금지한다. 이 저장소에는
-            아직 로고 자산 파일이 없으므로, 가짜 로고를 만드는 대신 이 영역을 비워
-            두고 실제 자산이 준비되면 <img> 로 교체한다 (task-14-report.md 참고).
-          */}
+          {/* 로고 lockup(디자인 시스템 8.1): 제목과 24px 이상 간격. */}
+          <img src="/logo.png" alt="" className="mx-auto mb-6 h-20 w-auto" />
           <h1 className="text-center text-page-title font-extrabold tracking-title text-ink-strong">
             문제 은행 Hub 로그인
           </h1>
