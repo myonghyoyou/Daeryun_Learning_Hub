@@ -1,8 +1,8 @@
-import LogoutButton from "@/components/ui/LogoutButton.jsx";
 import { sessionStatusMeta } from "@/utils/adminSession.js";
 
-// 디자인 시스템 7.3 Topbar + 8.6.1: 현재 역할·부서·세션 상태를 보여주는 프로필 영역과 로그아웃.
-export default function Topbar({ roleLabel, scopeLabel, sessionStatus, onLogout, loggingOut }) {
+// 디자인 시스템 7.3 Topbar + 8.6.1: 현재 역할·부서·세션 상태를 보여주는 프로필 영역.
+// 로그아웃은 SidebarNav 하단의 계정 정보 블록으로 옮겼다(중복 노출 방지).
+export default function Topbar({ roleLabel, scopeLabel, sessionStatus }) {
   const statusMeta = sessionStatusMeta(sessionStatus);
   return (
     // sticky top-0: 문서가 스크롤해도 상단에 남는다. bg-surface-default가 불투명하므로 아래
@@ -20,7 +20,6 @@ export default function Topbar({ roleLabel, scopeLabel, sessionStatus, onLogout,
           </span>
         </div>
       </div>
-      <LogoutButton onLogout={onLogout} loggingOut={loggingOut} />
     </header>
   );
 }

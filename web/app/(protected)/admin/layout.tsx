@@ -40,9 +40,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <AppShell
-      sidebar={<SidebarNav groups={buildNavGroups(session?.role)} />}
+      sidebar={<SidebarNav groups={buildNavGroups(session?.role)}
+                           accountName={session?.name} accountRoleLabel={roleLabel(session?.role)}
+                           onLogout={handleLogout} loggingOut={loggingOut} />}
       topbar={<Topbar roleLabel={roleLabel(session?.role)} scopeLabel={departmentScopeLabel(session)}
-                      sessionStatus={status} onLogout={handleLogout} loggingOut={loggingOut} />}
+                      sessionStatus={status} />}
     >
       {children}
     </AppShell>

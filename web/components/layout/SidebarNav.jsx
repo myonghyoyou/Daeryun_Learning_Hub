@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowSquareOut } from "@phosphor-icons/react";
+import AccountInfo from "@/components/ui/AccountInfo.jsx";
+import LogoutButton from "@/components/ui/LogoutButton.jsx";
 
 const menuLinkClass = (isActive) =>
   `flex h-[38px] items-center gap-2 rounded-sm border-l-2 px-3 text-body-small font-medium transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua ${
@@ -26,7 +28,7 @@ function isActivePath(pathname, to, end) {
  * h-screen이 없으면 사이드바가 콘텐츠 높이만큼만 되고 아래 메뉴 영역의 flex-1이 기준 높이를
  * 잃는다. overflow-y-auto는 여기 두지 않는다 — 메뉴 영역이 이미 갖고 있어 이중 스크롤이 된다.
  */
-export default function SidebarNav({ groups }) {
+export default function SidebarNav({ groups, accountName, accountRoleLabel, onLogout, loggingOut }) {
   const pathname = usePathname();
   return (
     <nav
@@ -68,6 +70,11 @@ export default function SidebarNav({ groups }) {
           <ArrowSquareOut size={18} aria-hidden="true" />
           학습 화면으로 이동
         </Link>
+      </div>
+
+      <div className="border-t border-line-default p-3">
+        <AccountInfo name={accountName} roleLabel={accountRoleLabel} className="px-3 pb-2" />
+        <LogoutButton onLogout={onLogout} loggingOut={loggingOut} className="w-full justify-center" />
       </div>
     </nav>
   );
