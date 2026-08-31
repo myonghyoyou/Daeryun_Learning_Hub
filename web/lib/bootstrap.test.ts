@@ -18,17 +18,22 @@ beforeEach(async () => {
 });
 
 describe("bootstrap", () => {
-  it("creates the HQ department and a super admin when none exists", async () => {
+  it("creates the 공통 department and a super admin when none exists", async () => {
     await bootstrap(db);
 
+    // 부트스트랩이 만드는 부서는 "공통"(COMMON) 하나다. "본사"는 이 회사 조직에 없는
+    // 부트스트랩 산물이었다 — spec 2026-08-13 이 정한 12개 그룹은 공통과 실팀 11개다.
+    const [common] = await db.select().from(departments).where(eq(departments.code, "COMMON"));
+    expect(common.name).toBe("공통");
+
     const [hq] = await db.select().from(departments).where(eq(departments.code, "HQ"));
-    expect(hq.name).toBe("본사");
+    expect(hq).toBeUndefined();
 
     const [admin] = await db.select().from(users).where(eq(users.role, "SUPER_ADMIN"));
     expect(admin.employeeNo).toBe("admin");
     expect(admin.name).toBe("총괄관리자");
     expect(admin.mustChangePassword).toBe(true);
-    expect(admin.departmentId).toBe(hq.id);
+    expect(admin.departmentId).toBe(common.id);
     expect(await bcrypt.compare("changeme1234", admin.passwordHash)).toBe(true);
   });
 
