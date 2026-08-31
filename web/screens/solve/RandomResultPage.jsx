@@ -67,12 +67,14 @@ export default function RandomResultPage() {
   const { total, correctCount } = summarize(session);
 
   return (
-    <>
+    // 랜덤 설정 화면과 같은 이유로 제목과 카드를 한 컬럼으로 묶어 중앙에 둔다
+    // (RandomSetupPage 주석 참고).
+    <div className="mx-auto w-full max-w-2xl">
       <section className="mb-6">
         <h1 className="text-page-title font-bold tracking-title text-ink-strong">결과 요약</h1>
       </section>
 
-      <Surface className="max-w-2xl p-6">
+      <Surface className="p-6">
         <p className="text-center text-body text-ink-default">
           {total}문제 중 <span className="text-section-title font-bold text-ink-strong">{correctCount}개</span> 정답
         </p>
@@ -111,6 +113,6 @@ export default function RandomResultPage() {
           </Link>
         </div>
       </Surface>
-    </>
+    </div>
   );
 }

@@ -55,7 +55,11 @@ export default function RandomSetupPage() {
   }
 
   return (
-    <>
+    // Shell 의 본문 컨테이너(max-w-[1120px])는 화면 중앙에 놓이지만, 그 안의 블록은
+    // 기본이 좌측 정렬이다. 폼 카드만 max-w 로 좁히면 넓은 화면에서 카드가 띠의 왼쪽
+    // 끝에 붙어 화면 중앙에서 크게 벗어난다. 뒤로가기·제목·카드를 한 컬럼으로 묶고
+    // 그 컬럼을 mx-auto 로 중앙에 둬야 축이 어긋나지 않는다.
+    <div className="mx-auto w-full max-w-md">
       <Link href="/solve" className="mb-4 inline-flex items-center gap-1 rounded-sm text-body-small font-medium text-ink-default hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
         <ArrowLeft size={16} aria-hidden="true" />
         학습 홈
@@ -66,7 +70,7 @@ export default function RandomSetupPage() {
         <p className="mt-1 text-body text-ink-default">문제 수와 부서를 정하면 무작위로 뽑아 드립니다.</p>
       </section>
 
-      <Surface className="max-w-md p-5">
+      <Surface className="p-5">
         <div className="flex flex-col gap-4">
           <Select
             id="random-count"
@@ -90,6 +94,6 @@ export default function RandomSetupPage() {
           </Button>
         </div>
       </Surface>
-    </>
+    </div>
   );
 }
