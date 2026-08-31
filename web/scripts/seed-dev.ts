@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { getDb } from "../lib/db/client";
 import { departments, users } from "../lib/db/schema";
-import { assertSeedableEnvironment, buildSeedUsers, COMMON, HQ, SEED_PASSWORD, SEED_TEAMS } from "../lib/devSeed";
+import { assertSeedableEnvironment, buildSeedUsers, COMMON, SEED_PASSWORD, SEED_TEAMS } from "../lib/devSeed";
 
 async function main() {
   // 로컬 DB 가 아니면 여기서 멈춘다. 운영에 테스트 계정이 섞이면 배포 결정 D8 이 무너진다.
@@ -19,7 +19,7 @@ async function main() {
   // (로컬에는 INACTIVE 로 바꿔 둔 QA 부서가 있고, 그 상태가 검증 대상이다).
   const departmentIdByCode = new Map<string, number>();
   let createdDepartments = 0;
-  for (const dept of [HQ, COMMON, ...SEED_TEAMS]) {
+  for (const dept of [COMMON, ...SEED_TEAMS]) {
     const [found] = await db.select().from(departments).where(eq(departments.code, dept.code));
     if (found) {
       departmentIdByCode.set(dept.code, found.id);
@@ -56,7 +56,7 @@ async function main() {
     createdUsers++;
   }
 
-  console.log(`부서: ${createdDepartments}개 생성, ${SEED_TEAMS.length + 2 - createdDepartments}개 기존 유지`);
+  console.log(`부서: ${createdDepartments}개 생성, ${SEED_TEAMS.length + 1 - createdDepartments}개 기존 유지`);
   console.log(`계정: ${createdUsers}개 생성, ${skippedUsers}개 기존 유지 (공통 비밀번호: ${SEED_PASSWORD})`);
 }
 

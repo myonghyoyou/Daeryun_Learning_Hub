@@ -44,17 +44,12 @@ export type SeedUser = {
   departmentCode: string;
 };
 
-// 부트스트랩이 만드는 부서. 총괄관리자가 소속되는 조직 단위이지, 문제 분류가 아니다.
-export const HQ: SeedDepartment = { name: "본사", code: "HQ" };
-
-// 공통문제(원본 문제은행의 `▣ 공통문제` 구획)가 귀속되는 부서. 특정 팀 소유가 아닌
-// 문제를 담는 분류이므로 소속 계정을 두지 않는다 — SEED_TEAMS 와 달리 관리자·직원을
-// 만들지 않는 이유다.
+// 특정 팀에 속하지 않는 것들이 모이는 부서. 원본 문제은행의 `▣ 공통문제` 구획이
+// 여기 귀속되고, 어느 팀에도 속하지 않는 총괄관리자도 여기 둔다(lib/bootstrap.ts 와
+// 같은 규칙). 팀이 아니므로 부서관리자·직원은 만들지 않는다 — SEED_TEAMS 와 다른 점이다.
 //
-// 본사(HQ)와 구분해야 한다. 본사는 "사람"이, 공통은 "문제"가 들어가는 곳이다.
-// 로컬 DB 에는 이 부서가 없어 공통문항 46개가 본사에 들어가 있었다 — 2026-08-09 18:00
-// 에 `문제_01_공통.xlsx` 를 올릴 때 아직 이 부서를 만들기 전이었고, 3시간 반 뒤
-// 실팀 11개를 만들 때 공통만 빠졌다. 운영 DB 에는 처음부터 제대로 있다.
+// 예전 부트스트랩이 만들던 "본사"(HQ)는 이 회사 조직에 없는 부서였다. spec
+// 2026-08-13-source-number-and-random-50 이 정한 12개 그룹은 공통과 실팀 11개다.
 export const COMMON: SeedDepartment = { name: "공통", code: "COMMON" };
 
 // 로컬 DB 에 이미 있는 실무 팀 14개. DB 를 밀어도 시드 한 번으로 돌아오도록 여기 적어 둔다.
@@ -86,7 +81,7 @@ export const SEED_PASSWORD = "Test1234!";
  */
 export function buildSeedUsers(): SeedUser[] {
   const users: SeedUser[] = [
-    { employeeNo: "sadmin", name: "시드총괄관리자", email: "sadmin@example.com", role: "SUPER_ADMIN", departmentCode: HQ.code },
+    { employeeNo: "sadmin", name: "시드총괄관리자", email: "sadmin@example.com", role: "SUPER_ADMIN", departmentCode: COMMON.code },
   ];
   for (const team of SEED_TEAMS) {
     const prefix = team.code.toLowerCase();
