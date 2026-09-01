@@ -201,6 +201,12 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
               ))}
             </ul>
           )}
+          {!result.correct && !result.blankResults && result.correctAnswerSummary && (
+            <p className="mt-3 text-body-small text-ink-default">
+              <span className="font-medium text-ink-strong">정답: </span>
+              {result.correctAnswerSummary}
+            </p>
+          )}
         </Surface>
       )}
     </>
