@@ -9,11 +9,18 @@ import { grade, type BlankResult, type GradeInput } from "./grading";
 import type { AttemptSubmitBody } from "./attemptRequestBody";
 import { PROBLEM_NOT_FOUND_MESSAGE } from "./solveQueryService";
 
-/** `AttemptResult.java` 미러. 응답 키는 정확히 이 세 개다(정답지 G14) — 스프레드로 더 실으면 안 된다. */
+/**
+ * `AttemptResult.java` 미러였다. 응답 키는 원래 `correct`·`explanation`·`blankResults`
+ * 3개뿐이었다(정답지 G14) — 그러나 이 4번째 키(`correctAnswerSummary`)는 **의도적으로
+ * G14 를 벗어나는 이탈**이다: 오답 시 정답을 알려주는 기능은 원본 Spring 시스템에 없었다
+ * (docs/qa/2026-08-21-solve-parity-checklist.md G14 를 "승인된 이탈"로 갱신했다).
+ * 스프레드로 다른 필드를 더 싣지는 마라 — 이 네 개만 계약이다.
+ */
 export interface AttemptResult {
   correct: boolean;
   explanation: string | null;
   blankResults: BlankResult[] | null;
+  correctAnswerSummary: string | null;
 }
 
 /**
@@ -119,5 +126,10 @@ export async function submitAttempt(
     })));
   });
 
-  return { correct: result.correct, explanation: problem.explanation, blankResults: result.blankResults };
+  return {
+    correct: result.correct,
+    explanation: problem.explanation,
+    blankResults: result.blankResults,
+    correctAnswerSummary: result.correctAnswerSummary,
+  };
 }

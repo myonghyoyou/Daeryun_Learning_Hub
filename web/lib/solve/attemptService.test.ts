@@ -213,10 +213,10 @@ describe("submitAttempt — 응답", () => {
     expect(r.explanation).toBe("해설 본문");
   });
 
-  it("Step 2-1: AttemptResult 의 키 집합이 정확히 세 개다", async () => {
+  it("Step 2-1: AttemptResult 의 키 집합이 정확히 네 개다 — G14 확장 이후", async () => {
     const { problemId } = await seedMcq();
     const r = await submitAttempt(db, problemId, { selectedChoiceIds: [], submittedText: null, blankAnswers: null }, actor);
-    expect(Object.keys(r).sort()).toEqual(["blankResults", "correct", "explanation"]);
+    expect(Object.keys(r).sort()).toEqual(["blankResults", "correct", "correctAnswerSummary", "explanation"]);
   });
 
   it("Step 2-1: blankResults 항목의 키 집합이 BlankAnswerResult.java 의 4필드와 정확히 같다", async () => {
@@ -268,5 +268,30 @@ describe("submitAttempt — ㉳: blankAnswers 의 null 원소(승인된 이탈, 
     const blankId = await seedBlank();
     const body = toAttemptSubmitBody({ blankAnswers: [null] });
     await expect(submitAttempt(db, blankId, body, actor)).rejects.toMatchObject({ message: BLANK_COUNT_MESSAGE });
+  });
+});
+
+describe("submitAttempt — correctAnswerSummary (G14 확장, 승인된 이탈)", () => {
+  it("오답 제출 시 응답에 정답 보기 텍스트가 실린다", async () => {
+    const { problemId, wrongChoiceId } = await seedMcq();
+    const result = await submitAttempt(db, problemId, { selectedChoiceIds: [wrongChoiceId] }, actor);
+    expect(result.correct).toBe(false);
+    expect(result.correctAnswerSummary).toBe("가");
+  });
+
+  it("정답 제출 시에도 correctAnswerSummary 는 채워져 있다 — 보여줄지는 화면이 판단한다", async () => {
+    const { problemId, choiceId } = await seedMcq();
+    const result = await submitAttempt(db, problemId, { selectedChoiceIds: [choiceId] }, actor);
+    expect(result.correct).toBe(true);
+    expect(result.correctAnswerSummary).toBe("가");
+  });
+
+  it("FILL_BLANK 는 correctAnswerSummary 가 null 이다 — blankResults 가 이미 정답을 담당한다", async () => {
+    const problemId = await seedBlank();
+    const result = await submitAttempt(
+      db, problemId, { selectedChoiceIds: null, submittedText: null, blankAnswers: [{ blankKey: "a", submittedAnswer: "오답" }] }, actor,
+    );
+    expect(result.correctAnswerSummary).toBeNull();
+    expect(result.blankResults?.[0].correctAnswer).toBe("가");
   });
 });
