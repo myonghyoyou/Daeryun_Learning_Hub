@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { parseUtcTimestamp } from "../db/raw";
 import { SNAPSHOT_VERSION, type ProblemSnapshot, type SnapshotProblem } from "./snapshot";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -38,7 +39,7 @@ export type ExportRows = {
     id: number; type: string; content: string; imageUrl: string | null;
     referenceText: string | null; explanation: string | null; blankRevealCount: number | null;
     status: string; departmentCode: string; sourceNumber: number | null;
-    createdAt: Date; updatedAt: Date;
+    createdAt: string; updatedAt: string;
   }[];
   choices: { problemId: number; choiceText: string; isCorrect: boolean; displayOrder: number }[];
   answers: { problemId: number; answerText: string }[];
@@ -82,8 +83,8 @@ export function buildSnapshot(rows: ExportRows, source: { host: string; database
     status: p.status,
     departmentCode: p.departmentCode,
     sourceNumber: p.sourceNumber,
-    createdAt: p.createdAt.toISOString(),
-    updatedAt: p.updatedAt.toISOString(),
+    createdAt: parseUtcTimestamp(p.createdAt)!.toISOString(),
+    updatedAt: parseUtcTimestamp(p.updatedAt)!.toISOString(),
     choices: choicesByProblem.get(p.id) ?? [],
     answers: answersByProblem.get(p.id) ?? [],
     blanks: blanksByProblem.get(p.id) ?? [],
@@ -126,7 +127,7 @@ export async function exportSnapshot(url: string): Promise<ProblemSnapshot> {
                p.image_url AS "imageUrl", p.reference_text AS "referenceText",
                p.explanation, p.blank_reveal_count AS "blankRevealCount", p.status,
                d.code AS "departmentCode", p.source_number AS "sourceNumber",
-               p.created_at AS "createdAt", p.updated_at AS "updatedAt"
+               p.created_at::text AS "createdAt", p.updated_at::text AS "updatedAt"
         FROM problems p JOIN departments d ON d.id = p.department_id
         ORDER BY p.id`;
       const choices = await tx<ExportRows["choices"]>`

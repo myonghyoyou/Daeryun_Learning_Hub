@@ -34,14 +34,12 @@ function rowsFixture(): ExportRows {
       {
         id: 501, type: "MCQ_SINGLE", content: "본문1", imageUrl: null, referenceText: null,
         explanation: "해설", blankRevealCount: null, status: "ACTIVE", departmentCode: "DEV",
-        sourceNumber: 3, createdAt: new Date("2026-08-01T00:00:00.000Z"),
-        updatedAt: new Date("2026-08-02T00:00:00.000Z"),
+        sourceNumber: 3, createdAt: "2026-08-01 00:00:00", updatedAt: "2026-08-02 00:00:00",
       },
       {
         id: 502, type: "SHORT_ANSWER", content: "본문2", imageUrl: null, referenceText: null,
         explanation: null, blankRevealCount: null, status: "ARCHIVED", departmentCode: "DEV",
-        sourceNumber: 4, createdAt: new Date("2026-08-03T00:00:00.000Z"),
-        updatedAt: new Date("2026-08-04T00:00:00.000Z"),
+        sourceNumber: 4, createdAt: "2026-08-03 00:00:00", updatedAt: "2026-08-04 00:00:00",
       },
     ],
     choices: [
@@ -81,9 +79,12 @@ describe("buildSnapshot", () => {
     expect(snapshot.problems.map((p) => p.status)).toEqual(["ACTIVE", "ARCHIVED"]);
   });
 
-  it("시각을 ISO 문자열로 바꾼다 — JSON 으로 오갈 수 있어야 한다", () => {
+  it("timestamp(무 tz) 텍스트를 UTC 로 읽는다 — 내보내는 머신의 시간대에 흔들리면 안 된다", () => {
     const snapshot = buildSnapshot(rowsFixture(), { host: "h", database: "d" });
+    // new Date("2026-08-01 00:00:00") 은 V8 이 로컬 시각으로 읽어 UTC+9 머신에서 9시간 밀린다.
+    // parseUtcTimestamp 를 거치면 시간대와 무관하게 같은 값이 나온다.
     expect(snapshot.problems[0].createdAt).toBe("2026-08-01T00:00:00.000Z");
+    expect(snapshot.problems[0].updatedAt).toBe("2026-08-02T00:00:00.000Z");
     expect(typeof snapshot.generatedAt).toBe("string");
   });
 
