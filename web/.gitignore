@@ -9,3 +9,6 @@ next-env.d.ts
 # .env.* 에 함께 걸려 무시되면 공유가 안 된다.
 !.env.example
 tsconfig.tsbuildinfo
+
+# 운영에서 내려받은 문제 스냅샷 (scripts/sync-problems-export.ts)
+.data/
