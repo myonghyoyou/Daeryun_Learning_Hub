@@ -26,3 +26,6 @@ dist-ssr
 # Git worktrees (superpowers:using-git-worktrees)
 .claude/worktrees/
 .worktrees/
+
+# Subagent-driven-development scratch workspace (superpowers:subagent-driven-development)
+.superpowers/
