@@ -98,7 +98,12 @@ export default function AttemptHistoryPage() {
                   <TableCell>
                     <Collapsible text={item.submittedAnswer || "-"} collapsedLines={1} />
                   </TableCell>
-                  <TableCell><ResultText correct={item.correct} /></TableCell>
+                  <TableCell>
+                    <ResultText correct={item.correct} />
+                    {!item.correct && item.correctAnswerSummary && (
+                      <p className="mt-1 text-body-small text-ink-muted">정답: {item.correctAnswerSummary}</p>
+                    )}
+                  </TableCell>
                   <TableCell>{formatAt(item.submittedAt)}</TableCell>
                 </TableRow>
               ))}
@@ -115,6 +120,9 @@ export default function AttemptHistoryPage() {
                     <SourceBadge item={item} />
                     <ResultText correct={item.correct} />
                   </div>
+                  {!item.correct && item.correctAnswerSummary && (
+                    <p className="mt-1 text-body-small text-ink-muted">정답: {item.correctAnswerSummary}</p>
+                  )}
                   <div className="mt-2">
                     <Collapsible text={`제출: ${item.submittedAnswer || "-"}`} collapsedLines={2} className="text-body-small text-ink-muted" />
                   </div>

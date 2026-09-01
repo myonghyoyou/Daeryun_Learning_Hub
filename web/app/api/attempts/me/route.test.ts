@@ -86,13 +86,17 @@ describe("attempts/me route", () => {
     expect(byAnswer["틀림"]).toBe(false);
   });
 
-  it("H5: 응답 필드 키 집합이 정확히 8개다 — problemType 추가 이후(Task 5 전)", async () => {
+  it("H5: 응답 필드 키 집합이 정확히 9개다 — correctAnswerSummary 추가 이후", async () => {
     await db.insert(attempts).values([{ userId: meId, problemId, submittedAnswer: "x", isCorrect: false }]);
     asMe();
     const { GET } = await import("./route");
     const body = await (await GET()).json();
     expect(Object.keys(body.data[0]).sort()).toEqual(
-      ["correct", "departmentName", "problemContent", "problemId", "problemType", "sourceNumber", "submittedAnswer", "submittedAt"]);
+      ["correct", "correctAnswerSummary", "departmentName", "problemContent", "problemId", "problemType", "sourceNumber", "submittedAnswer", "submittedAt"]);
+    // OX 문제(beforeEach 의 seedProblem 기본값)의 정답 보기는 심지 않았으므로 빈 문자열이다 —
+    // attemptHistoryService.test.ts 가 이미 실제 값 매핑을 자세히 검증하므로, 여기서는
+    // "라우트가 필드를 실어 나른다"는 배선만 확인한다.
+    expect(body.data[0].correctAnswerSummary).toBe("");
   });
 
   it("H7: 보관된 문제의 이력도 나온다 — 목록(S2)과 정반대다", async () => {
