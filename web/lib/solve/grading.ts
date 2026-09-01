@@ -38,6 +38,10 @@ export interface GradeResult {
   submittedAnswerSummary: string | null;
   selectedChoices: { id: number; choiceText: string }[]; // 문제 정의 순서
   blankResults: BlankResult[] | null;
+  // 오답 시 화면에 보여줄 정답 요약. 정답이 여러 개(MCQ_MULTI·SHORT_ANSWER 허용 정답)면
+  // ", " 로 모두 나열한다. FILL_BLANK 는 null — blankResults[i].correctAnswer 가
+  // 빈칙별로 이미 담당한다(둘 다 채우면 같은 정보가 두 자리에 흩어진다).
+  correctAnswerSummary: string | null;
 }
 
 export type GradeInput =
@@ -71,11 +75,16 @@ export function grade(input: GradeInput): GradeResult {
       const selectedChoices = input.choices
         .filter((c) => submittedIds.has(c.id))
         .map((c) => ({ id: c.id, choiceText: c.choiceText }));
+      const correctAnswerSummary = input.choices
+        .filter((c) => c.isCorrect)
+        .map((c) => c.choiceText)
+        .join(", ");
       return {
         correct,
         selectedChoices,
         blankResults: null,
         submittedAnswerSummary: selectedChoices.map((c) => c.choiceText ?? "").join(", "),
+        correctAnswerSummary,
       };
     }
     case "SHORT_ANSWER": {
@@ -85,6 +94,7 @@ export function grade(input: GradeInput): GradeResult {
         selectedChoices: [],
         blankResults: null,
         submittedAnswerSummary: input.submittedText, // T2-1: 원문 그대로
+        correctAnswerSummary: input.answers.join(", "),
       };
     }
     case "FILL_BLANK": {
@@ -117,6 +127,7 @@ export function grade(input: GradeInput): GradeResult {
         correct: blankResults.every((r) => r.correct),
         selectedChoices: [],
         blankResults,
+        correctAnswerSummary: null,
         // T4: 답만 잇는다. 키는 화면에 안 나오는 내부 식별자다.
         // Java describeBlanks(:236) 은 String.trim() 을 쓴다 — JS trim() 을 쓰면 U+00A0 같은
         // 유니코드 공백만 입력한 제출이 "(미입력)" 으로 잘못 갈린다(T4).

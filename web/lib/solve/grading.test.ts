@@ -225,3 +225,71 @@ describe("FILL_BLANK (G9~G13)", () => {
     expect(r.submittedAnswerSummary).toBe("\u00A0, \u3000");
   });
 });
+
+describe("correctAnswerSummary \u2014 \uC624\uB2F5 \uC2DC \uC815\uB2F5 \uACF5\uAC1C", () => {
+  it("MCQ_SINGLE: \uC815\uB2F5 \uBCF4\uAE30 \uD14D\uC2A4\uD2B8\uB97C \uB2F4\uB294\uB2E4", () => {
+    const result = grade({
+      type: "MCQ_SINGLE",
+      choices: [
+        { id: 1, choiceText: "\uC11C\uC6B8", isCorrect: true },
+        { id: 2, choiceText: "\uBD80\uC0B0", isCorrect: false },
+      ],
+      selectedChoiceIds: [2],
+    });
+    expect(result.correctAnswerSummary).toBe("\uC11C\uC6B8");
+  });
+
+  it("MCQ_MULTI: \uC815\uB2F5\uC774 \uC5EC\uB7EC \uAC1C\uBA74 \uCF64\uB9C8\uB85C \uBAA8\uB450 \uB098\uC5F4\uD55C\uB2E4", () => {
+    const result = grade({
+      type: "MCQ_MULTI",
+      choices: [
+        { id: 1, choiceText: "\uAC00", isCorrect: true },
+        { id: 2, choiceText: "\uB098", isCorrect: false },
+        { id: 3, choiceText: "\uB2E4", isCorrect: true },
+      ],
+      selectedChoiceIds: [2],
+    });
+    expect(result.correctAnswerSummary).toBe("\uAC00, \uB2E4");
+  });
+
+  it("OX: \uC815\uB2F5\uC774 O/X \uB77C\uBCA8 \uD14D\uC2A4\uD2B8\uB85C \uB098\uC628\uB2E4", () => {
+    const result = grade({
+      type: "OX",
+      choices: [
+        { id: 1, choiceText: "O", isCorrect: false },
+        { id: 2, choiceText: "X", isCorrect: true },
+      ],
+      selectedChoiceIds: [1],
+    });
+    expect(result.correctAnswerSummary).toBe("X");
+  });
+
+  it("SHORT_ANSWER: \uB4F1\uB85D\uB41C \uD5C8\uC6A9 \uC815\uB2F5\uC744 \uBAA8\uB450 \uB098\uC5F4\uD55C\uB2E4", () => {
+    const result = grade({
+      type: "SHORT_ANSWER",
+      answers: ["\uC11C\uC6B8", "Seoul"],
+      submittedText: "\uBD80\uC0B0",
+    });
+    expect(result.correctAnswerSummary).toBe("\uC11C\uC6B8, Seoul");
+  });
+
+  it("FILL_BLANK: null \uC774\uB2E4 \u2014 blankResults \uAC00 \uC774\uBBF8 \uBE48\uCE59\uBCC4 \uC815\uB2F5\uC744 \uB2F4\uB294\uB2E4", () => {
+    const result = grade({
+      type: "FILL_BLANK",
+      blanks: [{ blankKey: "b1", answerText: "\uC815\uB2F5" }],
+      blankRevealCount: 1,
+      blankAnswers: [{ blankKey: "b1", submittedAnswer: "\uC624\uB2F5" }],
+    });
+    expect(result.correctAnswerSummary).toBeNull();
+  });
+
+  it("\uC815\uB2F5 \uC81C\uCD9C\uC774\uC5B4\uB3C4 correctAnswerSummary \uB294 \uCC44\uC6CC\uC9C4\uB2E4 \u2014 \uBCF4\uC5EC\uC904\uC9C0\uB294 \uD654\uBA74\uC774 \uD310\uB2E8\uD55C\uB2E4", () => {
+    const result = grade({
+      type: "MCQ_SINGLE",
+      choices: [{ id: 1, choiceText: "\uC11C\uC6B8", isCorrect: true }],
+      selectedChoiceIds: [1],
+    });
+    expect(result.correct).toBe(true);
+    expect(result.correctAnswerSummary).toBe("\uC11C\uC6B8");
+  });
+});
