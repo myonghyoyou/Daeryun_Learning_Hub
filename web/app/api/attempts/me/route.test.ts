@@ -86,13 +86,13 @@ describe("attempts/me route", () => {
     expect(byAnswer["틀림"]).toBe(false);
   });
 
-  it("H5: 응답 필드 키 집합이 정확히 7개다", async () => {
+  it("H5: 응답 필드 키 집합이 정확히 8개다 — problemType 추가 이후(Task 5 전)", async () => {
     await db.insert(attempts).values([{ userId: meId, problemId, submittedAnswer: "x", isCorrect: false }]);
     asMe();
     const { GET } = await import("./route");
     const body = await (await GET()).json();
     expect(Object.keys(body.data[0]).sort()).toEqual(
-      ["correct", "departmentName", "problemContent", "problemId", "sourceNumber", "submittedAnswer", "submittedAt"]);
+      ["correct", "departmentName", "problemContent", "problemId", "problemType", "sourceNumber", "submittedAnswer", "submittedAt"]);
   });
 
   it("H7: 보관된 문제의 이력도 나온다 — 목록(S2)과 정반대다", async () => {

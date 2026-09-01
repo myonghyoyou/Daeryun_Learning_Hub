@@ -26,6 +26,7 @@ export async function insertAttemptBlankAnswers(
 export type AttemptHistoryRow = {
   problemId: number; problemContent: string; submittedAnswer: string | null;
   correct: boolean; submittedAt: Date; departmentName: string; sourceNumber: number | null;
+  problemType: string;
 };
 
 // AttemptMapper.xml:10 미러. Java 는 `a.is_correct AS correct` 별칭이 필수였다 —
@@ -36,7 +37,7 @@ export async function findAttemptsByUserId(db: DbConn, userId: number): Promise<
     problemId: attempts.problemId, problemContent: problems.content,
     submittedAnswer: attempts.submittedAnswer, correct: attempts.isCorrect,
     submittedAt: attempts.submittedAt, departmentName: departments.name,
-    sourceNumber: problems.sourceNumber,
+    sourceNumber: problems.sourceNumber, problemType: problems.type,
   })
     .from(attempts)
     .innerJoin(problems, eq(problems.id, attempts.problemId))

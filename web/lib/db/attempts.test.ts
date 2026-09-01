@@ -61,7 +61,7 @@ describe("attempts DAO", () => {
     expect((await findAttemptsByUserId(db, userId)).map((r) => r.submittedAnswer)).toEqual(["나중", "먼저"]);
   });
 
-  it("H5: 응답 필드가 정확히 7개고, 값도 각 컬럼과 일치한다", async () => {
+  it("H5: 응답 필드가 정확히 8개고, 값도 각 컬럼과 일치한다", async () => {
     // 리뷰(fix wave item B): 모양만 고정하고 값을 안 본 세 컬럼이 있었다 — select 맵에서
     // `attempts.problemId` → `attempts.userId`, `problems.sourceNumber` → `problems.departmentId`,
     // `attempts.submittedAt` → `problems.createdAt` 으로 바꿔치기해도 셋 다 스위트가 초록이었다.
@@ -73,10 +73,13 @@ describe("attempts DAO", () => {
     });
     const rows = await findAttemptsByUserId(db, userId);
     expect(Object.keys(rows[0]).sort()).toEqual(
-      ["correct", "departmentName", "problemContent", "problemId", "sourceNumber", "submittedAnswer", "submittedAt"]);
+      ["correct", "departmentName", "problemContent", "problemId", "problemType", "sourceNumber", "submittedAnswer", "submittedAt"]);
     expect(rows[0].problemId).toBe(numberedId);
     expect(rows[0].sourceNumber).toBe(42);
     expect(rows[0].submittedAt).toEqual(explicitSubmittedAt);
+    // problemType 은 departmentName 과 같은 문자열 컬럼이라, 값 비교 없이 모양만 맞추면
+    // 두 컬럼이 뒤바뀌어도 이 테스트가 통과한다 — 반드시 값까지 확인한다.
+    expect(rows[0].problemType).toBe("OX");
   });
 
   it("H7: 보관된 문제의 이력도 나온다 — 목록(S2)과 정반대다", async () => {
@@ -124,5 +127,11 @@ describe("attempts DAO", () => {
         { attemptId, blankKey: "b1", submittedAnswer: "가", isCorrect: true },
       ]),
     ).resolves.toBeUndefined();
+  });
+
+  it("이력 행에 problemType 이 실린다 — 정답 배치 조회가 유형별로 분기해야 한다", async () => {
+    await insertAttempt(db, { userId, problemId, submittedAnswer: "X", isCorrect: false });
+    const rows = await findAttemptsByUserId(db, userId);
+    expect(rows[0].problemType).toBe("OX"); // beforeEach 의 seed() 기본값이 OX
   });
 });
