@@ -40,7 +40,7 @@ export interface GradeResult {
   blankResults: BlankResult[] | null;
   // 오답 시 화면에 보여줄 정답 요약. 정답이 여러 개(MCQ_MULTI·SHORT_ANSWER 허용 정답)면
   // ", " 로 모두 나열한다. FILL_BLANK 는 null — blankResults[i].correctAnswer 가
-  // 빈칙별로 이미 담당한다(둘 다 채우면 같은 정보가 두 자리에 흩어진다).
+  // 빈칸별로 이미 담당한다(둘 다 채우면 같은 정보가 두 자리에 흩어진다).
   correctAnswerSummary: string | null;
 }
 

@@ -41,6 +41,21 @@ describe("findAttemptHistoryWithAnswers", () => {
     expect(rows[0].correctAnswerSummary).toBe("서울");
   });
 
+  it("MCQ_MULTI: 정답 보기 여러 개를 displayOrder 순으로 잇는다(삽입 순서가 달라도)", async () => {
+    const problemId = await seedProblem("MCQ_MULTI");
+    // 삽입 순서를 displayOrder 와 일부러 다르게 한다 — ORDER BY 가 빠지면
+    // insertion order(다, 가)로 나와 "다, 가" 가 되어 테스트가 실패해야 한다.
+    await db.insert(problemChoices).values([
+      { problemId, choiceText: "다", isCorrect: true, displayOrder: 3 },
+      { problemId, choiceText: "가", isCorrect: true, displayOrder: 1 },
+      { problemId, choiceText: "나", isCorrect: false, displayOrder: 2 },
+    ]);
+    await insertAttempt(db, { userId, problemId, submittedAnswer: "나", isCorrect: false });
+
+    const rows = await findAttemptHistoryWithAnswers(db, userId);
+    expect(rows[0].correctAnswerSummary).toBe("가, 다");
+  });
+
   it("SHORT_ANSWER: 허용 정답을 모두 나열한다", async () => {
     const problemId = await seedProblem("SHORT_ANSWER");
     await db.insert(problemAnswers).values([

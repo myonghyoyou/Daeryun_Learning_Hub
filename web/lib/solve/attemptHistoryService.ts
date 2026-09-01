@@ -3,6 +3,8 @@ import type { DbConn } from "../db/client";
 import { findAttemptsByUserId, type AttemptHistoryRow } from "../db/attempts";
 import { problemAnswers, problemBlanks, problemChoices } from "../db/schema";
 
+// correctAnswerSummary 는 "보여줄 게 없음"을 null 이 아니라 "" 로 표현한다(실시간 채점 경로의
+// AttemptResult.correctAnswerSummary: string | null 과 다르다) — 의도적인 선택이니 x === null 로 값 없음을 확인하지 마라.
 export type AttemptHistoryItem = AttemptHistoryRow & { correctAnswerSummary: string };
 
 const CHOICE_TYPES = new Set(["MCQ_SINGLE", "MCQ_MULTI", "OX"]);
@@ -25,7 +27,8 @@ async function fetchCorrectChoiceTexts(db: DbConn, problemIds: number[]): Promis
   if (problemIds.length === 0) return [];
   return db.select({ problemId: problemChoices.problemId, text: problemChoices.choiceText })
     .from(problemChoices)
-    .where(and(inArray(problemChoices.problemId, problemIds), eq(problemChoices.isCorrect, true)));
+    .where(and(inArray(problemChoices.problemId, problemIds), eq(problemChoices.isCorrect, true)))
+    .orderBy(problemChoices.displayOrder);
 }
 
 async function fetchAnswerTexts(db: DbConn, problemIds: number[]): Promise<ProblemText[]> {
@@ -63,9 +66,9 @@ export async function findAttemptHistoryWithAnswers(db: DbConn, userId: number):
   const rows = await findAttemptsByUserId(db, userId);
   if (rows.length === 0) return [];
 
-  const choiceProblemIds = rows.filter((r) => CHOICE_TYPES.has(r.problemType)).map((r) => r.problemId);
-  const answerProblemIds = rows.filter((r) => r.problemType === "SHORT_ANSWER").map((r) => r.problemId);
-  const blankProblemIds = rows.filter((r) => r.problemType === "FILL_BLANK").map((r) => r.problemId);
+  const choiceProblemIds = [...new Set(rows.filter((r) => CHOICE_TYPES.has(r.problemType)).map((r) => r.problemId))];
+  const answerProblemIds = [...new Set(rows.filter((r) => r.problemType === "SHORT_ANSWER").map((r) => r.problemId))];
+  const blankProblemIds = [...new Set(rows.filter((r) => r.problemType === "FILL_BLANK").map((r) => r.problemId))];
 
   const [choiceRows, answerRows, blankRows] = await Promise.all([
     fetchCorrectChoiceTexts(db, choiceProblemIds),
