@@ -105,7 +105,7 @@
 | G11 | FILL_BLANK — 개수 불일치 | **같은 문구** | `SolveServiceImpl.java:146` (`!= blankRevealCount`). **세 조건이 한 `if` 로 묶여 있어 문구가 구분되지 않는다 — 나눠서 다른 문구를 내면 파리티 위반** |
 | G12 | FILL_BLANK 판정 | **전부 맞아야 정답.** 부분 점수 없음 | `SolveServiceImpl.java:152-159` (`allCorrect &= blankCorrect`) |
 | G13 | `blankResults` 항목 | `{blankKey, submittedAnswer, correct, correctAnswer}` — **채점 후에는 정답을 공개한다** | `BlankAnswerResult.java`, `SolveServiceImpl.java:157` |
-| G14 | 응답 | `{correct, explanation, blankResults}`. FILL_BLANK 가 아니면 `blankResults` 는 null | `AttemptResult.java`, `SolveServiceImpl.java:201` |
+| G14 | 응답 | ~~{correct, explanation, blankResults}~~ → **2026-08-28 부로 4키로 확장**: `{correct, explanation, blankResults, correctAnswerSummary}`. **승인된 이탈** — 오답 시 정답을 공개하는 기능은 원본 Spring 시스템에 없었다. FILL_BLANK 는 `correctAnswerSummary`가 null(빈칸별 정답은 `blankResults[i].correctAnswer`가 이미 담당), 나머지 4개 유형은 정답 텍스트를 `, `로 나열한다. 근거: `docs/superpowers/plans/2026-08-28-solve-reveal-correct-answer.md` | `AttemptResult.java`, `SolveServiceImpl.java:201`(원본), `web/lib/solve/attemptService.ts:12-17`(현재) |
 
 ---
 
