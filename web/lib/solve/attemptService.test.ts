@@ -57,14 +57,14 @@ async function seedBlank(blankKey = "a", answerText = "가", revealCount = 1): P
 
 describe("submitAttempt — G1: 문제 조회", () => {
   it("없는 id 는 400/1000/존재하지 않거나 보관된 문제입니다", async () => {
-    await expect(submitAttempt(db, 999999, { selectedChoiceIds: [] }, actor)).rejects.toMatchObject({
+    await expect(submitAttempt(db, 999999, { selectedChoiceIds: [], submittedText: null, blankAnswers: null }, actor)).rejects.toMatchObject({
       message: "존재하지 않거나 보관된 문제입니다.",
     });
   });
 
   it("ARCHIVED 문제도 같은 문구다", async () => {
     const id = await seedProblem({ status: "ARCHIVED" });
-    await expect(submitAttempt(db, id, { selectedChoiceIds: [] }, actor)).rejects.toMatchObject({
+    await expect(submitAttempt(db, id, { selectedChoiceIds: [], submittedText: null, blankAnswers: null }, actor)).rejects.toMatchObject({
       message: "존재하지 않거나 보관된 문제입니다.",
     });
   });
@@ -274,14 +274,14 @@ describe("submitAttempt — ㉳: blankAnswers 의 null 원소(승인된 이탈, 
 describe("submitAttempt — correctAnswerSummary (G14 확장, 승인된 이탈)", () => {
   it("오답 제출 시 응답에 정답 보기 텍스트가 실린다", async () => {
     const { problemId, wrongChoiceId } = await seedMcq();
-    const result = await submitAttempt(db, problemId, { selectedChoiceIds: [wrongChoiceId] }, actor);
+    const result = await submitAttempt(db, problemId, { selectedChoiceIds: [wrongChoiceId], submittedText: null, blankAnswers: null }, actor);
     expect(result.correct).toBe(false);
     expect(result.correctAnswerSummary).toBe("가");
   });
 
   it("정답 제출 시에도 correctAnswerSummary 는 채워져 있다 — 보여줄지는 화면이 판단한다", async () => {
     const { problemId, choiceId } = await seedMcq();
-    const result = await submitAttempt(db, problemId, { selectedChoiceIds: [choiceId] }, actor);
+    const result = await submitAttempt(db, problemId, { selectedChoiceIds: [choiceId], submittedText: null, blankAnswers: null }, actor);
     expect(result.correct).toBe(true);
     expect(result.correctAnswerSummary).toBe("가");
   });
