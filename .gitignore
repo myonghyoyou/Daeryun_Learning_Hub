@@ -29,3 +29,6 @@ dist-ssr
 
 # Subagent-driven-development scratch workspace (superpowers:subagent-driven-development)
 .superpowers/
+
+# 운영 스냅샷이 저장소 루트에서 실행됐을 때를 대비한 이중 안전장치 (web/.gitignore 에도 있다)
+.data/

@@ -6,7 +6,7 @@ import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { assertProdSource, exportSnapshot } from "../lib/problemSync/exportSnapshot";
-import { SNAPSHOT_PATH } from "../lib/problemSync/snapshot";
+import { parseSnapshot, SNAPSHOT_PATH } from "../lib/problemSync/snapshot";
 
 async function main() {
   // 운영 자리에 로컬을 넣은 실수를 여기서 막는다.
@@ -16,7 +16,13 @@ async function main() {
 
   const snapshot = await exportSnapshot(url);
   await mkdir(dirname(SNAPSHOT_PATH), { recursive: true });
-  await writeFile(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2), "utf8");
+
+  // 쓰기 전에 두 반쪽이 실제로 맞는지 확인한다. 내보내기와 들여오기는 형식만 공유할 뿐
+  // 서로를 호출하지 않아, 별칭 오타로 필드가 undefined 가 되면(JSON.stringify 가 조용히
+  // 지운다) 운영을 상대로 처음 돌릴 때에야 드러난다. 여기서 걸리면 어느 필드인지 알려준다.
+  const json = JSON.stringify(snapshot, null, 2);
+  parseSnapshot(JSON.parse(json));
+  await writeFile(SNAPSHOT_PATH, json, "utf8");
 
   console.log(`스냅샷 저장: ${SNAPSHOT_PATH}`);
   console.log(`  출처: ${snapshot.source.host}/${snapshot.source.database}`);

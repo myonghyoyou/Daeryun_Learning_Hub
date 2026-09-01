@@ -149,9 +149,17 @@ describe("importSnapshot", () => {
     expect(created.id).toBeGreaterThan(900);
   });
 
-  it("총괄관리자가 없으면 안내와 함께 멈춘다", async () => {
-    await db.delete(users);
+  it("총괄관리자가 없으면 안내와 함께 멈추고, 기존 데이터를 건드리지 않는다", async () => {
+    const existingId = await seedExistingProblemWithAttempt();
+    // 계정을 지우면 problems.created_by 외래키에 걸린다(연쇄 삭제가 없다). 역할만 낮춰
+    // SUPER_ADMIN 이 하나도 없는 상태를 만든다 — importSnapshot 이 보는 건 역할이다.
+    await db.update(users).set({ role: "EMPLOYEE" }).where(eq(users.id, adminId));
+
     await expect(importSnapshot(db, snapshotOf([problemOf()]))).rejects.toThrow(/SUPER_ADMIN/);
+
+    // 삭제가 작성자 확인보다 먼저 일어났다면 이 문제는 사라졌을 것이다(롤백에 기대지 않는다).
+    const rows = await db.select({ id: problems.id }).from(problems);
+    expect(rows.map((r) => r.id)).toEqual([existingId]);
   });
 
   it("작성자는 로컬 총괄관리자로 채운다 — 운영 작성자는 옮기지 않는다", async () => {

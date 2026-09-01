@@ -25,15 +25,26 @@ export type ImportResult = {
  */
 export async function importSnapshot(db: Db, snapshot: ProblemSnapshot): Promise<ImportResult> {
   return db.transaction(async (tx) => {
-    // 1. 풀이 이력 먼저. attempts.problem_id 에는 연쇄 삭제가 걸려 있지 않아, 이력이 남아 있으면
+    // 1. 작성자를 먼저 확인한다. 아래에서 기존 문제와 풀이 이력을 전부 지우므로, 지운 뒤에
+    //    총괄관리자가 없다는 걸 알게 되면 롤백에 기대야 한다 — 지우기 전에 막는 편이 낫다.
+    //    운영 작성자 계정은 옮기지 않으므로 로컬 총괄관리자로 대체한다.
+    const [admin] = await tx.select({ id: users.id }).from(users)
+      .where(eq(users.role, "SUPER_ADMIN")).orderBy(asc(users.id)).limit(1);
+    if (!admin) {
+      throw new Error(
+        "로컬에 SUPER_ADMIN 계정이 없습니다. pnpm bootstrap 또는 pnpm seed:dev 를 먼저 실행하세요.",
+      );
+    }
+
+    // 2. 풀이 이력 먼저. attempts.problem_id 에는 연쇄 삭제가 걸려 있지 않아, 이력이 남아 있으면
     //    DB 가 문제 삭제를 거부한다. attempt_choices·attempt_blank_answers 는 attempts 에
     //    연쇄 삭제가 걸려 있어 함께 사라진다.
     const deletedAttempts = (await tx.delete(attempts).returning({ id: attempts.id })).length;
 
-    // 2. 문제. 보기·정답·빈칸·문제태그는 problems 에 연쇄 삭제가 걸려 있어 함께 사라진다.
+    // 3. 문제. 보기·정답·빈칸·문제태그는 problems 에 연쇄 삭제가 걸려 있어 함께 사라진다.
     const deletedProblems = (await tx.delete(problems).returning({ id: problems.id })).length;
 
-    // 3. 부서를 코드로 맞춘다. 이미 있으면 이름·상태를 건드리지 않는다 — 로컬에는 검증용으로
+    // 4. 부서를 코드로 맞춘다. 이미 있으면 이름·상태를 건드리지 않는다 — 로컬에는 검증용으로
     //    상태를 바꿔 둔 부서가 있을 수 있다(scripts/seed-dev.ts 와 같은 규칙).
     //    lib/db/departments.ts 의 insertDepartment 를 쓰지 않는 이유: 그 함수는 status 를
     //    항상 ACTIVE 로 박아, 운영에서 INACTIVE 인 부서를 그대로 옮길 수 없다.
@@ -51,15 +62,6 @@ export async function importSnapshot(db: Db, snapshot: ProblemSnapshot): Promise
         .returning({ id: departments.id });
       departmentIdByCode.set(dept.code, created.id);
       createdDepartments++;
-    }
-
-    // 4. 작성자. 운영 작성자 계정은 옮기지 않으므로 로컬 총괄관리자로 대체한다.
-    const [admin] = await tx.select({ id: users.id }).from(users)
-      .where(eq(users.role, "SUPER_ADMIN")).orderBy(asc(users.id)).limit(1);
-    if (!admin) {
-      throw new Error(
-        "로컬에 SUPER_ADMIN 계정이 없습니다. pnpm bootstrap 또는 pnpm seed:dev 를 먼저 실행하세요.",
-      );
     }
 
     // 5. 태그를 한 번에 맞춘다. 문제마다 부르면 700문항에 1,400번 왕복한다.
