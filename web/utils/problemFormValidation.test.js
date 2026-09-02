@@ -94,3 +94,19 @@ test("validateProblemForm can report multiple field errors at once", () => {
   assert.equal(errors.content, "문제 내용을 입력하세요.");
   assert.ok(errors.choices);
 });
+
+// 2026-09-02: 질문/지문을 나눈 뒤 빈칸 마커는 참조지문에 산다. 폼이 referenceText 를
+// 넘기지 않으면 마커가 든 글을 못 보고 "본문에 없는 빈칸 마커입니다"로 저장을 막는다.
+test("validateProblemForm accepts a FILL_BLANK form whose markers live in referenceText", () => {
+  const errors = validateProblemForm(
+    baseForm({
+      type: "FILL_BLANK",
+      content: "다음 괄호 안에 들어갈 말은?",
+      referenceText: "수도는 {{blank_1}}이다.",
+      blanks: [{ blankKey: "blank_1", answerText: "서울" }],
+      blankRevealCount: 1,
+      choices: [],
+    }),
+  );
+  assert.deepEqual(errors, {});
+});

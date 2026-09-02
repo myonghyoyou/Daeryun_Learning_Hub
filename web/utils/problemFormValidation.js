@@ -32,6 +32,7 @@ export function validateProblemForm(form) {
     case "FILL_BLANK": {
       const blanksError = validateBlanks({
         content: form.content,
+        referenceText: form.referenceText,
         blanks: form.blanks,
         blankRevealCount: form.blankRevealCount,
       });

@@ -31,6 +31,7 @@ import Input from "@/components/ui/Input.jsx";
 import Select from "@/components/ui/Select.jsx";
 import TagChip from "@/components/ui/TagChip.jsx";
 import BlankDesignator from "@/components/admin/BlankDesignator.jsx";
+import { blankHostField } from "@/lib/problem/blankHost";
 
 // 5개 유형 전체 — 서술형은 없다(태스크 8 서버 사이드 규칙).
 const TYPES = ["MCQ_SINGLE", "MCQ_MULTI", "OX", "SHORT_ANSWER", "FILL_BLANK"];
@@ -228,8 +229,15 @@ export default function ProblemFormPage() {
     clearError("blanks");
   }
 
-  // 지정 모드(BlankDesignator) 콜백. 셋 다 순수 함수(blankTokens.js) 결과를 content·blanks에
-  // 그대로 흘린다 — content 문자열({{bN}} 마커 포함)이 단일 진실이라 쓰기 모드 textarea와
+  // 2026-09-02: 질문/지문을 나누면서 마커가 참조지문으로 옮겨 갔다. 마커가 든 쪽을 여기서
+  // 한 번 정하고 지정·해제·경계조정 세 콜백이 같은 필드를 읽고 쓴다 — 각자 정하면 한쪽만
+  // 바뀌어 마커와 글이 어긋난다(lib/problem/blankHost.ts 가 같은 판단을 한다).
+  const blankField = blankHostField(referenceText);
+  const blankSourceText = blankField === "referenceText" ? referenceText : content;
+  const setBlankSourceText = blankField === "referenceText" ? setReferenceText : setContent;
+
+  // 지정 모드(BlankDesignator) 콜백. 셋 다 순수 함수(blankTokens.js) 결과를 그 필드·blanks에
+  // 그대로 흘린다 — 마커가 든 문자열({{bN}} 포함)이 단일 진실이라 쓰기 모드 textarea와
   // 여기서 만든 결과가 항상 같은 값을 공유한다.
   function handleDesignate(wordSeg) {
     // 새 등록 폼과 handleTypeChange는 blanks를 [createBlank()](키·정답 모두 빈 자리표시자
@@ -239,22 +247,22 @@ export default function ProblemFormPage() {
     // 안 했는데 저장이 막힌다. 키·정답이 "둘 다" 빈 행만 지운다(OR): 키만 먼저 채워 넣은
     // 행은 사용자 입력이 있으므로 살려야 한다.
     const seeded = blanks.filter((b) => b.blankKey.trim() || b.answerText.trim());
-    const next = designateBlank(content, seeded, wordSeg);
-    setContent(next.content);
+    const next = designateBlank(blankSourceText, seeded, wordSeg);
+    setBlankSourceText(next.content);
     setBlanks(next.blanks);
     clearError("blanks");
   }
 
   function handleRelease(key) {
-    const next = releaseBlank(content, blanks, key);
-    setContent(next.content);
+    const next = releaseBlank(blankSourceText, blanks, key);
+    setBlankSourceText(next.content);
     setBlanks(next.blanks);
     clearError("blanks");
   }
 
   function handleAdjust(key, delta) {
-    const next = adjustBlankBoundary(content, blanks, key, delta);
-    setContent(next.content);
+    const next = adjustBlankBoundary(blankSourceText, blanks, key, delta);
+    setBlankSourceText(next.content);
     setBlanks(next.blanks);
     clearError("blanks");
   }
@@ -373,7 +381,7 @@ export default function ProblemFormPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const formState = { type, content, choices, answers, blanks, blankRevealCount, tagsInput };
+    const formState = { type, content, referenceText, choices, answers, blanks, blankRevealCount, tagsInput };
     const validationErrors = validateProblemForm(formState);
     setErrors(validationErrors);
     if (!isEdit && !createDepartmentId) {
@@ -684,11 +692,12 @@ export default function ProblemFormPage() {
               {blankMode === "designate" ? (
                 <div className="mt-3">
                   <p className="mb-2 text-body-small text-ink-muted">
+                    {blankField === "referenceText" ? "참조지문에서 빈칸을 지정합니다. " : ""}
                     문장의 단어를 클릭하면 빈칸이 됩니다. 조사·쉼표는 자동으로 분리되며, 빈칸 칩의
                     화살표로 정답 범위를 한 글자씩 조정할 수 있습니다.
                   </p>
                   <BlankDesignator
-                    content={content}
+                    content={blankSourceText}
                     blanks={blanks}
                     onDesignate={handleDesignate}
                     onRelease={handleRelease}
