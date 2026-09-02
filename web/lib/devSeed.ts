@@ -52,20 +52,25 @@ export type SeedUser = {
 // 2026-08-13-source-number-and-random-50 이 정한 12개 그룹은 공통과 실팀 11개다.
 export const COMMON: SeedDepartment = { name: "공통", code: "COMMON" };
 
-// 로컬 DB 에 이미 있는 실무 팀 14개. DB 를 밀어도 시드 한 번으로 돌아오도록 여기 적어 둔다.
+// 실무 팀 11개. **코드는 운영 DB 의 값과 같아야 한다.**
+//
+// 예전에는 여기 14개가 있었고 코드가 운영과 어긋나 있었다(ACCT/FUND/REV/DEV vs 운영의
+// ACC/FIN/IMPORT/IT). 그 상태로 운영 문제를 로컬로 내려받으면(scripts/sync-problems-import.ts)
+// 부서를 코드로 짝맞추므로 같은 팀이 두 개씩 생겼다 — "회계팀"이 ACCT(빈 껍데기)와
+// ACC(문제 70개)로 갈라지는 식이다. 2026-09-02 에 운영과 대조해 코드를 맞추고, 운영에 없던
+// 세 팀(안전기획팀·신성장사업팀·기술팀)과 QA 픽스처였던 폐지팀(GONE)을 뺐다.
+//
+// 팀을 늘리거나 코드를 바꿀 일이 생기면 운영 DB 의 departments.code 를 먼저 확인해라.
 export const SEED_TEAMS: SeedDepartment[] = [
-  { name: "정보시스템팀", code: "DEV" },
+  { name: "정보시스템팀", code: "IT" },
   { name: "영업팀", code: "SALES" },
-  { name: "안전기획팀", code: "SAFE" },
-  { name: "신성장사업팀", code: "NEWBIZ" },
-  { name: "기술팀", code: "TECH" },
   { name: "기획팀", code: "PLAN" },
   { name: "업무지원팀", code: "SUPPORT" },
-  { name: "회계팀", code: "ACCT" },
-  { name: "자금팀", code: "FUND" },
+  { name: "회계팀", code: "ACC" },
+  { name: "자금팀", code: "FIN" },
   { name: "총무1팀", code: "GA1" },
   { name: "고객지원팀", code: "CS" },
-  { name: "수입관리팀", code: "REV" },
+  { name: "수입관리팀", code: "IMPORT" },
   { name: "인사팀", code: "HR" },
   { name: "공사관리팀", code: "CONST" },
 ];
