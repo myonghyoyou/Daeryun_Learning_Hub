@@ -4,12 +4,12 @@ import { toast } from "react-toastify";
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
-import Collapsible from "@/components/ui/Collapsible.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
 import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/components/solve/choiceLayout.js";
 import { submitAttempt } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
+import { blankHostField } from "@/lib/problem/blankHost";
 import { hasNoAnswer } from "@/utils/answerState.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
 
@@ -83,6 +83,35 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
     blanksToAnswer: problem.blanksToAnswer,
   });
 
+  // 빈칸 마커가 본문에 있는지 지문에 있는지. 참조지문이 있으면 거기가 집이다(blankHost.ts).
+  const blanksLiveInContent =
+    problem.type === "FILL_BLANK" && blankHostField(problem.referenceText) === "content";
+
+  /**
+   * 빈칸 마커가 든 글을 입력칸이 섞인 문단으로 그린다.
+   *
+   * 본문과 지문 두 자리에서 같은 모양이 필요하므로 함수로 둔다 — 자리마다 복사하면
+   * 한쪽만 고쳐지는 사고가 난다.
+   */
+  function renderWithBlanks(text) {
+    return parseBlankContent(text, problem.blanksToAnswer, revealedAnswers).map((segment, index) => {
+      if (segment.type === "text") return <span key={index}>{segment.value}</span>;
+      if (segment.type === "reveal") {
+        return <strong key={index} className="font-semibold text-ink-strong">{segment.value}</strong>;
+      }
+      return (
+        <input
+          key={index}
+          aria-label={`빈칸 ${segment.blankKey}`}
+          disabled={answered}
+          className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 text-center py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
+          value={blankInputs[segment.blankKey] ?? ""}
+          onChange={(event) => setBlankInputs({ ...blankInputs, [segment.blankKey]: event.target.value })}
+        />
+      );
+    });
+  }
+
   return (
     <>
       <Surface className="p-5 md:p-6">
@@ -96,31 +125,26 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         {problem.imageUrl && (
           <img src={problem.imageUrl} alt="문제 이미지" className="mb-4 max-h-60 rounded-md border border-line-default" />
         )}
-        {problem.referenceText && (
-          <div className="mb-4 rounded-md bg-surface-subtle p-3 text-body-small text-ink-default">
-            <Collapsible text={problem.referenceText} />
-          </div>
-        )}
 
-        {problem.type === "FILL_BLANK" ? (
-          <p className="text-body leading-loose text-ink-strong">
-            {parseBlankContent(problem.content, problem.blanksToAnswer, revealedAnswers).map((segment, index) => {
-              if (segment.type === "text") return <span key={index}>{segment.value}</span>;
-              if (segment.type === "reveal") return <strong key={index} className="font-semibold text-ink-strong">{segment.value}</strong>;
-              return (
-                <input
-                  key={index}
-                  aria-label={`빈칸 ${segment.blankKey}`}
-                  disabled={answered}
-                  className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 text-center py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
-                  value={blankInputs[segment.blankKey] ?? ""}
-                  onChange={(event) => setBlankInputs({ ...blankInputs, [segment.blankKey]: event.target.value })}
-                />
-              );
-            })}
-          </p>
+        {/*
+          질문이 먼저, 지문은 그 아래 테두리 박스. 빈칸 마커는 지문이 있으면 지문 쪽에 있으므로
+          (lib/problem/blankHost.ts) 입력칸도 그 글을 그리는 자리에서 나온다 — 두 자리 모두
+          renderWithBlanks 를 쓰므로 어느 쪽에 있든 같은 모양으로 그려진다.
+        */}
+        {blanksLiveInContent ? (
+          <p className="text-body leading-loose text-ink-strong">{renderWithBlanks(problem.content)}</p>
         ) : (
           <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-strong">{problem.content}</p>
+        )}
+
+        {problem.referenceText && (
+          <div className="mt-4 rounded-md border border-line-default bg-surface-subtle p-4">
+            {problem.type === "FILL_BLANK" ? (
+              <p className="text-body leading-loose text-ink-strong">{renderWithBlanks(problem.referenceText)}</p>
+            ) : (
+              <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-default">{problem.referenceText}</p>
+            )}
+          </div>
         )}
 
         {problem.type === "FILL_BLANK" && (
