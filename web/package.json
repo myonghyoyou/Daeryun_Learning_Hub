@@ -18,7 +18,8 @@
     "sync:problems:import": "tsx scripts/sync-problems-import.ts",
     "proof:export": "tsx scripts/export-proof-sheet.ts",
     "proof:apply": "tsx scripts/apply-proof-sheet.ts",
-    "proof:revert": "tsx scripts/revert-proof-sheet.ts"
+    "proof:revert": "tsx scripts/revert-proof-sheet.ts",
+    "split:reference": "tsx scripts/split-reference-text.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
