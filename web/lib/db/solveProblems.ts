@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { DbConn } from "./client";
 import { departments, problems, problemTags, tags } from "./schema";
 
@@ -34,7 +34,11 @@ export async function findActiveSolveProblems(
   const tag = filters.tag != null && filters.tag !== "" ? filters.tag : null;
 
   const where = [eq(problems.status, "ACTIVE")];
-  if (keyword) where.push(ilike(problems.content, `%${keyword}%`));
+  // 관리자 목록(lib/db/problems.ts)과 같은 이유로 참조지문도 함께 본다.
+  if (keyword) {
+    where.push(sql`(${problems.content} ILIKE ${`%${keyword}%`}
+      OR coalesce(${problems.referenceText}, '') ILIKE ${`%${keyword}%`})`);
+  }
   if (tag) {
     where.push(sql`EXISTS (SELECT 1 FROM problem_tags fpt JOIN tags ft ON ft.id = fpt.tag_id
       WHERE fpt.problem_id = ${problems.id} AND lower(ft.name) = lower(${tag}))`);

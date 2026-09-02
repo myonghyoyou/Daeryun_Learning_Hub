@@ -122,8 +122,11 @@ function problemFilterConditions(filters: ProblemListFilters): SQL[] {
       WHERE fpt.problem_id = ${problems.id} AND lower(ft.name) = lower(${filters.tag})
     )`);
   }
+  // 2026-09-02: 질문/지문을 나누면서 본문의 절반이 reference_text 로 갔다. 본문만 훑으면
+  // 지문에만 있는 낱말로는 문제를 못 찾는다 — 두 컬럼을 함께 본다.
   if (filters.keyword != null && filters.keyword !== "") {
-    conditions.push(sql`${problems.content} ILIKE '%' || ${filters.keyword} || '%'`);
+    conditions.push(sql`(${problems.content} ILIKE '%' || ${filters.keyword} || '%'
+      OR coalesce(${problems.referenceText}, '') ILIKE '%' || ${filters.keyword} || '%')`);
   }
   return conditions;
 }

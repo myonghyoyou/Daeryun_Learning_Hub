@@ -48,6 +48,14 @@ describe("findActiveSolveProblems", () => {
     expect((await findActiveSolveProblems(db, { tag: " " })).length).toBe(0);
   });
 
+  it("keyword 가 참조지문에도 걸린다", async () => {
+    // 관리자 목록(lib/db/problems.ts)과 같은 이유다 — 지문에만 있는 낱말로도 찾아야 한다.
+    await seed({ content: "다음 괄호 안에 적합한 용어는?", referenceText: "총괄원가를 판매열량으로 나눈다" });
+    await seed({ content: "무관한 문제" });
+    const rows = await findActiveSolveProblems(db, { keyword: "판매열량" });
+    expect(rows.map((r) => r.content)).toEqual(["다음 괄호 안에 적합한 용어는?"]);
+  });
+
   it("S9: 부서 필터가 없다 — 직원은 전 부서 문제를 본다", async () => {
     // 리뷰에서 변이로 드러난 구멍이다. 부서 필터를 하드코딩해도 나머지 테스트가 전부
     // 통과했다 — 두 번째 부서를 심는 테스트가 하나도 없었기 때문이다.

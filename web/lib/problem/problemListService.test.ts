@@ -132,6 +132,19 @@ describe("problemListService — 필터·응답", () => {
     expect((await listProblems(db, superAdmin, { ...none, keyword: "swot" })).items).toHaveLength(1);
   });
 
+  it("keyword 가 참조지문에도 걸린다 — 지문을 분리한 뒤에도 검색이 문제를 찾아야 한다", async () => {
+    // 질문/지문을 나누면서 본문의 절반이 reference_text 로 갔다. 본문만 훑으면 지문에만
+    // 있는 낱말로는 문제를 못 찾는다. seed() 는 referenceText 를 받지 않아 따로 채운다.
+    const id = await seed({ content: "다음 괄호 안에 적합한 용어는?", type: "SHORT_ANSWER", sourceNumber: 1 });
+    await db.update(problems)
+      .set({ referenceText: "총괄원가를 판매열량으로 나누어 산정한다" })
+      .where(eq(problems.id, id));
+    await seed({ content: "무관한 문제", sourceNumber: 2 });
+
+    const res = await listProblems(db, superAdmin, { ...none, keyword: "판매열량" });
+    expect(res.items.map((p) => p.id)).toEqual([id]);
+  });
+
   it("tag 필터는 대소문자를 가리지 않는다", async () => {
     await seed({ content: "회계 문제", sourceNumber: 1, tags: ["회계"] });
     await seed({ content: "무관", sourceNumber: 2, tags: ["기타"] });
