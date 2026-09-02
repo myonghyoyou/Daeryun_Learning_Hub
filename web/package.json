@@ -15,7 +15,9 @@
     "seed:dev": "tsx scripts/seed-dev.ts",
     "sync:problems": "pnpm sync:problems:export && pnpm sync:problems:import",
     "sync:problems:export": "tsx scripts/sync-problems-export.ts",
-    "sync:problems:import": "tsx scripts/sync-problems-import.ts"
+    "sync:problems:import": "tsx scripts/sync-problems-import.ts",
+    "proof:export": "tsx scripts/export-proof-sheet.ts",
+    "proof:apply": "tsx scripts/apply-proof-sheet.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
