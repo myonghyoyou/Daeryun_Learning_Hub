@@ -248,6 +248,30 @@ describe("validateProblem — fill in the blank", () => {
       validateProblem(fb({ content: "a {{b.1}} c", blanks: [{ blankKey: "b.1", answerText: "x" }] })),
     ).not.toThrow();
   });
+
+  // 2026-09-02: 질문/지문을 나누면서 마커가 참조지문으로 옮겨 갔다.
+  it("빈칸 마커가 참조지문에 있어도 통과한다 — 분리 이후의 정상 형태다", () => {
+    expect(() => validateProblem(fb({
+      content: "다음 괄호 안에 들어갈 용어는?",
+      referenceText: "가스사용자가 {{b1}}일 이내에 납부한다",
+    }))).not.toThrow();
+  });
+
+  it("마커가 본문과 참조지문에 걸쳐 있으면 거부한다 — 한쪽에만 있어야 한다", () => {
+    expectMessage(
+      () => validateProblem(fb({
+        content: "본문 {{b1}} 질문은?",
+        referenceText: "지문 {{b2}} 입니다",
+        blanks: [{ blankKey: "b1", answerText: "가" }, { blankKey: "b2", answerText: "나" }],
+        blankRevealCount: 2,
+      })),
+      "빈칸 마커는 문제 본문과 참조지문 중 한쪽에만 있어야 합니다.",
+    );
+  });
+
+  it("참조지문이 없으면 예전처럼 본문에서 마커를 찾는다", () => {
+    expect(() => validateProblem(fb({ referenceText: null }))).not.toThrow();
+  });
 });
 
 describe("validateSourceNumber", () => {

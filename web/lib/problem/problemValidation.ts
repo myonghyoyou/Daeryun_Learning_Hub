@@ -1,6 +1,7 @@
 import { BizError } from "../http/errors";
 import { ErrorCode } from "../http/errorCode";
 import { checkImageUrl, IMAGE_URL_PREFIX } from "./imageUrl";
+import { blankHostText } from "./blankHost";
 
 export type ProblemType = "MCQ_SINGLE" | "MCQ_MULTI" | "OX" | "SHORT_ANSWER" | "FILL_BLANK";
 
@@ -183,7 +184,10 @@ function extractMarkers(content: string | null): string[] {
   return markers;
 }
 
-function validateFillBlank(content: string | null, blanks: BlankInput[], blankRevealCount: number | null | undefined): void {
+function validateFillBlank(
+  content: string | null, referenceText: string | null | undefined,
+  blanks: BlankInput[], blankRevealCount: number | null | undefined,
+): void {
   if (blanks.length === 0) invalid("빈칸을 최소 1개 정의하세요.");
 
   // Java 는 blanks 를 한 번만 순회하며 각 빈칸에 세 검사를 모두 적용한 뒤 다음 빈칸으로
@@ -207,12 +211,19 @@ function validateFillBlank(content: string | null, blanks: BlankInput[], blankRe
   // 두 방향에 같은 정규식 charset([A-Za-z0-9_-]+)을 쓰면, 그 charset 밖의 키(한글, "b.1" 처럼
   // "."을 포함하는 키 등)가 본문에 실제로 있어도 이 방향에서 false 로 거부된다 —
   // web/utils/blankSegments.js 가 명시하듯 "서버는 키 형식을 강제하지 않는다".
-  const contentValue = content ?? "";
+  // 2026-09-02: 질문/지문을 나누면서 마커가 참조지문으로 옮겨 갔다. 마커가 양쪽에 걸치면
+  // 렌더링·지정·검증이 서로 다른 글을 보게 되므로 여기서 막는다(blankHost.ts 의 전제).
+  if (referenceText && extractMarkers(content).length > 0 && extractMarkers(referenceText).length > 0) {
+    invalid("빈칸 마커는 문제 본문과 참조지문 중 한쪽에만 있어야 합니다.");
+  }
+
+  // 마커가 든 쪽에서 검사한다. 참조지문이 있으면 거기가, 없으면 본문이 집이다(blankHost.ts).
+  const contentValue = blankHostText(content, referenceText);
   for (const key of keys) {
     if (!contentValue.includes(`{{${key}}}`)) invalid(`본문에 없는 빈칸 마커입니다: ${key}`);
   }
 
-  const markers = extractMarkers(content);
+  const markers = extractMarkers(contentValue);
   const keySet = new Set(keys);
   for (const marker of markers) {
     if (!keySet.has(marker)) invalid(`정답이 등록되지 않은 빈칸 마커가 본문에 있습니다: ${marker}`);
@@ -253,7 +264,7 @@ export function validateProblem(req: ProblemCreateInput): void {
       validateShortAnswer(req.answers ?? []);
       break;
     case "FILL_BLANK":
-      validateFillBlank(req.content, req.blanks ?? [], req.blankRevealCount);
+      validateFillBlank(req.content, req.referenceText, req.blanks ?? [], req.blankRevealCount);
       break;
     default:
       // Java 에서는 닿을 수 없다(type 이 enum 이라 Jackson 이 먼저 거른다). TS 에서는 캐스팅

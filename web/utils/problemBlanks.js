@@ -17,7 +17,7 @@ function isBlankText(value) {
   return !value || !value.trim();
 }
 
-export function validateBlanks({ content, blanks, blankRevealCount }) {
+export function validateBlanks({ content, referenceText, blanks, blankRevealCount }) {
   if (!blanks || blanks.length === 0) {
     return "빈칸을 최소 1개 정의하세요.";
   }
@@ -31,18 +31,33 @@ export function validateBlanks({ content, blanks, blankRevealCount }) {
     return "빈칸 키가 중복되었습니다.";
   }
 
+  // 서버 validateFillBlank 와 같은 순서·같은 문구. 정규식은 blankSegments.js 의
+  // MARKER 와 같은 문자 집합이어야 지정 모드가 칩으로 그리는 것과 검증이 보는 것이 일치한다.
+  const markerPattern = /\{\{([A-Za-z0-9_-]+)\}\}/g;
+  const countMarkers = (text) => {
+    markerPattern.lastIndex = 0;
+    return ((text ?? "").match(markerPattern) || []).length;
+  };
+
+  // 2026-09-02: 질문/지문을 나누면서 마커가 참조지문으로 옮겨 갔다. 양쪽에 걸치면
+  // 렌더링·지정·검증이 서로 다른 글을 보게 된다(lib/problem/blankHost.ts 의 전제).
+  if (referenceText && countMarkers(content) > 0 && countMarkers(referenceText) > 0) {
+    return "빈칸 마커는 문제 본문과 참조지문 중 한쪽에만 있어야 합니다.";
+  }
+
+  // 마커가 든 쪽에서 검사한다(lib/problem/blankHost.ts 의 blankHostText 와 같은 규칙).
+  const hostText = (referenceText ? referenceText : content) ?? "";
+
   for (const key of keys) {
-    if (!content || !content.includes(`{{${key}}}`)) {
+    if (!hostText.includes(`{{${key}}}`)) {
       return `본문에 없는 빈칸 마커입니다: ${key}`;
     }
   }
 
-  // 서버 ProblemServiceImpl.validateBlanks 와 같은 순서·같은 문구. 정규식은 blankSegments.js 의
-  // MARKER 와 같은 문자 집합이어야 지정 모드가 칩으로 그리는 것과 검증이 보는 것이 일치한다.
-  const markerPattern = /\{\{([A-Za-z0-9_-]+)\}\}/g;
   const declared = new Set(keys);
   let m;
-  while ((m = markerPattern.exec(content ?? "")) !== null) {
+  markerPattern.lastIndex = 0;
+  while ((m = markerPattern.exec(hostText)) !== null) {
     if (!declared.has(m[1])) {
       return `정답이 등록되지 않은 빈칸 마커가 본문에 있습니다: ${m[1]}`;
     }

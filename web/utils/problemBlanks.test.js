@@ -113,3 +113,27 @@ test("validateBlanks: still accepts content whose markers are all declared", () 
   });
   assert.strictEqual(message, null);
 });
+
+// 2026-09-02: 질문/지문을 나누면서 마커가 참조지문으로 옮겨 갔다.
+test("validateBlanks: 마커가 참조지문에 있어도 통과한다", () => {
+  const message = validateBlanks({
+    content: "다음 괄호 안에 들어갈 용어는?",
+    referenceText: "가스사용자가 {{b1}}일 이내에 납부한다",
+    blanks: [{ blankKey: "b1", answerText: "30" }],
+    blankRevealCount: 1,
+  });
+  assert.strictEqual(message, null);
+});
+
+test("validateBlanks: 마커가 양쪽에 걸쳐 있으면 문구를 돌려준다", () => {
+  const message = validateBlanks({
+    content: "본문 {{b1}} 질문은?",
+    referenceText: "지문 {{b2}} 입니다",
+    blanks: [
+      { blankKey: "b1", answerText: "가" },
+      { blankKey: "b2", answerText: "나" },
+    ],
+    blankRevealCount: 2,
+  });
+  assert.strictEqual(message, "빈칸 마커는 문제 본문과 참조지문 중 한쪽에만 있어야 합니다.");
+});
