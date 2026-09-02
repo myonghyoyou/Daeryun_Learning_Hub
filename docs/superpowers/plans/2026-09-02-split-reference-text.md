@@ -49,7 +49,7 @@
 - Consumes: 없음(순수 모듈)
 - Produces: `splitQuestionAndReference(content: string): { question: string; reference: string | null }`, `blankHostText(content: string | null, referenceText: string | null): string`, `blankHostField(referenceText: string | null): "content" | "referenceText"`. Task 2~5 가 전부 이것을 쓴다.
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/problem/splitReference.test.ts` 새로 작성:
 
@@ -135,12 +135,12 @@ describe("blankHostText", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problem/splitReference.test.ts lib/problem/blankHost.test.ts`
 Expected: FAIL — 두 모듈이 없어 import 에러.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/problem/blankHost.ts` 새로 작성:
 
@@ -196,16 +196,16 @@ export function splitQuestionAndReference(content: string): { question: string; 
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problem/splitReference.test.ts lib/problem/blankHost.test.ts`
 Expected: PASS, 10개 전부.
 
-- [ ] **Step 5: 뮤테이션 테스트**
+- [x] **Step 5: 뮤테이션 테스트**
 
 `splitReference.ts` 의 `if (reference.length < MIN_REFERENCE_LENGTH)` 줄을 잠시 지우고 재실행 → "물음표 뒤가 짧으면 나누지 않는다" 테스트가 실패하는지 확인 → 복원 → 다시 통과 확인.
 
-- [ ] **Step 6: 전체 스위트 확인 + 커밋**
+- [x] **Step 6: 전체 스위트 확인 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -229,7 +229,7 @@ git commit -m "[ADD] 질문/지문 분리 규칙과 빈칸 마커 위치 판단"
 - Consumes: `blankHostText(content, referenceText)`(Task 1)
 - Produces: `validateFillBlank` 가 `referenceText` 를 받는다. `validateBlanks({ content, referenceText, blanks, blankRevealCount })` 로 인자가 바뀐다. Task 4(관리자 화면)가 이 새 시그니처를 쓴다.
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/problem/problemValidation.test.ts` 의 기존 `describe` 안에 추가(파일 상단의 기존 헬퍼·import 를 그대로 쓴다. 기존 FILL_BLANK 픽스처가 `content` 에 마커를 넣는 형태이므로 그 형태를 참고해 작성한다):
 
@@ -287,12 +287,12 @@ git commit -m "[ADD] 질문/지문 분리 규칙과 빈칸 마커 위치 판단"
   });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problem/problemValidation.test.ts utils/problemBlanks.test.js`
 Expected: FAIL — 마커가 지문에 있는 경우 `본문에 없는 빈칸 마커입니다` 로 거부된다.
 
-- [ ] **Step 3: 서버 검증을 고친다**
+- [x] **Step 3: 서버 검증을 고친다**
 
 `web/lib/problem/problemValidation.ts` 상단 import 에 추가:
 
@@ -355,7 +355,7 @@ function validateFillBlank(
 
 그리고 `validateFillBlank` 를 부르는 자리(같은 파일 아래쪽 `validateProblem` 안)에서 인자를 하나 더 넘기도록 고친다. 호출부를 찾아 `validateFillBlank(req.content, req.blanks, req.blankRevealCount)` 형태를 `validateFillBlank(req.content, req.referenceText, req.blanks, req.blankRevealCount)` 로 바꾼다.
 
-- [ ] **Step 4: 클라이언트 검증을 같은 규칙으로 고친다**
+- [x] **Step 4: 클라이언트 검증을 같은 규칙으로 고친다**
 
 `web/utils/problemBlanks.js` 의 `validateBlanks`(20-57행)를 다음으로 교체:
 
@@ -411,16 +411,16 @@ export function validateBlanks({ content, referenceText, blanks, blankRevealCoun
 }
 ```
 
-- [ ] **Step 5: 테스트가 통과하는지 확인한다**
+- [x] **Step 5: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problem/problemValidation.test.ts utils/problemBlanks.test.js`
 Expected: PASS. 기존 테스트(마커가 본문에 있는 픽스처)도 그대로 통과해야 한다 — 참조지문이 없으면 예전 동작과 같기 때문이다.
 
-- [ ] **Step 6: 뮤테이션 테스트**
+- [x] **Step 6: 뮤테이션 테스트**
 
 서버 쪽 "양쪽에 걸치면 거부" 분기를 잠시 지우고 재실행 → 해당 테스트가 실패하는지 확인 → 복원 → 다시 통과 확인.
 
-- [ ] **Step 7: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 7: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -443,7 +443,7 @@ git commit -m "[MOD] 빈칸 마커 검증이 참조지문도 보게"
 - Consumes: `blankHostField(referenceText)`(Task 1), 기존 `parseBlankContent(content, blanksToAnswer, revealedAnswers)`(`web/utils/blankContent.js`)
 - Produces: 없음(화면 종단)
 
-- [ ] **Step 1: 렌더링을 고친다**
+- [x] **Step 1: 렌더링을 고친다**
 
 `web/components/solve/ProblemSolveCard.jsx` 상단 import 에 추가:
 
@@ -509,7 +509,7 @@ import { blankHostField } from "@/lib/problem/blankHost";
 
 `Collapsible` 을 더 안 쓰게 되면 그 import 도 지운다(같은 파일에서 다른 곳이 쓰고 있으면 남긴다 — 지우기 전에 파일 안을 확인한다).
 
-- [ ] **Step 2: 전체 스위트 + 빌드 확인**
+- [x] **Step 2: 전체 스위트 + 빌드 확인**
 
 ```bash
 cd web && npx vitest run
@@ -518,7 +518,7 @@ cd web && npx next build
 
 이 저장소에는 React 렌더 테스트 인프라가 없다(기존 계획서들이 같은 이유로 화면 변경을 브라우저 실측으로 검증했다). 자동 테스트로 덮였다고 적지 마라.
 
-- [ ] **Step 3: 커밋**
+- [x] **Step 3: 커밋**
 
 ```bash
 git add web/components/solve/ProblemSolveCard.jsx
@@ -536,7 +536,7 @@ git commit -m "[MOD] 풀이 화면에서 지문을 질문 아래 테두리 박�
 - Consumes: `blankHostField(referenceText)`(Task 1), `validateBlanks({ content, referenceText, blanks, blankRevealCount })`(Task 2), 기존 `designateBlank`/`releaseBlank`/`adjustBlankBoundary`(`web/utils/blankDesignate.js` 또는 같은 유틸)
 - Produces: 없음(화면 종단)
 
-- [ ] **Step 1: 지정 핸들러가 마커가 든 필드를 읽고 쓰게 한다**
+- [x] **Step 1: 지정 핸들러가 마커가 든 필드를 읽고 쓰게 한다**
 
 `web/screens/admin/problems/ProblemFormPage.jsx` 상단 import 에 추가:
 
@@ -581,7 +581,7 @@ import { blankHostField } from "@/lib/problem/blankHost";
 
 `blankField`·`blankSourceText`·`setBlankSourceText` 세 줄은 이 핸들러들보다 **위**에 와야 한다. `content`·`referenceText` state 선언(103·126행 부근) 다음이면 어디든 좋다.
 
-- [ ] **Step 2: 지정 화면이 그 필드를 그리게 한다**
+- [x] **Step 2: 지정 화면이 그 필드를 그리게 한다**
 
 `BlankDesignator` 에 넘기는 `content` prop(690행 부근)을 `blankSourceText` 로 바꾼다:
 
@@ -597,7 +597,7 @@ import { blankHostField } from "@/lib/problem/blankHost";
               )}
 ```
 
-- [ ] **Step 3: 저장 전 검증 호출을 새 시그니처에 맞춘다**
+- [x] **Step 3: 저장 전 검증 호출을 새 시그니처에 맞춘다**
 
 같은 파일에서 `validateBlanks({ content, blanks, blankRevealCount })` 형태로 부르는 자리를 찾아 `referenceText` 를 넘기도록 고친다:
 
@@ -605,7 +605,7 @@ import { blankHostField } from "@/lib/problem/blankHost";
     const blankError = validateBlanks({ content, referenceText, blanks, blankRevealCount });
 ```
 
-- [ ] **Step 4: 전체 스위트 + 빌드 + 타입 검사**
+- [x] **Step 4: 전체 스위트 + 빌드 + 타입 검사**
 
 ```bash
 cd web && npx vitest run
@@ -613,7 +613,7 @@ cd web && npx next build
 cd web && npx tsc --noEmit
 ```
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add web/screens/admin/problems/ProblemFormPage.jsx
@@ -632,7 +632,7 @@ git commit -m "[MOD] 관리자 빈칸 지정을 참조지문에도 쓰게"
 - Consumes: 없음
 - Produces: 없음
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/problem/problemListService.test.ts` 의 기존 keyword 테스트("keyword 는 본문 부분일치이고 대소문자를 가리지 않는다", 129-132행 부근) 뒤에 추가한다. 이 파일은 `seed()` 헬퍼(18-33행)로 문제를 심고 `listProblems(db, req, actor)` 로 조회하며, `none`(13-16행)이 필터 기본값이다. `seed()` 는 `referenceText` 를 받지 않으므로 심은 뒤 따로 채운다:
 
@@ -648,12 +648,12 @@ git commit -m "[MOD] 관리자 빈칸 지정을 참조지문에도 쓰게"
   });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problem/problemListService.test.ts`
 Expected: FAIL — 검색이 `content` 만 보므로 못 찾는다.
 
-- [ ] **Step 3: 관리자 목록 검색을 고친다**
+- [x] **Step 3: 관리자 목록 검색을 고친다**
 
 `web/lib/db/problems.ts:125-127` 을 다음으로 교체:
 
@@ -666,7 +666,7 @@ Expected: FAIL — 검색이 `content` 만 보므로 못 찾는다.
   }
 ```
 
-- [ ] **Step 4: 풀이 목록 검색을 고친다**
+- [x] **Step 4: 풀이 목록 검색을 고친다**
 
 `web/lib/db/solveProblems.ts:37` 을 다음으로 교체:
 
@@ -680,16 +680,16 @@ Expected: FAIL — 검색이 `content` 만 보므로 못 찾는다.
 
 `ilike` 를 더 안 쓰게 되면 그 import 를 지운다(같은 파일 다른 곳에서 쓰고 있으면 남긴다). `sql` 은 이미 import 되어 있다.
 
-- [ ] **Step 5: 테스트가 통과하는지 확인한다**
+- [x] **Step 5: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problem/problemListService.test.ts`
 Expected: PASS. 기존 keyword 테스트도 그대로 통과해야 한다.
 
-- [ ] **Step 6: 뮤테이션 테스트**
+- [x] **Step 6: 뮤테이션 테스트**
 
 `problems.ts` 의 `OR coalesce(...)` 절을 잠시 지우고 재실행 → 새 테스트가 실패하는지 확인 → 복원 → 다시 통과 확인.
 
-- [ ] **Step 7: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 7: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -715,7 +715,7 @@ git commit -m "[MOD] 문제 검색이 참조지문도 훑게"
 
 **이미 되어 있어 손대지 않는 것 (2026-09-02 확인):** 동기화 도구(`snapshot.ts`·`exportSnapshot.ts`·`importSnapshot.ts`)는 **이미 참조지문을 완전히 나른다.** `SnapshotProblem.referenceText`(snapshot.ts:22), `parseSnapshot` 의 검증(:120), 내보내기 SQL 의 `p.reference_text AS "referenceText"`(exportSnapshot.ts:127), 들여오기 insert 의 `referenceText`(importSnapshot.ts:87)가 모두 있다. **이 네 파일은 건드리지 마라.** 빠진 것은 교정 엑셀 경로뿐이다.
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/problemSync/revertProofSheet.test.ts` 에 추가(파일의 기존 `contentChange` 헬퍼를 쓴다):
 
@@ -739,12 +739,12 @@ git commit -m "[MOD] 문제 검색이 참조지문도 훑게"
   });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problemSync/revertProofSheet.test.ts`
 Expected: FAIL — `field: "referenceText"` 가 타입에 없고, `applyRevert` 가 그 갈래를 모른다.
 
-- [ ] **Step 3: 교정 시트에 참조지문 칸을 넣는다**
+- [x] **Step 3: 교정 시트에 참조지문 칸을 넣는다**
 
 `web/lib/problemSync/proofSheet.ts`:
 
@@ -801,12 +801,12 @@ Expected: FAIL — `field: "referenceText"` 가 타입에 없고, `applyRevert` 
 
 `applyRevert` 의 `problems` 분기에도 같은 세 갈래를 넣는다(위 `applyProofChanges` 와 같은 모양, `c.after` 대신 `c.before` 를 쓴다).
 
-- [ ] **Step 6: 테스트가 통과하는지 확인한다**
+- [x] **Step 6: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/problemSync/`
 Expected: PASS.
 
-- [ ] **Step 7: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 7: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -830,7 +830,7 @@ git commit -m "[MOD] 교정 엑셀과 동기화가 참조지문을 다루게"
 - Consumes: `splitQuestionAndReference(content)`(Task 1), `assertSeedableEnvironment(env)`(`web/lib/devSeed.ts`), `getDb()`(`web/lib/db/client.ts`)
 - Produces: 없음(종단)
 
-- [ ] **Step 1: 마이그레이션 스크립트를 만든다**
+- [x] **Step 1: 마이그레이션 스크립트를 만든다**
 
 `web/scripts/split-reference-text.ts` 새로 작성:
 
@@ -912,7 +912,7 @@ main()
   });
 ```
 
-- [ ] **Step 2: 명령어를 등록한다**
+- [x] **Step 2: 명령어를 등록한다**
 
 `web/package.json` 의 `scripts` 에서 `"proof:revert"` 줄 뒤에 추가:
 
@@ -922,7 +922,7 @@ main()
 
 앞 줄 끝에 쉼표를 넣는 것을 잊지 마라.
 
-- [ ] **Step 3: 확인만 돌려본다**
+- [x] **Step 3: 확인만 돌려본다**
 
 ```bash
 cd web && pnpm split:reference
@@ -935,13 +935,13 @@ cd web && pnpm split:reference
 
 숫자가 다르면 **멈추고 보고한다** — 1차·2차 교정으로 본문이 바뀌었으니 소폭 차이는 있을 수 있으나, 크게 다르면 분리 규칙을 다시 봐야 한다.
 
-- [ ] **Step 4: 실제로 나눈다**
+- [x] **Step 4: 실제로 나눈다**
 
 ```bash
 cd web && pnpm split:reference -- --apply
 ```
 
-- [ ] **Step 5: 데이터를 검증한다**
+- [x] **Step 5: 데이터를 검증한다**
 
 ```bash
 cd web && npx vitest run
@@ -972,7 +972,7 @@ console.log(bad === 0 ? "이상 없음" : `이상 ${bad}건`);
 await db.end();
 ```
 
-- [ ] **Step 6: 브라우저로 실측한다**
+- [x] **Step 6: 브라우저로 실측한다**
 
 ```bash
 cd web && rm -rf .next && npx next dev -p 3200
@@ -988,7 +988,7 @@ cd web && rm -rf .next && npx next dev -p 3200
 - **검색** — 지문에만 있는 낱말로 문제가 찾아지는지
 - 콘솔 오류 0건
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add web/scripts/split-reference-text.ts web/package.json
