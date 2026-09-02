@@ -14,10 +14,13 @@ export type RevertPlan = {
 
 async function readCurrent(db: Db, change: CellChange): Promise<string | null> {
   if (change.table === "problems") {
-    const [row] = await db.select({ content: problems.content, explanation: problems.explanation })
-      .from(problems).where(eq(problems.id, change.rowId)).limit(1);
+    const [row] = await db.select({
+      content: problems.content, explanation: problems.explanation, referenceText: problems.referenceText,
+    }).from(problems).where(eq(problems.id, change.rowId)).limit(1);
     if (!row) return null;
-    return change.field === "content" ? row.content : (row.explanation ?? "");
+    if (change.field === "content") return row.content;
+    if (change.field === "referenceText") return row.referenceText ?? "";
+    return row.explanation ?? "";
   }
   if (change.table === "problem_choices") {
     const [row] = await db.select({ v: problemChoices.choiceText })
@@ -71,6 +74,9 @@ export async function applyRevert(db: Db, changes: CellChange[]): Promise<number
       if (c.table === "problems") {
         if (c.field === "content") {
           await tx.update(problems).set({ content: c.before }).where(eq(problems.id, c.rowId));
+        } else if (c.field === "referenceText") {
+          await tx.update(problems).set({ referenceText: c.before === "" ? null : c.before })
+            .where(eq(problems.id, c.rowId));
         } else {
           await tx.update(problems).set({ explanation: c.before === "" ? null : c.before })
             .where(eq(problems.id, c.rowId));

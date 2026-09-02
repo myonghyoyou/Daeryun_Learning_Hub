@@ -10,7 +10,7 @@ export type CellChange = {
   column: string;
   table: "problems" | "problem_choices" | "problem_answers" | "problem_blanks";
   rowId: number;
-  field: "content" | "explanation" | "choiceText" | "answerText";
+  field: "content" | "referenceText" | "explanation" | "choiceText" | "answerText";
   before: string;
   after: string;
 };
@@ -27,6 +27,7 @@ export type ProofDiff = {
 type LoadedProblem = {
   id: number;
   content: string;
+  referenceText: string | null;
   explanation: string | null;
   choices: { id: number; choiceText: string }[];
   answers: { id: number; answerText: string }[];
@@ -65,7 +66,8 @@ export async function planProofChanges(db: Db, sheets: Map<string, ProofRow[]>):
   const ids = [...wanted.keys()];
   // 문제 수가 1000 단위라 통째로 읽어 메모리에서 맞춘다. inArray 로 잘라 읽을 만큼 크지 않다.
   const problemRows = await db.select({
-    id: problems.id, content: problems.content, explanation: problems.explanation,
+    id: problems.id, content: problems.content, referenceText: problems.referenceText,
+    explanation: problems.explanation,
   }).from(problems);
   const choiceRows = await db.select({
     id: problemChoices.id, problemId: problemChoices.problemId, choiceText: problemChoices.choiceText,
@@ -78,7 +80,10 @@ export async function planProofChanges(db: Db, sheets: Map<string, ProofRow[]>):
   }).from(problemBlanks).orderBy(asc(problemBlanks.problemId), asc(problemBlanks.displayOrder), asc(problemBlanks.id));
 
   for (const p of problemRows) {
-    loaded.set(p.id, { id: p.id, content: p.content, explanation: p.explanation, choices: [], answers: [], blanks: [] });
+    loaded.set(p.id, {
+      id: p.id, content: p.content, referenceText: p.referenceText, explanation: p.explanation,
+      choices: [], answers: [], blanks: [],
+    });
   }
   for (const c of choiceRows) loaded.get(c.problemId)?.choices.push({ id: c.id, choiceText: c.choiceText });
   for (const a of answerRows) loaded.get(a.problemId)?.answers.push({ id: a.id, answerText: a.answerText });
@@ -105,6 +110,8 @@ export async function planProofChanges(db: Db, sheets: Map<string, ProofRow[]>):
 
     push("content", "problems", id, "content", db_.content, cell(row, "content"));
     // 해설은 비울 수도 있어야 하므로 빈 문자열도 값으로 본다. DB 의 null 은 "" 로 맞춰 비교한다.
+    // 참조지문도 교정 대상이다. 비울 수 있어야 하므로 빈 문자열도 값으로 본다.
+    push("reference_text", "problems", id, "referenceText", db_.referenceText ?? "", cell(row, "reference_text"));
     push("explanation", "problems", id, "explanation", db_.explanation ?? "", cell(row, "explanation"));
 
     for (let i = 0; i < MAX_CHOICES; i += 1) {
@@ -165,6 +172,9 @@ export async function applyProofChanges(db: Db, changes: CellChange[]): Promise<
         // 운영과 대조할 때 시각이 어긋나면 오히려 헷갈린다.
         if (c.field === "content") {
           await tx.update(problems).set({ content: c.after }).where(eq(problems.id, c.rowId));
+        } else if (c.field === "referenceText") {
+          await tx.update(problems).set({ referenceText: c.after === "" ? null : c.after })
+            .where(eq(problems.id, c.rowId));
         } else {
           await tx.update(problems).set({ explanation: c.after === "" ? null : c.after })
             .where(eq(problems.id, c.rowId));

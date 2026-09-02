@@ -14,6 +14,7 @@ export const MAX_BLANKS = 5;
 /** 되돌릴 때 글자를 고쳐 반영하는 칸. 이 목록에 없는 칸은 참고용이라 무시한다. */
 export const EDITABLE_COLUMNS = [
   "content",
+  "reference_text",
   "explanation",
   ...Array.from({ length: MAX_CHOICES }, (_, i) => `choice_text_${i + 1}`),
   ...Array.from({ length: MAX_ANSWERS }, (_, i) => `answer_text_${i + 1}`),
@@ -33,6 +34,7 @@ export const SHEET_COLUMNS: string[] = [
   "type",
   "status",
   "content",
+  "reference_text",
   "explanation",
   "blank_reveal_count",
   ...Array.from({ length: MAX_CHOICES }, (_, i) => [`choice_text_${i + 1}`, `is_correct_${i + 1}`]).flat(),
@@ -49,6 +51,7 @@ export type ProblemForSheet = {
   type: string;
   status: string;
   content: string;
+  referenceText: string | null;
   explanation: string | null;
   blankRevealCount: number | null;
   choices: { choiceText: string; isCorrect: boolean }[];
@@ -70,6 +73,7 @@ export function toSheetRow(problem: ProblemForSheet): ProofRow {
     type: problem.type,
     status: problem.status,
     content: problem.content,
+    reference_text: problem.referenceText ?? "",
     explanation: problem.explanation ?? "",
     blank_reveal_count: problem.blankRevealCount ?? "",
   };

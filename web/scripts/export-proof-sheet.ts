@@ -34,7 +34,7 @@ function safeSheetName(name: string): string {
 function buildSheet(rows: ProofRow[]): XLSX.WorkSheet {
   const ws = XLSX.utils.json_to_sheet(rows, { header: SHEET_COLUMNS });
   ws["!cols"] = SHEET_COLUMNS.map((c) => {
-    if (c === "content") return { wch: 70 };
+    if (c === "content" || c === "reference_text") return { wch: 70 };
     if (c === "explanation") return { wch: 40 };
     if (c.startsWith("choice_text") || c.startsWith("answer_text") || c.startsWith("blank_answer_text")) return { wch: 32 };
     if (c.startsWith("is_correct") || c.startsWith("blank_key")) return { wch: 10 };
@@ -59,6 +59,7 @@ async function main() {
 
   const problemRows = await db.select({
     id: problems.id, type: problems.type, content: problems.content,
+    referenceText: problems.referenceText,
     explanation: problems.explanation, blankRevealCount: problems.blankRevealCount,
     status: problems.status, sourceNumber: problems.sourceNumber,
     departmentCode: departments.code, departmentName: departments.name,
@@ -93,6 +94,7 @@ async function main() {
       type: p.type,
       status: p.status,
       content: p.content,
+      referenceText: p.referenceText,
       explanation: p.explanation,
       blankRevealCount: p.blankRevealCount,
       choices: choicesBy.get(p.id) ?? [],

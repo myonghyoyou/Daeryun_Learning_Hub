@@ -102,6 +102,24 @@ describe("applyRevert", () => {
     expect(row.v).toBeNull();
   });
 
+  it("참조지문도 되돌린다", async () => {
+    await db.update(problems).set({ referenceText: "고친 지문" }).where(eq(problems.id, problemId));
+    await applyRevert(db, [contentChange({
+      column: "reference_text", field: "referenceText", before: "원래 지문", after: "고친 지문",
+    })]);
+    const [row] = await db.select({ v: problems.referenceText }).from(problems).where(eq(problems.id, problemId));
+    expect(row.v).toBe("원래 지문");
+  });
+
+  it("참조지문을 빈 값으로 되돌리면 null 로 넣는다", async () => {
+    await db.update(problems).set({ referenceText: "고친 지문" }).where(eq(problems.id, problemId));
+    await applyRevert(db, [contentChange({
+      column: "reference_text", field: "referenceText", before: "", after: "고친 지문",
+    })]);
+    const [row] = await db.select({ v: problems.referenceText }).from(problems).where(eq(problems.id, problemId));
+    expect(row.v).toBeNull();
+  });
+
   it("빈 목록이면 아무것도 하지 않는다", async () => {
     expect(await applyRevert(db, [])).toBe(0);
     const [row] = await db.select({ content: problems.content }).from(problems).where(eq(problems.id, problemId));
