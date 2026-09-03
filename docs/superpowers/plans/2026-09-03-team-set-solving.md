@@ -127,6 +127,8 @@ cd web && npx drizzle-kit generate
 
 `web/drizzle/` 에 `0001_*.sql` 이 생기고 `web/drizzle/meta/_journal.json` 에 항목이 하나 늘어난다. 생성된 SQL 을 열어 다음 세 가지가 들어 있는지 눈으로 확인한다: `CREATE TABLE "solve_runs"`, 두 개의 `CHECK`, `CREATE UNIQUE INDEX "solve_runs_one_active" ... WHERE "status" = 'IN_PROGRESS'`.
 
+`WHERE` 절이 보이지 않으면 **멈추고 보고한다.** 생성된 SQL 을 손으로 고치지 마라 — 스키마와 마이그레이션이 어긋나 다음 generate 가 엉킨다.
+
 **이미 만들어진 마이그레이션 파일은 절대 수정하지 마라.** 내용이 틀렸으면 스키마를 고치고 그 파일을 지운 뒤 다시 generate 한다(아직 어디에도 적용하기 전이므로 안전하다).
 
 - [ ] **Step 3: truncateAll 에 테이블을 추가한다**
@@ -512,9 +514,16 @@ describe("findTeamCounts", () => {
     expect(sales?.totalCount).toBe(1);
   });
 
-  it("문제가 하나도 없는 부서도 0 으로 나온다", async () => {
+  it("정상 문제가 하나도 없는 부서는 목록에 오지 않는다", async () => {
+    // 운영의 "본사"(HQ) 처럼 행만 남은 부서를 거른다.
+    await seedProblem({ sourceNumber: 1 });
     const rows = await findTeamCounts(db);
-    expect(rows.map((r) => r.totalCount)).toEqual([0, 0]);
+    expect(rows.map((r) => r.departmentId)).toEqual([planId]);
+  });
+
+  it("보관된 문제만 있는 부서도 빠진다", async () => {
+    await seedProblem({ sourceNumber: 1, status: "ARCHIVED" });
+    expect(await findTeamCounts(db)).toEqual([]);
   });
 });
 
@@ -628,6 +637,8 @@ describe("findSolveRowsByIds", () => {
 Run: `cd web && npx vitest run lib/db/solveTeams.test.ts`
 Expected: FAIL — `./solveTeams` 모듈이 없다.
 
+**첫 초록불이 전제 하나를 함께 증명한다.** 이 저장소에는 `db.execute(sql...)` 로 SELECT 하는 곳이 아직 없다(`grep -rn "db.execute(sql" lib/` 는 0건이고 `test/db.ts:44` 의 TRUNCATE 가 유일한 사용이다). Step 3 의 네 쿼리는 `rows as unknown as T[]` 캐스트에 기대는데, 이 캐스트는 타입 검사를 통과시킬 뿐 반환 모양을 보장하지 않는다. 만들고 돌렸을 때 `rows.map is not a function` 이 나면 드라이버가 배열이 아니라 `{ rows }` 를 돌려주는 것이므로 `(rows as unknown as { rows: T[] }).rows` 로 바꾼다.
+
 - [ ] **Step 3: 구현한다**
 
 `web/lib/db/solveTeams.ts` 를 새로 만든다:
@@ -650,6 +661,19 @@ import type { SolveListRow } from "./solveProblems";
 
 export type TeamCountRow = { departmentId: number; departmentName: string; totalCount: number };
 
+/**
+ * 팀 목록에 올릴 부서와 그 문제 수.
+ *
+ * **정상 문제가 하나도 없는 부서는 뺀다.** 운영에는 "본사"(code=HQ) 처럼 조직에 없는데
+ * 행만 남은 부서가 있다(2026-09-03 실측: 부서 13개 중 본사만 문제 0개, `lib/devSeed.ts:51-52`
+ * 도 "이 회사 조직에 없는 부서"라고 적어 두었다). 이름으로 하드코딩해 거르지 않는 이유는
+ * 그런 목록이 또 어긋나기 때문이다 — 풀 문제가 없으면 팀으로 보여 줄 이유도 없다.
+ *
+ * 부서 상태로도 거른다. 2026-09-03 기준 비활성 부서는 없다. 다만 나중에 어떤 부서를
+ * 비활성으로 바꾸면 그 팀은 목록에서 사라지고 진행 중이던 바퀴도 이어 풀 수 없게 된다 —
+ * 랜덤 풀기(`lib/db/solveProblems.ts:60-61`)는 부서 상태를 보지 않아 그 문제를 계속 내므로,
+ * 두 화면이 갈린다는 것을 알고 있어야 한다.
+ */
 export async function findTeamCounts(db: DbConn): Promise<TeamCountRow[]> {
   const rows = await db.execute(sql`
     SELECT d.id::int AS "departmentId", d.name AS "departmentName",
@@ -658,6 +682,7 @@ export async function findTeamCounts(db: DbConn): Promise<TeamCountRow[]> {
     LEFT JOIN problems p ON p.department_id = d.id
     WHERE d.status = 'ACTIVE'
     GROUP BY d.id, d.name
+    HAVING count(p.id) FILTER (WHERE p.status = 'ACTIVE') > 0
     ORDER BY d.id
   `);
   return rows as unknown as TeamCountRow[];
@@ -794,6 +819,7 @@ git commit -m "[ADD] 팀별 문제와 틀린 문제 조회"
   - `findRunById(db, runId: number): Promise<SolveRunRow | null>`
   - `findActiveRun(db, userId: number, departmentId: number): Promise<SolveRunRow | null>`
   - `findLatestFinishedRun(db, userId: number, departmentId: number): Promise<SolveRunRow | null>`
+  - `findActiveRunsByUser(db, userId: number): Promise<Map<number, SolveRunRow>>` — 부서 id → 진행 중 바퀴
   - `findFinishedDepartmentIds(db, userId: number): Promise<Set<number>>`
   - `updateRunProgress(db, runId: number, patch: { cursor: number; results: RunResult[]; status: "IN_PROGRESS" | "FINISHED" }): Promise<void>`
   - `markRunFinished(db, runId: number): Promise<void>`
@@ -807,8 +833,8 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { departments, users } from "./schema";
 import {
-  findActiveRun, findFinishedDepartmentIds, findLatestFinishedRun, findRunById,
-  insertRun, markRunFinished, updateRunProgress,
+  findActiveRun, findActiveRunsByUser, findFinishedDepartmentIds, findLatestFinishedRun,
+  findRunById, insertRun, markRunFinished, updateRunProgress,
 } from "./solveRuns";
 
 const db = testDb();
@@ -860,6 +886,22 @@ describe("findActiveRun", () => {
     const made = await insertRun(db, { userId, departmentId: planId, mode: "ALL", problemIds: [1] });
     await markRunFinished(db, made.id);
     expect(await findActiveRun(db, userId, planId)).toBeNull();
+  });
+});
+
+describe("findActiveRunsByUser", () => {
+  it("진행 중인 바퀴를 부서별로 한 번에 준다", async () => {
+    const a = await insertRun(db, { userId, departmentId: planId, mode: "ALL", problemIds: [1] });
+    const b = await insertRun(db, { userId, departmentId: salesId, mode: "WRONG", problemIds: [2] });
+    const map = await findActiveRunsByUser(db, userId);
+    expect(map.get(planId)?.id).toBe(a.id);
+    expect(map.get(salesId)?.id).toBe(b.id);
+  });
+
+  it("끝난 바퀴는 들어 있지 않다", async () => {
+    const a = await insertRun(db, { userId, departmentId: planId, mode: "ALL", problemIds: [1] });
+    await markRunFinished(db, a.id);
+    expect((await findActiveRunsByUser(db, userId)).size).toBe(0);
   });
 });
 
@@ -1008,6 +1050,20 @@ export async function findLatestFinishedRun(
   return row ? toRow(row) : null;
 }
 
+/**
+ * 이 사람의 진행 중인 바퀴를 부서별로 한 번에 읽는다.
+ *
+ * 팀 목록이 부서마다 findActiveRun 을 부르면 부서 수만큼 왕복이 붙는다(운영 부서 13개).
+ * 유니크 인덱스가 팀당 진행 중 바퀴 하나를 보장하므로 Map 으로 접어도 잃는 것이 없다.
+ */
+export async function findActiveRunsByUser(
+  db: DbConn, userId: number,
+): Promise<Map<number, SolveRunRow>> {
+  const rows = await db.select().from(solveRuns)
+    .where(and(eq(solveRuns.userId, userId), eq(solveRuns.status, "IN_PROGRESS")));
+  return new Map(rows.map((r) => [r.departmentId, toRow(r)]));
+}
+
 /** 팀 목록이 "아직 안 풂"과 "틀린 문제 N개"를 가르는 데 쓴다. 부서 수만큼 질의하지 않는다. */
 export async function findFinishedDepartmentIds(db: DbConn, userId: number): Promise<Set<number>> {
   const rows = await db.selectDistinct({ departmentId: solveRuns.departmentId })
@@ -1081,6 +1137,7 @@ git commit -m "[ADD] 바퀴 저장소"
   - `advanceRun(db, actor, runId: number, fromCursor: number, correct: boolean | null): Promise<{ cursor: number; status: RunStatus; total: number }>`
   - `finishRun(db, actor, runId: number): Promise<{ runId: number; status: RunStatus }>`
   - `getRunView(db, actor, runId: number): Promise<RunView>`
+  - `getLatestRunView(db, actor, departmentId: number): Promise<RunView | null>`
   - `NO_PROBLEMS_MESSAGE`
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
@@ -1094,7 +1151,7 @@ import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { attempts, departments, problems, users } from "../db/schema";
 import type { AuthUser } from "../auth/types";
 import {
-  advanceRun, finishRun, getRunView, listTeams, startRun, NO_PROBLEMS_MESSAGE,
+  advanceRun, finishRun, getLatestRunView, getRunView, listTeams, startRun, NO_PROBLEMS_MESSAGE,
 } from "./teamRunService";
 
 const db = testDb();
@@ -1315,6 +1372,26 @@ describe("복습 고리", () => {
   });
 });
 
+describe("getLatestRunView", () => {
+  it("진행 중인 바퀴가 있으면 그것을 준다", async () => {
+    await seedProblem(1);
+    const run = await startRun(db, actor, planId, "ALL");
+    expect((await getLatestRunView(db, actor, planId))?.runId).toBe(run.runId);
+  });
+
+  it("끝난 바퀴만 있으면 그중 가장 나중 것을 준다", async () => {
+    await seedProblem(1);
+    const first = await startRun(db, actor, planId, "ALL");
+    await finishRun(db, actor, first.runId);
+    expect((await getLatestRunView(db, actor, planId))?.runId).toBe(first.runId);
+  });
+
+  it("바퀴가 하나도 없으면 null 이다", async () => {
+    await seedProblem(1);
+    expect(await getLatestRunView(db, actor, planId)).toBeNull();
+  });
+});
+
 describe("getRunView", () => {
   it("남의 바퀴는 볼 수 없다", async () => {
     await seedProblem(1);
@@ -1345,8 +1422,8 @@ import {
   findTeamProblemIds, findWrongProblemIds,
 } from "../db/solveTeams";
 import {
-  findActiveRun, findFinishedDepartmentIds, findRunById, insertRun,
-  markRunFinished, updateRunProgress,
+  findActiveRun, findActiveRunsByUser, findFinishedDepartmentIds, findLatestFinishedRun,
+  findRunById, insertRun, markRunFinished, updateRunProgress,
   type RunMode, type RunStatus, type SolveRunRow,
 } from "../db/solveRuns";
 import { canAdvance, isRunFinished, nextCursor, summarizeResults, type RunResult } from "./teamRun";
@@ -1388,18 +1465,19 @@ export type RunView = {
 };
 
 /**
- * 팀 목록. 부서 수만큼 질의하지 않는다 — 개수·틀린 수·끝난 부서를 각각 한 번에 읽어
- * 메모리에서 맞춘다. 진행 중인 바퀴만 부서별로 따로 읽는데, 한 사람에게 진행 중인
- * 바퀴는 팀당 하나뿐이라 양이 작다.
+ * 팀 목록. 네 가지를 각각 **한 번씩만** 읽어 메모리에서 맞춘다 — 개수·틀린 수·끝난 부서·
+ * 진행 중 바퀴. 부서마다 질의를 하나씩 더 쏘면 운영 부서 13개 기준으로 왕복이 16번이 되고,
+ * 이 목록은 화면을 열 때마다 불린다.
  */
 export async function listTeams(db: DbConn, actor: AuthUser): Promise<TeamListItem[]> {
   const counts = await findTeamCounts(db);
   const wrongByDept = await countWrongByDepartment(db, actor.userId);
   const finishedDeptIds = await findFinishedDepartmentIds(db, actor.userId);
+  const activeRuns = await findActiveRunsByUser(db, actor.userId);
 
   const items: TeamListItem[] = [];
   for (const c of counts) {
-    const active = await findActiveRun(db, actor.userId, c.departmentId);
+    const active = activeRuns.get(c.departmentId) ?? null;
     items.push({
       departmentId: c.departmentId,
       departmentName: c.departmentName,
@@ -1477,6 +1555,20 @@ export async function getRunView(db: DbConn, actor: AuthUser, runId: number): Pr
   return toRunView(db, await requireOwnRun(db, actor, runId));
 }
 
+/**
+ * 그 팀에서 가장 최근에 본 바퀴. 진행 중인 것이 있으면 그것, 없으면 마지막으로 끝낸 것이다.
+ *
+ * 결과 화면이 주소에 바퀴 번호 없이 열렸을 때(북마크·새로고침) 이걸로 되찾는다.
+ * 진행 화면도 진입할 때 이 하나만 부르면 되므로 팀 목록을 통째로 읽지 않아도 된다.
+ */
+export async function getLatestRunView(
+  db: DbConn, actor: AuthUser, departmentId: number,
+): Promise<RunView | null> {
+  const run = await findActiveRun(db, actor.userId, departmentId)
+    ?? await findLatestFinishedRun(db, actor.userId, departmentId);
+  return run ? toRunView(db, run) : null;
+}
+
 async function requireOwnRun(db: DbConn, actor: AuthUser, runId: number): Promise<SolveRunRow> {
   const run = await findRunById(db, runId);
   // 없는 바퀴와 남의 바퀴를 같은 문구로 거절한다 — id 를 훑어 남의 바퀴 존재를 알아내는
@@ -1542,6 +1634,7 @@ git commit -m "[ADD] 팀 바퀴 시작·전진·종료 서비스"
 **Files:**
 - Create: `web/app/api/solve/teams/route.ts`
 - Create: `web/app/api/solve/teams/[departmentId]/runs/route.ts`
+- Create: `web/app/api/solve/teams/[departmentId]/runs/latest/route.ts`
 - Create: `web/app/api/solve/runs/[runId]/route.ts`
 - Create: `web/app/api/solve/runs/[runId]/advance/route.ts`
 - Create: `web/app/api/solve/runs/[runId]/finish/route.ts`
@@ -1549,7 +1642,7 @@ git commit -m "[ADD] 팀 바퀴 시작·전진·종료 서비스"
 - Test: `web/lib/solve/teamRunRequestBody.test.ts`
 
 **Interfaces:**
-- Consumes: `listTeams`·`startRun`·`advanceRun`·`finishRun`·`getRunView`·`RunMode`(Task 5)
+- Consumes: `listTeams`·`startRun`·`advanceRun`·`finishRun`·`getRunView`·`getLatestRunView`·`RunMode`(Task 5)
 - Produces:
   - `toStartRunBody(raw: Record<string, unknown>): { mode: RunMode }`
   - `toAdvanceBody(raw: Record<string, unknown>): { fromCursor: number; correct: boolean | null }`
@@ -1652,7 +1745,7 @@ export function toAdvanceBody(
 Run: `cd web && npx vitest run lib/solve/teamRunRequestBody.test.ts`
 Expected: PASS (8개)
 
-- [ ] **Step 5: 라우트 다섯 개를 만든다**
+- [ ] **Step 5: 라우트 여섯 개를 만든다**
 
 `web/app/api/solve/teams/route.ts`:
 
@@ -1697,6 +1790,30 @@ export async function POST(
     const parsed = parseNumericParam(departmentId, "departmentId")!;
     const body = toStartRunBody(await readJsonStrict(request));
     return startRun(getDb(), actor, parsed, body.mode);
+  });
+}
+```
+
+`web/app/api/solve/teams/[departmentId]/runs/latest/route.ts`:
+
+```typescript
+import { getDb } from "@/lib/db/client";
+import { handleRoute } from "@/lib/http/errors";
+import { parseNumericParam } from "@/lib/http/params";
+import { requireActor } from "@/lib/auth/currentUser";
+import { getLatestRunView } from "@/lib/solve/teamRunService";
+
+export const runtime = "nodejs";
+
+// 바퀴가 하나도 없으면 data 가 null 이다 — 오류가 아니다. 화면이 팀 목록으로 돌려보낸다.
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ departmentId: string }> },
+): Promise<Response> {
+  return handleRoute(async () => {
+    const actor = await requireActor();
+    const { departmentId } = await context.params;
+    return getLatestRunView(getDb(), actor, parseNumericParam(departmentId, "departmentId")!);
   });
 }
 ```
@@ -1801,7 +1918,7 @@ git commit -m "[ADD] 팀 바퀴 API 라우트"
 **Interfaces:**
 - Consumes: Task 6 의 다섯 창구
 - Produces:
-  - `listTeams()`·`startTeamRun(departmentId, mode)`·`getRun(runId)`·`advanceRun(runId, fromCursor, correct)`·`finishRun(runId)` — `apiClient/teamRuns.js`
+  - `listTeams()`·`startTeamRun(departmentId, mode)`·`getRun(runId)`·`getLatestRun(departmentId)`·`advanceRun(runId, fromCursor, correct)`·`finishRun(runId)` — `apiClient/teamRuns.js`
   - `teamStateLabel(team): { text: string; kind: "progress" | "wrong" | "none" }` — `utils/teamRunLabel.js`
 
 - [ ] **Step 1: 표시 문구의 실패하는 테스트를 쓴다**
@@ -1894,6 +2011,11 @@ export function getRun(runId) {
   return apiGet(`/api/solve/runs/${runId}`);
 }
 
+// 바퀴가 하나도 없으면 null 이 온다 — 오류가 아니다.
+export function getLatestRun(departmentId) {
+  return apiGet(`/api/solve/teams/${departmentId}/runs/latest`);
+}
+
 export function advanceRun(runId, fromCursor, correct) {
   return apiPost(`/api/solve/runs/${runId}/advance`, { fromCursor, correct });
 }
@@ -1951,7 +2073,6 @@ export default function SolveTeamListPage() {
   }, []);
 
   async function handleClick(team) {
-    if (team.totalCount === 0) return;
     if (team.activeRun) {
       router.push(`/solve/problems/${team.departmentId}/play`);
       return;
@@ -1999,14 +2120,17 @@ export default function SolveTeamListPage() {
       ) : (
         <Surface className="overflow-hidden p-0">
           <ul>
+            {/*
+              문제가 하나도 없는 부서는 서버가 아예 내려보내지 않는다(findTeamCounts 의 HAVING).
+              그래서 여기에 "문제 없음" 분기가 없다 — 그런 줄이 오지 않는다.
+            */}
             {teams.map((team) => {
               const label = teamStateLabel(team);
-              const empty = team.totalCount === 0;
               return (
                 <li key={team.departmentId} className="border-b border-line-default last:border-b-0">
                   <button
                     type="button"
-                    disabled={empty || startingId === team.departmentId}
+                    disabled={startingId === team.departmentId}
                     onClick={() => handleClick(team)}
                     className="group flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-surface-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:-outline-offset-[3px] focus-visible:outline-brand-aqua disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
                   >
@@ -2019,11 +2143,9 @@ export default function SolveTeamListPage() {
                           : "bg-surface-subtle text-ink-muted"
                       }`}
                     >
-                      {empty ? "문제 없음" : label.text}
+                      {label.text}
                     </span>
-                    {!empty && (
-                      <ArrowRight size={16} aria-hidden="true" className="shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
-                    )}
+                    <ArrowRight size={16} aria-hidden="true" className="shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </button>
                 </li>
               );
@@ -2041,12 +2163,15 @@ export default function SolveTeamListPage() {
 `web/app/(protected)/solve/problems/page.tsx` 를 연다. 지금은 `SolveProblemListPage` 를 그린다. 그 파일 전체를 다음으로 바꾼다(파일에 있던 `"use client"` 나 메타데이터 같은 다른 줄이 있으면 그대로 두고 import 와 반환 컴포넌트만 바꾼다):
 
 ```typescript
+"use client";
 import SolveTeamListPage from "@/screens/solve/SolveTeamListPage.jsx";
 
 export default function Page() {
   return <SolveTeamListPage />;
 }
 ```
+
+**`"use client"` 가 첫 줄에 있어야 한다.** 이 저장소는 그 지시문을 화면 파일이 아니라 **라우트 파일**에 둔다(`app/(protected)/solve/random/play/page.tsx:1`, `app/login/page.tsx:1`). 화면은 `useState` 를 쓰므로 이 줄이 없으면 서버 컴포넌트로 렌더되어 빌드가 깨진다.
 
 `web/screens/solve/SolveHomePage.jsx` 에서 "골라서 풀기" 카드의 설명 문구를 바꾼다. 지금은 이렇다:
 
@@ -2207,7 +2332,7 @@ import Button from "@/components/ui/Button.jsx";
 import ProblemSolveCard from "@/components/solve/ProblemSolveCard.jsx";
 import ProblemSkeleton from "@/components/solve/ProblemSkeleton.jsx";
 import { getSolveProblem } from "@/apiClient/solve.js";
-import { advanceRun, finishRun, listTeams, getRun } from "@/apiClient/teamRuns.js";
+import { advanceRun, finishRun, getLatestRun, getRun } from "@/apiClient/teamRuns.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 
 /**
@@ -2229,17 +2354,19 @@ export default function TeamRunPlayPage() {
   const [retryCount, setRetryCount] = useState(0);
 
   // 진행 중인 바퀴를 찾아 온다. 없으면 팀 목록으로 돌려보낸다.
+  //
+  // 팀 목록 전체(listTeams)를 읽지 않는다 — 이 화면은 문제를 넘길 때마다 다시 진입하는데,
+  // 그때마다 부서 수만큼 질의가 붙는다. 필요한 것은 이 팀의 바퀴 하나뿐이다.
   useEffect(() => {
     let cancelled = false;
-    listTeams()
-      .then(async (teams) => {
+    getLatestRun(departmentId)
+      .then((latest) => {
         if (cancelled) return;
-        const team = teams.find((t) => t.departmentId === departmentId);
-        if (!team?.activeRun) {
+        if (!latest || latest.status === "FINISHED") {
           router.replace("/solve/problems");
           return;
         }
-        setRun(await getRun(team.activeRun.runId));
+        setRun(latest);
       })
       .catch((error) => {
         if (!cancelled) toast.error(resolveErrorMessage(error, "진행 상태를 불러오지 못했습니다."));
@@ -2367,7 +2494,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-toastify";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
-import { getRun, listTeams, startTeamRun } from "@/apiClient/teamRuns.js";
+import { getLatestRun, getRun, listTeams, startTeamRun } from "@/apiClient/teamRuns.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { previewContent } from "@/utils/problemPreview.js";
 
@@ -2396,13 +2523,15 @@ export default function TeamRunResultPage() {
         if (cancelled) return;
         const found = teams.find((t) => t.departmentId === departmentId) ?? null;
         setTeam(found);
-        // run 이 주소에 없으면 그 팀의 마지막 바퀴를 보여 준다.
-        const runId = runIdParam ? Number(runIdParam) : found?.activeRun?.runId ?? null;
-        if (runId === null) {
+        // run 이 주소에 없으면 그 팀의 마지막 바퀴를 보여 준다(설계서: 북마크·새로고침).
+        // activeRun 으로 되찾으면 안 된다 — 다 푼 뒤에는 항상 null 이라 결과를 못 본다.
+        const loaded = runIdParam ? await getRun(Number(runIdParam)) : await getLatestRun(departmentId);
+        if (cancelled) return;
+        if (!loaded) {
           router.replace("/solve/problems");
           return;
         }
-        setRun(await getRun(runId));
+        setRun(loaded);
       } catch (error) {
         if (!cancelled) toast.error(resolveErrorMessage(error, "결과를 불러오지 못했습니다."));
       }
@@ -2493,9 +2622,12 @@ export default function TeamRunResultPage() {
 
 - [ ] **Step 4: 세 라우트를 만든다**
 
+세 파일 모두 **첫 줄이 `"use client";`** 다 — 화면이 훅을 쓰기 때문이다.
+
 `web/app/(protected)/solve/problems/[departmentId]/page.tsx`:
 
 ```typescript
+"use client";
 import TeamRunChoicePage from "@/screens/solve/TeamRunChoicePage.jsx";
 
 export default function Page() {
@@ -2506,6 +2638,7 @@ export default function Page() {
 `web/app/(protected)/solve/problems/[departmentId]/play/page.tsx`:
 
 ```typescript
+"use client";
 import TeamRunPlayPage from "@/screens/solve/TeamRunPlayPage.jsx";
 
 export default function Page() {
@@ -2516,10 +2649,12 @@ export default function Page() {
 `web/app/(protected)/solve/problems/[departmentId]/result/page.tsx`:
 
 ```typescript
+"use client";
 import { Suspense } from "react";
 import TeamRunResultPage from "@/screens/solve/TeamRunResultPage.jsx";
 
 // useSearchParams 를 쓰는 화면은 Suspense 로 감싸야 next build 가 통과한다.
+// "use client" 와 Suspense 를 함께 두는 것은 app/login/page.tsx 와 같은 모양이다.
 export default function Page() {
   return (
     <Suspense fallback={<p className="px-1 py-10 text-center text-body text-ink-muted">불러오는 중...</p>}>
@@ -2529,11 +2664,7 @@ export default function Page() {
 }
 ```
 
-- [ ] **Step 5: 화면이 클라이언트 컴포넌트인지 확인한다**
-
-세 화면 파일(`TeamRunChoicePage.jsx`·`TeamRunPlayPage.jsx`·`TeamRunResultPage.jsx`)과 `SolveTeamListPage.jsx` 는 `useState` 를 쓴다. 같은 폴더의 기존 화면들(`RandomPlayPage.jsx` 등)이 `"use client"` 를 파일 첫 줄에 두는지 확인하고, 두고 있으면 네 파일에도 똑같이 첫 줄에 넣는다. 기존 화면이 두지 않는다면(상위 레이아웃이 이미 클라이언트 경계를 만든 경우) 넣지 않는다 — **기존 파일과 같게 맞추는 것이 기준이다.**
-
-- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+- [ ] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -2608,7 +2739,8 @@ cd web && rm -rf .next && npx next dev -p 3300
 - 끝까지 풀면 결과가 나오고 버튼 두 개가 보인다
 - "이전에 틀린 문제 다시 풀어보기"를 눌러 틀렸던 문제만 나오는지 본다
 - 그 복습을 다 맞히면 팀 목록의 `틀린 문제 N개` 가 줄고, 0이 되면 복습 버튼이 비활성화된다
-- 문제가 0개인 팀은 "문제 없음"으로 눌리지 않는다
+- **팀 목록에 "본사"가 없다** — 문제가 0개인 부서를 서버가 거른다(2026-09-03 실측: 부서 13개 중 본사만 0개). 본사가 보이면 그 부서에 문제가 붙었다는 뜻이므로 멈추고 보고한다
+- 팀 수가 12개다(공통 + 실팀 11개)
 - 옛 주소 `/solve/1` 로 직접 들어가면 404 가 난다
 - 콘솔 오류 0건
 
