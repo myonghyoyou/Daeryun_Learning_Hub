@@ -130,6 +130,13 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
    *
    * 본문과 지문 두 자리에서 같은 모양이 필요하므로 함수로 둔다 — 자리마다 복사하면
    * 한쪽만 고쳐지는 사고가 난다.
+   *
+   * 입력칸의 포커스 링은 outline-offset 을 음수로 둬 테두리 안쪽에 그린다. 빈칸이
+   * 줄바꿈 중간에 오면 윗줄·아랫줄과의 간격이 실측 1px대로 촘촘한데(각 줄의
+   * line-height 는 입력칸 자체 높이와 거의 같다), outline-offset-2(양수)를 쓰면
+   * 링이 박스 밖으로 최대 5px 번져 위아래 줄 글자를 가린다. offset 을 outline-width
+   * 와 같은 크기의 음수로 주면 링이 절대 박스 밖으로 안 나가 줄 간격과 무관하게
+   * 안전하다 — SolveTeamListPage.jsx 의 촘촘한 목록 행이 쓰는 것과 같은 장치다.
    */
   function renderWithBlanks(text) {
     return parseBlankContent(text, problem.blanksToAnswer, revealedAnswers).map((segment, index) => {
@@ -146,7 +153,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           onKeyDown={(event) => handleBlankKeyDown(event, segment.blankKey)}
           aria-label={`빈칸 ${segment.blankKey}`}
           disabled={answered}
-          className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 text-center py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
+          className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 text-center py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:-outline-offset-[3px] focus-visible:outline-brand-aqua disabled:opacity-60"
           value={blankInputs[segment.blankKey] ?? ""}
           onChange={(event) => setBlankInputs({ ...blankInputs, [segment.blankKey]: event.target.value })}
         />
