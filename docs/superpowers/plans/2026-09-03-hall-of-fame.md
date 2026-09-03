@@ -61,7 +61,7 @@
   - `findCorrectCountsByUser(db: DbConn, period: Period): Promise<HallOfFameRow[]>` — 정렬된 채로 돌아온다
   - `findCorrectCountsByTeam(db: DbConn, period: Period): Promise<TeamRow[]>` — 정렬된 채로 돌아온다
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/db/hallOfFame.test.ts` 를 새로 만든다:
 
@@ -252,14 +252,14 @@ describe("findCorrectCountsByUser — MONTH", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/db/hallOfFame.test.ts`
 Expected: FAIL — `./hallOfFame` 모듈이 없다.
 
 **vitest 실행은 `node node_modules/vitest/vitest.mjs run` 을 쓴다.** `npx vitest` 는 이 환경의 래퍼가 출력을 삼켜 실패 내용을 못 본다(2026-09-03 실측).
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/db/hallOfFame.ts` 를 새로 만든다:
 
@@ -344,12 +344,12 @@ export async function findCorrectCountsByTeam(db: DbConn, period: Period): Promi
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/db/hallOfFame.test.ts`
 Expected: PASS (13개)
 
-- [ ] **Step 5: 변이 테스트 세 가지**
+- [x] **Step 5: 변이 테스트 세 가지**
 
 각각 하나씩 되돌려 가며 확인한다.
 
@@ -361,7 +361,7 @@ Expected: PASS (13개)
 
 세 변이가 모두 해당 테스트를 깨뜨렸으면 원상복구하고 다시 PASS 를 확인한다.
 
-- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && node node_modules/vitest/vitest.mjs run
@@ -394,7 +394,7 @@ git commit -m "[ADD] 명예의 전당 기간별 집계 질의"
   - `findMyRank(rows: HallOfFameRow[], userId: number): MyRank | null`
   - `findMyTeamRank(rows: TeamRow[], departmentId: number): MyRank | null`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/solve/hallOfFameRanking.test.ts` 를 새로 만든다:
 
@@ -510,12 +510,12 @@ describe("findMyRank", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameRanking.test.ts`
 Expected: FAIL — `./hallOfFameRanking` 모듈이 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/solve/hallOfFameRanking.ts` 를 새로 만든다:
 
@@ -617,12 +617,12 @@ export function findMyTeamRank(rows: TeamRow[], departmentId: number): MyRank | 
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameRanking.test.ts`
 Expected: PASS (14개)
 
-- [ ] **Step 5: 변이 테스트 두 가지**
+- [x] **Step 5: 변이 테스트 두 가지**
 
 첫째. `toGroups` 의 `rank: groups.length + 1` 을 `rank: rows.indexOf(r) + 1` 로 바꾼다(총 순서로 만든다) → "동점 다음 줄은 바로 다음 숫자다" 가 깨져야 한다. 되돌린다.
 
@@ -632,7 +632,7 @@ Expected: PASS (14개)
 
 되돌린 뒤 다시 PASS 를 확인한다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add web/lib/solve/hallOfFameRanking.ts web/lib/solve/hallOfFameRanking.test.ts
@@ -654,7 +654,7 @@ git commit -m "[ADD] 명예의 전당 순위 매기기 순수 함수"
   - `type HallOfFame = { month: PeriodBoard; allTime: PeriodBoard }`
   - `getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOfFame>`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/solve/hallOfFameService.test.ts` 를 새로 만든다:
 
@@ -773,12 +773,12 @@ describe("getHallOfFame", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameService.test.ts`
 Expected: FAIL — `./hallOfFameService` 모듈이 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/solve/hallOfFameService.ts` 를 새로 만든다:
 
@@ -823,12 +823,12 @@ export async function getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOf
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameService.test.ts`
 Expected: PASS (6개)
 
-- [ ] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && node node_modules/vitest/vitest.mjs run
@@ -852,7 +852,7 @@ git commit -m "[ADD] 명예의 전당 서비스"
 - Consumes: `getHallOfFame`(Task 3)
 - Produces: `fetchHallOfFame()` — `apiClient/hallOfFame.js`
 
-- [ ] **Step 1: 라우트를 만든다**
+- [x] **Step 1: 라우트를 만든다**
 
 `web/app/api/solve/hall-of-fame/route.ts`:
 
@@ -873,7 +873,7 @@ export async function GET(): Promise<Response> {
 }
 ```
 
-- [ ] **Step 2: 클라이언트를 만든다**
+- [x] **Step 2: 클라이언트를 만든다**
 
 `web/apiClient/hallOfFame.js`:
 
@@ -885,7 +885,7 @@ export function fetchHallOfFame() {
 }
 ```
 
-- [ ] **Step 3: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 3: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && node node_modules/vitest/vitest.mjs run
@@ -919,7 +919,7 @@ git commit -m "[ADD] 명예의 전당 창구"
 | 리본 한 가닥 | 너비 4px · 길이 13px · 위로 5px 만 드러남 |
 | 내 순위 줄의 작은 메달 | 17px, 리본 없음 |
 
-- [ ] **Step 1: 키프레임 두 개를 넣는다**
+- [x] **Step 1: 키프레임 두 개를 넣는다**
 
 `web/app/globals.css` 는 지금 여덟 줄이다. 맨 끝에 붙인다:
 
@@ -943,7 +943,7 @@ git commit -m "[ADD] 명예의 전당 창구"
 }
 ```
 
-- [ ] **Step 2: 카드를 만든다**
+- [x] **Step 2: 카드를 만든다**
 
 `web/components/solve/HallOfFameCard.jsx` 를 새로 만든다:
 
@@ -1236,7 +1236,7 @@ export default function HallOfFameCard() {
 }
 ```
 
-- [ ] **Step 3: 학습 홈에 붙인다**
+- [x] **Step 3: 학습 홈에 붙인다**
 
 `web/screens/solve/SolveHomePage.jsx` 의 import 에 한 줄을 더한다:
 
@@ -1252,7 +1252,7 @@ import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
       </div>
 ```
 
-- [ ] **Step 4: 구문·타입 검사와 전체 스위트**
+- [x] **Step 4: 구문·타입 검사와 전체 스위트**
 
 ```bash
 cd web && ./node_modules/.bin/esbuild components/solve/HallOfFameCard.jsx --loader:.jsx=jsx --outfile=/dev/null
@@ -1262,7 +1262,7 @@ cd web && npx tsc --noEmit
 
 `esbuild` 는 반드시 `web` 디렉터리에서 실행한다 - 상위에서 부르면 실행 파일을 못 찾아 실패한다(2026-09-03 실측).
 
-- [ ] **Step 5: 빌드**
+- [x] **Step 5: 빌드**
 
 dev 서버가 떠 있으면 먼저 내린다.
 
@@ -1272,7 +1272,7 @@ cd web && rm -rf .next && npx next build
 
 기대: Errors 0, Warnings 0.
 
-- [ ] **Step 6: 브라우저로 실측한다**
+- [x] **Step 6: 브라우저로 실측한다**
 
 ```bash
 cd web && rm -rf .next && npx next dev -p 3300
@@ -1292,7 +1292,7 @@ cd web && rm -rf .next && npx next dev -p 3300
 - 다른 팀 계정(`sales_emp` 등)으로도 풀어 팀 순위가 두 줄 이상이 되는지 본다
 - 콘솔 오류 0건
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add web/components/solve/HallOfFameCard.jsx web/screens/solve/SolveHomePage.jsx web/app/globals.css
