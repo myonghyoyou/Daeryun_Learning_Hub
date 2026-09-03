@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 전 사용자의 맞힌 개수로 이번 달·전체 기간 순위를 매겨 학습 홈에 보여 준다.
+**Goal:** 맞힌 개수로 이번 달·전체 기간의 **개인 순위와 팀 순위**를 매겨 학습 홈에 보여 준다.
 
-**Architecture:** DB 는 사람 한 명당 한 행을 **정렬된 채로** 낸다. 순위를 매기고 동점을 줄로 접는 일은 DB 를 모르는 순수 함수가 한다 — 목록 순위와 내 순위가 **같은 함수**에서 나오므로 두 숫자가 어긋날 수 없다. 새 표도 마이그레이션도 없다.
+**Architecture:** DB 는 사람 한 명당·팀 한 곳당 한 행을 **정렬된 채로** 낸다. 순위를 매기고 동점을 줄로 접는 일은 DB 를 모르는 순수 함수가 한다 — 목록 순위와 내 순위가 **같은 함수**에서 나오므로 두 숫자가 어긋날 수 없다. 새 표도 마이그레이션도 없다.
 
 **Tech Stack:** Next.js 15 (App Router), Drizzle ORM, Postgres, Vitest, Tailwind
 
@@ -17,6 +17,7 @@
 - 대상은 **`users.status = 'ACTIVE'` 인 전 사용자**다. 관리자도 포함한다. 부서 상태는 보지 않는다.
 - 정렬은 **맞힌 개수 내림차순 → 마지막 정답 시각 오름차순 → 사용자 번호 오름차순**이다. 세 번째 항이 없으면 화면에 보이는 대표 이름이 새로고침마다 바뀐다.
 - 순위는 **`DENSE_RANK` 의미**다 — 동점은 같은 순위이고 다음 줄은 바로 다음 숫자다(1위가 5명이어도 다음은 2위).
+- **팀 점수는 그 팀 활성 사용자가 맞힌 개수의 합계**다. 개인과 팀은 순위·동점·정렬 규칙이 모두 같다 — 세는 단위만 다르다.
 - 이번 달 경계는 **서울 기준 1일 0시**이며 SQL 은 아래 한 가지 표현만 쓴다:
   `((date_trunc('month', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'UTC')`
 - **postgres.js 는 `COUNT`·`SUM` 을 문자열로 준다**(`lib/db/stats.ts:36` 주석). 집계값에는 반드시 `::int` 를 붙인다.
@@ -34,12 +35,12 @@
 
 | 파일 | 책임 |
 |---|---|
-| `web/lib/db/hallOfFame.ts` (신규) | 기간별 사용자 집계 질의. 정렬까지 한다 |
+| `web/lib/db/hallOfFame.ts` (신규) | 기간별 사용자·팀 집계 질의. 정렬까지 한다 |
 | `web/lib/solve/hallOfFameRanking.ts` (신규) | 순수 함수 — 순위 매기기·동점 접기·내 순위 찾기 |
 | `web/lib/solve/hallOfFameService.ts` (신규) | 두 기간을 묶어 응답을 만든다 |
 | `web/app/api/solve/hall-of-fame/route.ts` (신규) | 창구 |
 | `web/apiClient/hallOfFame.js` (신규) | 클라이언트 |
-| `web/components/solve/HallOfFameCard.jsx` (신규) | 카드·탭·"외 N명" 펼침 |
+| `web/components/solve/HallOfFameCard.jsx` (신규) | 카드·탭·금은동 메달·"외 N명" 펼침 |
 | `web/screens/solve/SolveHomePage.jsx` | 카드 한 줄 추가 |
 
 ---
@@ -55,7 +56,9 @@
 - Produces:
   - `type Period = "MONTH" | "ALL"`
   - `type HallOfFameRow = { userId: number; name: string; departmentName: string; correctCount: number; lastCorrectAt: string }`
+  - `type TeamRow = { departmentId: number; departmentName: string; correctCount: number; lastCorrectAt: string }`
   - `findCorrectCountsByUser(db: DbConn, period: Period): Promise<HallOfFameRow[]>` — 정렬된 채로 돌아온다
+  - `findCorrectCountsByTeam(db: DbConn, period: Period): Promise<TeamRow[]>` — 정렬된 채로 돌아온다
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
 
@@ -65,7 +68,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { attempts, departments, problems, users } from "./schema";
-import { findCorrectCountsByUser } from "./hallOfFame";
+import { findCorrectCountsByTeam, findCorrectCountsByUser } from "./hallOfFame";
 
 const db = testDb();
 let planId = 0;
@@ -178,6 +181,44 @@ describe("findCorrectCountsByUser — ALL", () => {
   });
 });
 
+describe("findCorrectCountsByTeam", () => {
+  it("팀원이 맞힌 것을 모두 더한다", async () => {
+    const a = await seedUser("emp1", "가"); const b = await seedUser("emp2", "나");
+    await seedAttempt(a, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(a, true, "2026-09-01T02:00:00Z");
+    await seedAttempt(b, true, "2026-09-01T03:00:00Z");
+
+    const rows = await findCorrectCountsByTeam(db, "ALL");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ departmentId: planId, departmentName: "기획팀", correctCount: 3 });
+  });
+
+  it("비활성 계정의 기록은 팀 합계에서도 빠진다", async () => {
+    const live = await seedUser("emp1", "재직");
+    const gone = await seedUser("emp2", "퇴사", { status: "INACTIVE" });
+    await seedAttempt(live, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(gone, true, "2026-09-01T02:00:00Z");
+
+    expect((await findCorrectCountsByTeam(db, "ALL"))[0].correctCount).toBe(1);
+  });
+
+  it("합계 내림차순, 같으면 마지막 정답이 이른 팀이 앞이다", async () => {
+    const plan1 = await seedUser("emp1", "기획");
+    const sales1 = await seedUser("emp2", "영업", { departmentId: salesId });
+    await seedAttempt(plan1, true, "2026-09-01T03:00:00Z");
+    await seedAttempt(sales1, true, "2026-09-01T01:00:00Z");
+
+    expect((await findCorrectCountsByTeam(db, "ALL")).map((r) => r.departmentName))
+      .toEqual(["영업팀", "기획팀"]);
+  });
+
+  it("맞힌 것이 없는 팀은 아예 나오지 않는다", async () => {
+    const me = await seedUser("emp1", "가");
+    await seedAttempt(me, false, "2026-09-01T01:00:00Z");
+    expect(await findCorrectCountsByTeam(db, "ALL")).toEqual([]);
+  });
+});
+
 describe("findCorrectCountsByUser — MONTH", () => {
   /**
    * 서울 기준 이번 달 1일 0시 = UTC 로 지난달 말일 15시.
@@ -272,12 +313,40 @@ export async function findCorrectCountsByUser(db: DbConn, period: Period): Promi
     ORDER BY count(*) DESC, max(a.submitted_at) ASC, u.id ASC
   `);
 }
+
+export type TeamRow = {
+  departmentId: number;
+  departmentName: string;
+  correctCount: number;
+  lastCorrectAt: string;
+};
+
+/**
+ * 팀 한 곳당 한 행. 사람 것을 부서로 묶어 더한 것뿐이라 규칙이 위와 같다 —
+ * 활성 사용자만 세고, 정렬도 합계 내림차순 → 마지막 정답이 이른 순 → 부서 번호 순이다.
+ *
+ * 부서 상태는 보지 않는다. 부서가 비활성이 되었다고 그 팀이 쌓은 기록이 사라지면 안 된다.
+ */
+export async function findCorrectCountsByTeam(db: DbConn, period: Period): Promise<TeamRow[]> {
+  const periodFilter = period === "MONTH" ? sql`AND a.submitted_at >= ${MONTH_START}` : sql``;
+  return executeRows<TeamRow>(db, sql`
+    SELECT d.id::int AS "departmentId", d.name AS "departmentName",
+           count(*)::int AS "correctCount",
+           max(a.submitted_at)::text AS "lastCorrectAt"
+    FROM attempts a
+    JOIN users u ON u.id = a.user_id
+    JOIN departments d ON d.id = u.department_id
+    WHERE a.is_correct = true AND u.status = 'ACTIVE' ${periodFilter}
+    GROUP BY d.id, d.name
+    ORDER BY count(*) DESC, max(a.submitted_at) ASC, d.id ASC
+  `);
+}
 ```
 
 - [ ] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/db/hallOfFame.test.ts`
-Expected: PASS (9개)
+Expected: PASS (13개)
 
 - [ ] **Step 5: 변이 테스트 세 가지**
 
@@ -312,14 +381,17 @@ git commit -m "[ADD] 명예의 전당 기간별 집계 질의"
 - Test: `web/lib/solve/hallOfFameRanking.test.ts`
 
 **Interfaces:**
-- Consumes: `HallOfFameRow`(Task 1)
+- Consumes: `HallOfFameRow`·`TeamRow`(Task 1)
 - Produces:
   - `MAX_OTHERS = 10`, `TOP_ROWS = 3`
   - `type Person = { userId: number; name: string; departmentName: string }`
-  - `type RankRow = { rank: number; correctCount: number; leader: Person; others: Person[]; otherCount: number }`
+  - `type Team = { departmentId: number; departmentName: string }`
+  - `type RankRow<T> = { rank: number; correctCount: number; leader: T; others: T[]; otherCount: number }`
   - `type MyRank = { rank: number; correctCount: number }`
-  - `buildTopRows(rows: HallOfFameRow[]): RankRow[]`
+  - `buildTopRows(rows: HallOfFameRow[]): RankRow<Person>[]`
+  - `buildTopTeamRows(rows: TeamRow[]): RankRow<Team>[]`
   - `findMyRank(rows: HallOfFameRow[], userId: number): MyRank | null`
+  - `findMyTeamRank(rows: TeamRow[], departmentId: number): MyRank | null`
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
 
@@ -327,8 +399,10 @@ git commit -m "[ADD] 명예의 전당 기간별 집계 질의"
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import type { HallOfFameRow } from "../db/hallOfFame";
-import { buildTopRows, findMyRank, MAX_OTHERS } from "./hallOfFameRanking";
+import type { HallOfFameRow, TeamRow } from "../db/hallOfFame";
+import {
+  buildTopRows, buildTopTeamRows, findMyRank, findMyTeamRank, MAX_OTHERS,
+} from "./hallOfFameRanking";
 
 // 입력은 DB 가 이미 정렬해 준 순서다(개수 내림차순 → 마지막 정답 이른 순 → id 순).
 function row(userId: number, name: string, correctCount: number): HallOfFameRow {
@@ -387,6 +461,32 @@ describe("buildTopRows", () => {
   });
 });
 
+describe("buildTopTeamRows · findMyTeamRank", () => {
+  function team(departmentId: number, departmentName: string, correctCount: number): TeamRow {
+    return { departmentId, departmentName, correctCount, lastCorrectAt: "2026-09-01 00:00:00" };
+  }
+
+  it("사람과 같은 규칙으로 접힌다 — 동점은 한 줄, 대표는 맨 앞", () => {
+    const out = buildTopTeamRows([team(1, "기획팀", 40), team(2, "영업팀", 40), team(3, "회계팀", 12)]);
+    expect(out).toHaveLength(2);
+    expect(out[0].rank).toBe(1);
+    expect(out[0].leader.departmentName).toBe("기획팀");
+    expect(out[0].others.map((t) => t.departmentName)).toEqual(["영업팀"]);
+    expect(out[0].otherCount).toBe(1);
+    expect(out[1].rank).toBe(2);
+  });
+
+  it("우리 팀 순위가 목록의 순위와 같은 값이다", () => {
+    const rows = [team(1, "기획팀", 40), team(2, "영업팀", 40), team(3, "회계팀", 12)];
+    expect(findMyTeamRank(rows, 2)).toEqual({ rank: 1, correctCount: 40 });
+    expect(buildTopTeamRows(rows)[0].rank).toBe(1);
+  });
+
+  it("점수가 없는 팀은 목록에 없어 null 이다", () => {
+    expect(findMyTeamRank([team(1, "기획팀", 40)], 99)).toBeNull();
+  });
+});
+
 describe("findMyRank", () => {
   it("목록과 같은 순위 값을 준다", () => {
     const rows = [row(1, "가", 5), row(2, "나", 5), row(3, "다", 3)];
@@ -419,32 +519,38 @@ Expected: FAIL — `./hallOfFameRanking` 모듈이 없다.
 `web/lib/solve/hallOfFameRanking.ts` 를 새로 만든다:
 
 ```typescript
-import type { HallOfFameRow } from "../db/hallOfFame";
+import type { HallOfFameRow, TeamRow } from "../db/hallOfFame";
 
-/** 펼침 목록에 담는 최대 인원. 나머지는 "외 N명 더"로 접는다. */
+/** 펼침 목록에 담는 최대 인원(팀도 같다). 나머지는 "외 N명 더"로 접는다. */
 export const MAX_OTHERS = 10;
 
 /** 화면에 보여 줄 줄 수. 사람 수가 아니라 순위 수다. */
 export const TOP_ROWS = 3;
 
 export type Person = { userId: number; name: string; departmentName: string };
+export type Team = { departmentId: number; departmentName: string };
 
-export type RankRow = {
+export type RankRow<T> = {
   rank: number;
   correctCount: number;
-  leader: Person;
-  /** 대표 외 동점자. 최대 MAX_OTHERS 명. */
-  others: Person[];
-  /** 대표 외 전체 인원. MAX_OTHERS 를 넘어도 실제 수를 담는다. */
+  leader: T;
+  /** 대표 외 동점자. 최대 MAX_OTHERS 개. */
+  others: T[];
+  /** 대표 외 전체 개수. MAX_OTHERS 를 넘어도 실제 수를 담는다. */
   otherCount: number;
 };
 
 export type MyRank = { rank: number; correctCount: number };
 
-type Group = { rank: number; correctCount: number; members: HallOfFameRow[] };
+type Scored = { correctCount: number };
+type Group<T> = { rank: number; correctCount: number; members: T[] };
 
 function toPerson(r: HallOfFameRow): Person {
   return { userId: r.userId, name: r.name, departmentName: r.departmentName };
+}
+
+function toTeam(r: TeamRow): Team {
+  return { departmentId: r.departmentId, departmentName: r.departmentName };
 }
 
 /**
@@ -456,8 +562,8 @@ function toPerson(r: HallOfFameRow): Person {
  *
  * 입력이 개수 내림차순으로 정렬돼 있다는 전제다(lib/db/hallOfFame.ts 의 ORDER BY).
  */
-function toGroups(rows: HallOfFameRow[]): Group[] {
-  const groups: Group[] = [];
+function toGroups<T extends Scored>(rows: T[]): Group<T>[] {
+  const groups: Group<T>[] = [];
   for (const r of rows) {
     const last = groups[groups.length - 1];
     if (last && last.correctCount === r.correctCount) {
@@ -469,39 +575,59 @@ function toGroups(rows: HallOfFameRow[]): Group[] {
   return groups;
 }
 
-export function buildTopRows(rows: HallOfFameRow[]): RankRow[] {
+/**
+ * 무리를 줄로 접는 공통 부분. 사람이든 팀이든 접는 규칙이 같아야 하므로 한 곳에 둔다.
+ * 다른 것은 무엇을 화면에 실어 보내느냐(toEntity)뿐이다.
+ */
+function buildRows<T extends Scored, E>(rows: T[], toEntity: (r: T) => E): RankRow<E>[] {
   return toGroups(rows).slice(0, TOP_ROWS).map((g) => {
     const [leader, ...rest] = g.members;
     return {
       rank: g.rank,
       correctCount: g.correctCount,
-      leader: toPerson(leader),
-      others: rest.slice(0, MAX_OTHERS).map(toPerson),
+      leader: toEntity(leader),
+      others: rest.slice(0, MAX_OTHERS).map(toEntity),
       otherCount: rest.length,
     };
   });
 }
 
-export function findMyRank(rows: HallOfFameRow[], userId: number): MyRank | null {
+function findRankBy<T extends Scored>(rows: T[], match: (r: T) => boolean): MyRank | null {
   for (const g of toGroups(rows)) {
-    if (g.members.some((m) => m.userId === userId)) {
-      return { rank: g.rank, correctCount: g.correctCount };
-    }
+    if (g.members.some(match)) return { rank: g.rank, correctCount: g.correctCount };
   }
   return null;
+}
+
+export function buildTopRows(rows: HallOfFameRow[]): RankRow<Person>[] {
+  return buildRows(rows, toPerson);
+}
+
+export function buildTopTeamRows(rows: TeamRow[]): RankRow<Team>[] {
+  return buildRows(rows, toTeam);
+}
+
+export function findMyRank(rows: HallOfFameRow[], userId: number): MyRank | null {
+  return findRankBy(rows, (r) => r.userId === userId);
+}
+
+export function findMyTeamRank(rows: TeamRow[], departmentId: number): MyRank | null {
+  return findRankBy(rows, (r) => r.departmentId === departmentId);
 }
 ```
 
 - [ ] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameRanking.test.ts`
-Expected: PASS (11개)
+Expected: PASS (14개)
 
 - [ ] **Step 5: 변이 테스트 두 가지**
 
 첫째. `toGroups` 의 `rank: groups.length + 1` 을 `rank: rows.indexOf(r) + 1` 로 바꾼다(총 순서로 만든다) → "동점 다음 줄은 바로 다음 숫자다" 가 깨져야 한다. 되돌린다.
 
 둘째. `buildTopRows` 의 `others: rest.slice(0, MAX_OTHERS)` 에서 `.slice(0, MAX_OTHERS)` 를 지운다 → "동점자가 많으면 목록은 10명까지만" 이 깨져야 한다. 되돌린다.
+
+셋째. `buildTopTeamRows` 가 `buildRows(rows, toTeam)` 대신 `buildRows(rows, toPerson as never)` 를 쓰게 바꾼다 → 팀 이름이 사라져 "사람과 같은 규칙으로 접힌다" 가 깨져야 한다. 되돌린다.
 
 되돌린 뒤 다시 PASS 를 확인한다.
 
@@ -521,9 +647,9 @@ git commit -m "[ADD] 명예의 전당 순위 매기기 순수 함수"
 - Test: `web/lib/solve/hallOfFameService.test.ts`
 
 **Interfaces:**
-- Consumes: `findCorrectCountsByUser`(Task 1), `buildTopRows`·`findMyRank`·`RankRow`·`MyRank`(Task 2), `AuthUser`(`lib/auth/types.ts` — 필드는 `userId`·`role`·`departmentId` 등)
+- Consumes: `findCorrectCountsByUser`·`findCorrectCountsByTeam`(Task 1), `buildTopRows`·`buildTopTeamRows`·`findMyRank`·`findMyTeamRank`·`RankRow`·`Person`·`Team`·`MyRank`(Task 2), `AuthUser`(`lib/auth/types.ts` — 필드는 `userId`·`role`·`departmentId` 등)
 - Produces:
-  - `type PeriodBoard = { top: RankRow[]; me: MyRank | null }`
+  - `type PeriodBoard = { people: { top: RankRow<Person>[]; me: MyRank | null }; teams: { top: RankRow<Team>[]; mine: MyRank | null } }`
   - `type HallOfFame = { month: PeriodBoard; allTime: PeriodBoard }`
   - `getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOfFame>`
 
@@ -533,6 +659,7 @@ git commit -m "[ADD] 명예의 전당 순위 매기기 순수 함수"
 
 ```typescript
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { migrateTestDb, testDb, truncateAll } from "../../test/db";
 import { attempts, departments, problems, users } from "../db/schema";
 import type { AuthUser } from "../auth/types";
@@ -579,10 +706,11 @@ beforeEach(async () => {
 });
 
 describe("getHallOfFame", () => {
-  it("아무도 맞히지 않았으면 두 기간 모두 비어 있다", async () => {
+  it("아무도 맞히지 않았으면 개인도 팀도 비어 있다", async () => {
     const out = await getHallOfFame(db, actor);
-    expect(out.month).toEqual({ top: [], me: null });
-    expect(out.allTime).toEqual({ top: [], me: null });
+    expect(out.month.people).toEqual({ top: [], me: null });
+    expect(out.month.teams).toEqual({ top: [], mine: null });
+    expect(out.allTime.people).toEqual({ top: [], me: null });
   });
 
   it("내 순위가 목록의 순위와 같은 값이다", async () => {
@@ -593,9 +721,9 @@ describe("getHallOfFame", () => {
 
     const out = await getHallOfFame(db, actor);
     // 둘 다 1개라 공동 1위다.
-    expect(out.allTime.top).toHaveLength(1);
-    expect(out.allTime.top[0].rank).toBe(1);
-    expect(out.allTime.me?.rank).toBe(1);
+    expect(out.allTime.people.top).toHaveLength(1);
+    expect(out.allTime.people.top[0].rank).toBe(1);
+    expect(out.allTime.people.me?.rank).toBe(1);
   });
 
   it("이번 달과 전체 기간이 서로 다른 숫자를 낸다", async () => {
@@ -604,8 +732,8 @@ describe("getHallOfFame", () => {
     await seedAttempt(actor.userId, true, new Date(boundary.getTime() + 60_000).toISOString());
 
     const out = await getHallOfFame(db, actor);
-    expect(out.month.me?.correctCount).toBe(1);
-    expect(out.allTime.me?.correctCount).toBe(2);
+    expect(out.month.people.me?.correctCount).toBe(1);
+    expect(out.allTime.people.me?.correctCount).toBe(2);
   });
 
   it("내가 맞힌 것이 없으면 me 는 null 이고 남의 순위는 그대로 나온다", async () => {
@@ -613,8 +741,33 @@ describe("getHallOfFame", () => {
     await seedAttempt(rival, true, new Date().toISOString());
 
     const out = await getHallOfFame(db, actor);
-    expect(out.allTime.top[0].leader.name).toBe("이둘");
-    expect(out.allTime.me).toBeNull();
+    expect(out.allTime.people.top[0].leader.name).toBe("이둘");
+    expect(out.allTime.people.me).toBeNull();
+  });
+
+  it("내가 0개여도 같은 팀원이 맞혔으면 우리 팀 점수는 나온다", async () => {
+    const teammate = await seedUser("emp2", "이둘");
+    await seedAttempt(teammate, true, new Date().toISOString());
+
+    const out = await getHallOfFame(db, actor);
+    expect(out.allTime.people.me).toBeNull();
+    expect(out.allTime.teams.mine).toEqual({ rank: 1, correctCount: 1 });
+  });
+
+  it("우리 팀 순위가 팀 목록의 순위와 같은 값이다", async () => {
+    const [sales] = await db.insert(departments)
+      .values({ name: "영업팀", code: "SALES", status: "ACTIVE" }).returning({ id: departments.id });
+    const rival = await seedUser("emp3", "영업사람");
+    await db.update(users).set({ departmentId: sales.id }).where(eq(users.id, rival));
+    const now = new Date().toISOString();
+    await seedAttempt(actor.userId, true, now);
+    await seedAttempt(rival, true, now);
+
+    const out = await getHallOfFame(db, actor);
+    // 두 팀 모두 1개라 공동 1위다.
+    expect(out.allTime.teams.top).toHaveLength(1);
+    expect(out.allTime.teams.top[0].rank).toBe(1);
+    expect(out.allTime.teams.mine?.rank).toBe(1);
   });
 });
 ```
@@ -630,25 +783,41 @@ Expected: FAIL — `./hallOfFameService` 모듈이 없다.
 
 ```typescript
 import type { DbConn } from "../db/client";
-import { findCorrectCountsByUser } from "../db/hallOfFame";
-import { buildTopRows, findMyRank, type MyRank, type RankRow } from "./hallOfFameRanking";
+import { findCorrectCountsByTeam, findCorrectCountsByUser, type Period } from "../db/hallOfFame";
+import {
+  buildTopRows, buildTopTeamRows, findMyRank, findMyTeamRank,
+  type MyRank, type Person, type RankRow, type Team,
+} from "./hallOfFameRanking";
 import type { AuthUser } from "../auth/types";
 
-export type PeriodBoard = { top: RankRow[]; me: MyRank | null };
+export type PeriodBoard = {
+  people: { top: RankRow<Person>[]; me: MyRank | null };
+  teams: { top: RankRow<Team>[]; mine: MyRank | null };
+};
 export type HallOfFame = { month: PeriodBoard; allTime: PeriodBoard };
 
 /**
- * 두 기간의 순위표를 함께 만든다.
+ * 한 기간의 개인·팀 순위표.
  *
- * 같은 기간의 목록과 내 순위는 **같은 행 묶음**에서 뽑는다. 각각 따로 질의하면 그 사이에
- * 누가 문제를 맞혔을 때 두 숫자가 어긋난다.
+ * 목록과 내 순위는 **같은 행 묶음**에서 뽑는다. 각각 따로 질의하면 그 사이에 누가 문제를
+ * 맞혔을 때 두 숫자가 어긋난다.
+ *
+ * 내 순위와 우리 팀 순위는 따로 계산한다 — 내가 하나도 못 맞혀도 팀원이 맞혔으면 팀은
+ * 점수가 있다.
  */
-export async function getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOfFame> {
-  const monthRows = await findCorrectCountsByUser(db, "MONTH");
-  const allRows = await findCorrectCountsByUser(db, "ALL");
+async function buildPeriod(db: DbConn, actor: AuthUser, period: Period): Promise<PeriodBoard> {
+  const peopleRows = await findCorrectCountsByUser(db, period);
+  const teamRows = await findCorrectCountsByTeam(db, period);
   return {
-    month: { top: buildTopRows(monthRows), me: findMyRank(monthRows, actor.userId) },
-    allTime: { top: buildTopRows(allRows), me: findMyRank(allRows, actor.userId) },
+    people: { top: buildTopRows(peopleRows), me: findMyRank(peopleRows, actor.userId) },
+    teams: { top: buildTopTeamRows(teamRows), mine: findMyTeamRank(teamRows, actor.departmentId) },
+  };
+}
+
+export async function getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOfFame> {
+  return {
+    month: await buildPeriod(db, actor, "MONTH"),
+    allTime: await buildPeriod(db, actor, "ALL"),
   };
 }
 ```
@@ -656,7 +825,7 @@ export async function getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOf
 - [ ] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameService.test.ts`
-Expected: PASS (4개)
+Expected: PASS (6개)
 
 - [ ] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
 
@@ -762,7 +931,7 @@ const TABS = [
  * 올리거나 키보드 포커스가 닿으면 열리고, 누르면 고정된다 — **휴대폰에는 마우스 올리기가
  * 없어서** 누르기를 함께 받아야 한다. Esc 로 닫는다.
  */
-function OtherNames({ others, otherCount }) {
+function OtherNames({ others, otherCount, render }) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const panelId = useId();
@@ -804,9 +973,9 @@ function OtherNames({ others, otherCount }) {
           className="absolute left-0 top-full z-10 mt-1 block w-max max-w-[240px] rounded-md border border-line-default bg-surface-default p-3 shadow-raised"
         >
           <span className="block space-y-1">
-            {others.map((p) => (
-              <span key={p.userId} className="block text-body-small text-ink-default">
-                {p.departmentName} {p.name}
+            {others.map((item, i) => (
+              <span key={i} className="block text-body-small text-ink-default">
+                {render(item)}
               </span>
             ))}
             {hiddenCount > 0 && (
@@ -819,8 +988,58 @@ function OtherNames({ others, otherCount }) {
   );
 }
 
+/** 순위 원반. 1·2·3 이 곧 금·은·동이다. 색만으로는 구분이 어려우므로 숫자를 함께 새긴다. */
+function Medal({ rank }) {
+  const tone = {
+    1: "border-[#DEC489] bg-[#F7EBCB] text-[#8A6416]",
+    2: "border-[#C9D4DE] bg-[#EAEFF4] text-[#5A6875]",
+    3: "border-[#D9B594] bg-[#F3E1D3] text-[#8A5731]",
+  }[rank];
+  const ribbon = { 1: "bg-[#D9B96F]", 2: "bg-[#B9C6D2]", 3: "bg-[#CFA381]" }[rank];
+  return (
+    <span className="relative inline-block h-6 w-6 shrink-0">
+      {/*
+        리본 두 가닥은 원반보다 **먼저** 그린다. 둘 다 자리를 잡은 요소라 나중에 오는
+        원반이 위에 덮여, 겹치는 아래쪽은 가려지고 위로 5px 만 드러난다.
+        z-index 로 뒤에 깔면 안 된다 — Surface 가 쌓임 맥락을 만들지 않아 음수 z-index 가
+        카드의 흰 배경 뒤까지 내려가 리본이 통째로 사라진다(2026-09-03 실측).
+      */}
+      <span aria-hidden="true" className={`absolute -top-[5px] left-1 h-[14px] w-[5px] rotate-[20deg] rounded-[1px] ${ribbon}`} />
+      <span aria-hidden="true" className={`absolute -top-[5px] right-1 h-[14px] w-[5px] -rotate-[20deg] rounded-[1px] ${ribbon}`} />
+      <span
+        aria-hidden="true"
+        className={`relative grid h-full w-full place-items-center rounded-full border text-body-small font-bold tabular-nums ${tone}`}
+      >
+        {rank}
+      </span>
+      <span className="sr-only">{rank}위</span>
+    </span>
+  );
+}
+
+function RankList({ rows, renderName }) {
+  return (
+    <ol className="space-y-1">
+      {rows.map((row) => (
+        <li key={row.rank} className="flex items-center gap-2.5 py-1">
+          <Medal rank={row.rank} />
+          <span className="flex-1 text-body text-ink-strong">
+            {renderName(row.leader)}
+            {row.otherCount > 0 && (
+              <OtherNames others={row.others} otherCount={row.otherCount} render={renderName} />
+            )}
+          </span>
+          <span className="shrink-0 text-body-small font-medium tabular-nums text-ink-default">
+            {row.correctCount}개
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Board({ board }) {
-  if (board.top.length === 0) {
+  if (board.people.top.length === 0) {
     return (
       <p className="px-1 py-6 text-center text-body-small text-ink-muted">
         아직 아무도 문제를 맞히지 않았습니다.
@@ -828,25 +1047,27 @@ function Board({ board }) {
     );
   }
   return (
-    <>
-      <ol className="space-y-2">
-        {board.top.map((row) => (
-          <li key={row.rank} className="flex items-baseline gap-2">
-            <span className="w-8 shrink-0 text-body font-bold text-brand-blue">{row.rank}위</span>
-            <span className="flex-1 text-body text-ink-strong">
-              {row.leader.departmentName} {row.leader.name}
-              {row.otherCount > 0 && <OtherNames others={row.others} otherCount={row.otherCount} />}
-            </span>
-            <span className="shrink-0 text-body-small font-medium text-ink-default">{row.correctCount}개</span>
-          </li>
-        ))}
-      </ol>
-      <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
-        {board.me
-          ? `내 순위 ${board.me.rank}위 · ${board.me.correctCount}개`
-          : "아직 맞힌 문제가 없습니다."}
-      </p>
-    </>
+    <div className="flex flex-col gap-5">
+      <div>
+        <p className="mb-2 text-label font-bold uppercase tracking-wide text-ink-muted">개인</p>
+        <RankList rows={board.people.top} renderName={(p) => `${p.departmentName} ${p.name}`} />
+        <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
+          {board.people.me
+            ? `내 순위 ${board.people.me.rank}위 · ${board.people.me.correctCount}개`
+            : "아직 맞힌 문제가 없습니다."}
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-2 text-label font-bold uppercase tracking-wide text-ink-muted">팀</p>
+        <RankList rows={board.teams.top} renderName={(t) => t.departmentName} />
+        <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
+          {board.teams.mine
+            ? `우리 팀 ${board.teams.mine.rank}위 · ${board.teams.mine.correctCount}개`
+            : "우리 팀은 아직 맞힌 문제가 없습니다."}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -962,9 +1183,12 @@ cd web && rm -rf .next && npx next dev -p 3300
 - 카드 세 개 아래 "명예의 전당"이 보인다
 - 탭이 **이번 달**·**전체 기간** 둘이고 기본은 이번 달이다
 - 아무도 맞히지 않은 기간에는 "아직 아무도 문제를 맞히지 않았습니다"가 나온다
-- 문제를 몇 개 풀고 돌아오면 내 이름이 뜬다
+- **개인 묶음과 팀 묶음이 위아래로 보이고**, 각 줄 앞에 금·은·동 원반과 리본이 그려진다
+- 리본이 원반 위로 5px 만 드러나고 잘리지 않는다
+- 문제를 몇 개 풀고 돌아오면 내 이름과 우리 팀이 뜬다
 - 다른 계정(`it_emp` 등)으로도 풀어 동점을 만든 뒤, "외 N명"에 **마우스를 올리면** 이름이 뜨고 **누르면** 고정되고 **Esc** 로 닫힌다
-- 내 순위 줄에 순위와 맞힌 개수가 함께 적힌다
+- 내 순위 줄과 우리 팀 줄에 순위와 개수가 함께 적힌다
+- 다른 팀 계정(`sales_emp` 등)으로도 풀어 팀 순위가 두 줄 이상이 되는지 본다
 - 콘솔 오류 0건
 
 - [ ] **Step 6: 커밋**
@@ -984,7 +1208,7 @@ git commit -m "[ADD] 학습 홈 명예의 전당 카드"
 
 ## 이 계획이 다루지 않는 것
 
-- 부서별 순위
+- 팀 안에서의 내 순위(전사 순위와 우리 팀 순위만 보여 준다)
 - 연속 학습일·배지·보상
 - 관리자용 전체 순위표
 - 지난달 순위 보관
