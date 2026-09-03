@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",
+    "migrate:prod": "tsx scripts/migrate-prod.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
     "sync:problems": "pnpm sync:problems:export && pnpm sync:problems:import",
