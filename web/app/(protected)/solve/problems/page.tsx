@@ -1,3 +1,3 @@
 "use client";
-import SolveProblemListPage from "@/screens/solve/SolveProblemListPage.jsx";
-export default function Page() { return <SolveProblemListPage />; }
+import SolveTeamListPage from "@/screens/solve/SolveTeamListPage.jsx";
+export default function Page() { return <SolveTeamListPage />; }

@@ -36,7 +36,7 @@ export default function SolveHomePage() {
             골라서 풀기
             <ArrowRight size={16} aria-hidden="true" className="text-brand-blue transition-transform group-hover:translate-x-0.5" />
           </p>
-          <p className="mt-1 text-body-small text-ink-muted">검색·태그로 원하는 문제를 찾아 풉니다.</p>
+          <p className="mt-1 text-body-small text-ink-muted">팀을 골라 그 팀 문제를 처음부터 끝까지 풉니다.</p>
         </Surface>
 
         <Surface as={Link} href="/solve/history" className="group block p-5 transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua">
