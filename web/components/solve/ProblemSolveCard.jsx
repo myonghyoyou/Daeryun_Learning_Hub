@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
@@ -9,6 +9,7 @@ import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/
 import { submitAttempt } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
+import { resolveEnter } from "@/utils/blankFocus.js";
 import { blankHostField } from "@/lib/problem/blankHost";
 import { hasNoAnswer } from "@/utils/answerState.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
@@ -25,6 +26,8 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
   const [blankInputs, setBlankInputs] = useState({});
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // 빈칸 입력칸을 키로 들고 있다가 엔터로 다음 칸에 포커스를 옮길 때 쓴다.
+  const blankRefs = useRef({});
 
   useEffect(() => {
     setSelectedChoiceIds([]);
@@ -88,6 +91,41 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
     problem.type === "FILL_BLANK" && blankHostField(problem.referenceText) === "content";
 
   /**
+   * 엔터를 제출로 받을 수 있는 상태인지. 제출 버튼과 같은 조건을 쓴다 — 버튼이 잠겨
+   * 있는데 엔터로는 낼 수 있으면 두 길이 어긋난다.
+   *
+   * **한글 조합 중(isComposing)에는 받지 않는다.** 조합을 끝내는 엔터까지 제출로 세면,
+   * 마지막 글자를 확정하려고 누른 엔터에 답이 나가 버린다.
+   */
+  function isSubmitEnter(event) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return false;
+    return !answered && !submitting && !nothingEntered;
+  }
+
+  function handleShortAnswerKeyDown(event) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (isSubmitEnter(event)) handleSubmit();
+  }
+
+  /**
+   * 빈칸에서의 엔터. 다음 칸으로 옮기고, **마지막 칸에서만** 제출한다.
+   *
+   * 다음 칸으로 옮기는 것은 아직 아무것도 안 썼을 때도 되어야 한다 — 건너뛰며 훑는
+   * 사람이 있다. 그래서 옮기기는 isSubmitEnter 조건을 보지 않는다.
+   */
+  function handleBlankKeyDown(event, blankKey) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    const next = resolveEnter(problem.blanksToAnswer, blankKey);
+    if (next.action === "focus") {
+      blankRefs.current[next.key]?.focus();
+      return;
+    }
+    if (next.action === "submit" && isSubmitEnter(event)) handleSubmit();
+  }
+
+  /**
    * 빈칸 마커가 든 글을 입력칸이 섞인 문단으로 그린다.
    *
    * 본문과 지문 두 자리에서 같은 모양이 필요하므로 함수로 둔다 — 자리마다 복사하면
@@ -102,6 +140,10 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
       return (
         <input
           key={index}
+          ref={(el) => {
+            blankRefs.current[segment.blankKey] = el;
+          }}
+          onKeyDown={(event) => handleBlankKeyDown(event, segment.blankKey)}
           aria-label={`빈칸 ${segment.blankKey}`}
           disabled={answered}
           className="mx-1 inline-block w-28 rounded-sm border-0 border-b-2 border-brand-blue bg-surface-blue px-1 text-center py-0.5 text-body text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
@@ -184,6 +226,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         {problem.type === "SHORT_ANSWER" && (
           <input
             aria-label="주관식 답안"
+            onKeyDown={handleShortAnswerKeyDown}
             disabled={answered}
             className="mt-5 h-[44px] w-full rounded-sm border border-line-default bg-surface-default px-3 text-body text-ink-strong placeholder:text-ink-subtle focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua disabled:opacity-60"
             placeholder="답안을 입력하세요"
