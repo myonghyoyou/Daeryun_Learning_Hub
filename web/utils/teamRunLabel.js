@@ -9,7 +9,10 @@
  */
 export function teamStateLabel(team) {
   if (team.activeRun) {
-    return { text: `${team.activeRun.cursor} / ${team.activeRun.total} 진행 중`, kind: "progress" };
+    // "12 / 30" 으로 적지 않는다. 진행 화면이 같은 모양으로 **지금 몇 번째 문제인지**를
+    // 적기 때문에(1문제를 풀었으면 거기는 "2 / 30"), 나란히 놓으면 같은 상태가 다른
+    // 숫자로 보인다. 여기서 세는 것은 위치가 아니라 푼 개수다.
+    return { text: `${team.activeRun.cursor}문제 풀었음`, kind: "progress" };
   }
   if (team.hasFinishedRun) {
     return { text: `틀린 문제 ${team.wrongCount}개`, kind: "wrong" };

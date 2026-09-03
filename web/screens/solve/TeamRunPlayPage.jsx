@@ -91,13 +91,26 @@ export default function TeamRunPlayPage() {
     }
   }
 
+  /**
+   * 여기서 그만두고 결과로 나간다.
+   *
+   * 답을 내고 아직 "다음 문제"를 누르지 않은 상태라면 **그 답을 먼저 기록한 뒤** 끝낸다.
+   * 그러지 않으면 마지막 문제를 맞히고 그만뒀을 때 결과가 "0문제 중 0문제"로 나온다 —
+   * 채점 이력에는 남아 있는데 이 바퀴의 요약에서만 사라지는 것이라 더 헷갈린다.
+   */
   async function quit() {
-    if (!run) return;
+    if (!run || advancing) return;
+    setAdvancing(true);
     try {
+      if (submittedResult) {
+        await advanceRun(run.runId, run.cursor, submittedResult.correct);
+      }
       await finishRun(run.runId);
       router.replace(`/solve/problems/${departmentId}/result?run=${run.runId}`);
     } catch (error) {
       toast.error(resolveErrorMessage(error, "그만두지 못했습니다."));
+    } finally {
+      setAdvancing(false);
     }
   }
 
@@ -112,8 +125,12 @@ export default function TeamRunPlayPage() {
           {run.departmentName} · {run.cursor + 1} / {run.total}
           {run.mode === "WRONG" && <span className="ml-2 text-body-small font-medium text-ink-muted">복습</span>}
         </p>
-        <Button variant="secondary" size="sm" onClick={quit}>
-          그만두고 결과 보기
+        {/*
+          "그만두고 결과 보기"라고 쓰지 않는다. 마지막 문제에서는 아래 버튼도
+          "결과 보기"가 되어 두 버튼 이름이 겹친다 — 사용자도, 자동화 테스트도 헷갈린다.
+        */}
+        <Button variant="secondary" size="sm" loading={advancing} onClick={quit}>
+          그만두기
         </Button>
       </div>
 
