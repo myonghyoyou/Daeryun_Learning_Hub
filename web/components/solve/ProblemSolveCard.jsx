@@ -10,6 +10,7 @@ import { submitAttempt } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
 import { blankOrderFrom, resolveEnter } from "@/utils/blankFocus.js";
+import { splitAnswerBlanks } from "@/utils/answerBlank.js";
 import { blankHostField, blankHostText } from "@/lib/problem/blankHost";
 import { hasNoAnswer } from "@/utils/answerState.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
@@ -138,6 +139,35 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
   }
 
   /**
+   * 본문의 빈 괄호 `( )` 를 답 적는 자리처럼 그린다.
+   *
+   * 괄호 모양을 그대로 두고 색과 안쪽 점선만 더한다. 밑줄 칸으로 바꾸면 빈칸 채우기의
+   * 진짜 입력칸(renderWithBlanks)과 색·밑줄이 같아져, 칠 수 없는 자리를 치려 든다.
+   *
+   * 안쪽 상자는 1.15em 이라 22px 줄 상자 안에 들어간다 — 입력칸처럼 줄 간격을 밀어내지
+   * 않으므로 이 문단은 leading-relaxed 그대로 둔다. 괄호와 점선이 줄바꿈에서 갈라지지
+   * 않도록 한 덩어리로 묶는다.
+   *
+   * 점선만 남기면 화면 낭독기가 아무것도 읽지 않으므로 "빈칸"을 숨은 글자로 넣는다.
+   */
+  function renderAnswerBlanks(text) {
+    return splitAnswerBlanks(text).map((segment, index) => {
+      if (segment.type === "text") return <span key={index}>{segment.value}</span>;
+      return (
+        <span key={index} className="mx-px whitespace-nowrap">
+          <span className="font-bold text-brand-blue">(</span>
+          <span
+            aria-hidden="true"
+            className="mx-0.5 inline-block h-[1.15em] w-[54px] border-b border-dashed border-line-strong align-[-0.22em]"
+          />
+          <span className="sr-only">빈칸</span>
+          <span className="font-bold text-brand-blue">)</span>
+        </span>
+      );
+    });
+  }
+
+  /**
    * 빈칸 마커가 든 글을 입력칸이 섞인 문단으로 그린다.
    *
    * 본문과 지문 두 자리에서 같은 모양이 필요하므로 함수로 둔다 — 자리마다 복사하면
@@ -195,7 +225,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         {blanksLiveInContent ? (
           <p className="text-body leading-loose text-ink-strong">{renderWithBlanks(problem.content)}</p>
         ) : (
-          <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-strong">{problem.content}</p>
+          <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-strong">{renderAnswerBlanks(problem.content)}</p>
         )}
 
         {problem.referenceText && (
@@ -203,7 +233,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
             {problem.type === "FILL_BLANK" ? (
               <p className="text-body leading-loose text-ink-strong">{renderWithBlanks(problem.referenceText)}</p>
             ) : (
-              <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-default">{problem.referenceText}</p>
+              <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-default">{renderAnswerBlanks(problem.referenceText)}</p>
             )}
           </div>
         )}
