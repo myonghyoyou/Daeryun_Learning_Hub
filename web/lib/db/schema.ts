@@ -1,6 +1,6 @@
 import {
   pgTable, bigserial, varchar, text, integer, boolean, timestamp, bigint, jsonb,
-  index, primaryKey, unique, check,
+  index, primaryKey, unique, uniqueIndex, check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -141,3 +141,35 @@ export const auditLogs = pgTable("audit_logs", {
   detail: jsonb("detail"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/**
+ * 한 팀을 한 번 훑는 단위("바퀴"). 골라서 풀기가 팀 단위로 바뀌면서 생겼다.
+ *
+ * problem_ids 를 시작 시점에 박아 두는 이유가 있다. 그러지 않으면 푸는 도중 관리자가
+ * 문제를 추가하거나 보관 처리했을 때 총 개수와 순서가 발밑에서 바뀐다 — 화면의
+ * "12 / 30" 이 갑자기 "12 / 31" 이 된다.
+ *
+ * results 를 여기 쌓는 이유도 있다. 채점 결과는 attempts 에도 남지만 거기에는 어느
+ * 바퀴에서 낸 답인지가 없어, 다른 탭에서 같은 문제를 병행해 풀면 시각만으로 갈라낼 수
+ * 없다. attempts 를 건드리지 않고 정확한 요약을 내기 위해 따로 쌓는다.
+ */
+export const solveRuns = pgTable("solve_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: bigint("user_id", { mode: "number" }).notNull().references(() => users.id),
+  departmentId: bigint("department_id", { mode: "number" }).notNull().references(() => departments.id),
+  mode: varchar("mode", { length: 10 }).notNull(),
+  problemIds: jsonb("problem_ids").$type<number[]>().notNull(),
+  cursor: integer("cursor").notNull().default(0),
+  results: jsonb("results").$type<{ problemId: number; correct: boolean | null }[]>()
+    .notNull().default(sql`'[]'::jsonb`),
+  status: varchar("status", { length: 20 }).notNull().default("IN_PROGRESS"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  modeCheck: check("solve_runs_mode_check", sql`${t.mode} IN ('ALL', 'WRONG')`),
+  statusCheck: check("solve_runs_status_check", sql`${t.status} IN ('IN_PROGRESS', 'FINISHED')`),
+  // 한 사람이 한 팀에 대해 진행 중인 바퀴는 최대 하나. 두 탭에서 동시에 시작해도
+  // 바퀴가 둘로 갈라지지 않게 DB 가 막는다 — 애플리케이션 검사만으로는 경합을 못 막는다.
+  oneActive: uniqueIndex("solve_runs_one_active").on(t.userId, t.departmentId)
+    .where(sql`${t.status} = 'IN_PROGRESS'`),
+}));

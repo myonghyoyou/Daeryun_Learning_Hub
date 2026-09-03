@@ -8,6 +8,13 @@
       "when": 1786809688171,
       "tag": "0000_rich_wraith",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788402491737,
+      "tag": "0001_cloudy_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

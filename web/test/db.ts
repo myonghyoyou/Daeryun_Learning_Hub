@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import * as schema from "../lib/db/schema";
 
-// truncateAll 이 13개 테이블을 CASCADE 로 비운다. 그러므로 이 URL 은 테스트 DB 외에는
+// truncateAll 이 14개 테이블을 CASCADE 로 비운다. 그러므로 이 URL 은 테스트 DB 외에는
 // 절대 향해선 안 된다. 앱의 DATABASE_URL 은 여기서 읽지 않는다 — .env 를 로드한 테스트 파일
 // 하나가 스위트 전체를 개발 DB 로 돌려 버리기 때문이다(test/env.ts 주석 참고).
 const url = process.env.TEST_DATABASE_URL ?? "postgres://probank:probank_dev@localhost:5434/probank_test";
@@ -43,7 +43,7 @@ export async function migrateTestDb() {
 export async function truncateAll() {
   const db = testDb();
   await db.execute(sql`TRUNCATE TABLE
-    audit_logs, problem_tags, tags, excel_upload_logs, attempt_choices,
+    solve_runs, audit_logs, problem_tags, tags, excel_upload_logs, attempt_choices,
     attempt_blank_answers, attempts, problem_blanks, problem_answers,
     problem_choices, problems, users, departments RESTART IDENTITY CASCADE`);
 }
