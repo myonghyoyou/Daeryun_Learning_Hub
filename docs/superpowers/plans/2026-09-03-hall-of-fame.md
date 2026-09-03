@@ -40,7 +40,8 @@
 | `web/lib/solve/hallOfFameService.ts` (신규) | 두 기간을 묶어 응답을 만든다 |
 | `web/app/api/solve/hall-of-fame/route.ts` (신규) | 창구 |
 | `web/apiClient/hallOfFame.js` (신규) | 클라이언트 |
-| `web/components/solve/HallOfFameCard.jsx` (신규) | 카드·탭·금은동 메달·"외 N명" 펼침 |
+| `web/components/solve/HallOfFameCard.jsx` (신규) | 카드·세그먼트 버튼·금은동 메달·"외 N명" 펼침 |
+| `web/app/globals.css` | 메달·순위표 등장 키프레임 두 개 |
 | `web/screens/solve/SolveHomePage.jsx` | 카드 한 줄 추가 |
 
 ---
@@ -902,113 +903,163 @@ git commit -m "[ADD] 명예의 전당 창구"
 
 **Files:**
 - Create: `web/components/solve/HallOfFameCard.jsx`
+- Modify: `web/app/globals.css` (키프레임 두 개)
 - Modify: `web/screens/solve/SolveHomePage.jsx`
 
 **Interfaces:**
 - Consumes: `fetchHallOfFame()`(Task 4), `Surface`(`components/ui/Surface.jsx`), `resolveErrorMessage`(`apiClient/client.js`)
 - Produces: 없음(화면 종단)
 
-- [ ] **Step 1: 카드를 만든다**
+**메달 치수는 아래 값을 그대로 쓴다.** 미리보기에서 24px 로 만들었다가 학습 홈 카드에서 조금 커 보여 **22px 로 줄인 값**이다. 순위 줄의 글자가 14px 라, 원반이 그보다 지나치게 크면 이름보다 메달이 먼저 읽힌다.
+
+| 부분 | 값 |
+|---|---|
+| 원반 지름 | **22px** |
+| 상자 높이 | **27px** (원반 22 + 드러나는 리본 5) |
+| 리본 한 가닥 | 너비 4px · 길이 13px · 위로 5px 만 드러남 |
+| 내 순위 줄의 작은 메달 | 17px, 리본 없음 |
+
+- [ ] **Step 1: 키프레임 두 개를 넣는다**
+
+`web/app/globals.css` 는 지금 여덟 줄이다. 맨 끝에 붙인다:
+
+```css
+/*
+ * 명예의 전당 카드의 움직임. Tailwind 유틸리티로는 키프레임을 만들 수 없어 여기 둔다.
+ * 두 애니메이션 모두 끝 프레임이 평소 모습이다 - 움직임이 끝나도 화면이 그대로다.
+ */
+@keyframes medal-pop {
+  from { opacity: 0; transform: scale(0.55) rotate(-14deg); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes board-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hof-medal, .hof-board, .hof-thumb { animation: none !important; transition: none !important; }
+}
+```
+
+- [ ] **Step 2: 카드를 만든다**
 
 `web/components/solve/HallOfFameCard.jsx` 를 새로 만든다:
 
 ```jsx
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Trophy } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import { fetchHallOfFame } from "@/apiClient/hallOfFame.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 
-const TABS = [
+const PERIODS = [
   { key: "month", label: "이번 달" },
   { key: "allTime", label: "전체 기간" },
 ];
+const TARGETS = [
+  { key: "people", label: "개인" },
+  { key: "teams", label: "팀" },
+];
 
 /**
- * 동점자 목록을 여는 작은 펼침.
+ * 세그먼트 컨트롤. 회색 트랙 위로 흰 알약이 고른 쪽에 미끄러져 간다.
  *
- * components/ui 에 툴팁이 없어 여기서만 쓰는 것으로 둔다(2026-09-03 확인). 마우스를
- * 올리거나 키보드 포커스가 닿으면 열리고, 누르면 고정된다 — **휴대폰에는 마우스 올리기가
- * 없어서** 누르기를 함께 받아야 한다. Esc 로 닫는다.
+ * 알약의 자리와 너비를 JS 로 재는 이유가 있다. 글자 길이가 서로 달라("이번 달" 60px,
+ * "전체 기간" 72px - 2026-09-03 실측) CSS 만으로 맞추려면 두 칸을 같은 너비로 묶어야
+ * 하는데, 그러면 "개인·팀"처럼 짧은 짝에서 빈 공간이 크게 남는다.
  */
-function OtherNames({ others, otherCount, render }) {
-  const [open, setOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
-  const panelId = useId();
-  const hiddenCount = otherCount - others.length;
+function Segmented({ label, options, value, onChange }) {
+  const trackRef = useRef(null);
+  const thumbRef = useRef(null);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    if (!pinned) return undefined;
-    function onKeyDown(event) {
-      if (event.key === "Escape") {
-        setPinned(false);
-        setOpen(false);
-      }
+  // 그리기 전에 자리를 잡아야 첫 화면에서 알약이 왼쪽에서 날아오지 않는다.
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const thumb = thumbRef.current;
+    if (!track || !thumb) return undefined;
+
+    function move() {
+      const active = track.querySelector('[aria-selected="true"]');
+      if (!active) return;
+      thumb.style.width = `${active.offsetWidth}px`;
+      thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [pinned]);
+    move();
+    // 글꼴이 늦게 오면 버튼 너비가 바뀐다. 창 크기가 바뀔 때도 다시 잰다.
+    window.addEventListener("resize", move);
+    document.fonts?.ready?.then(move);
+    return () => window.removeEventListener("resize", move);
+  }, [value]);
 
-  const visible = open || pinned;
+  // 첫 배치는 옮기는 티가 나지 않게 하고, 그다음 프레임부터 미끄러지게 한다.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
-    <span className="relative inline-block">
-      <button
-        type="button"
-        aria-expanded={visible}
-        aria-controls={panelId}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onClick={() => setPinned((v) => !v)}
-        className="ml-1 rounded-sm text-body-small font-medium text-action-secondary-text underline decoration-dotted underline-offset-2 focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
-      >
-        외 {otherCount}명
-      </button>
-      {visible && (
-        <span
-          id={panelId}
-          role="tooltip"
-          className="absolute left-0 top-full z-10 mt-1 block w-max max-w-[240px] rounded-md border border-line-default bg-surface-default p-3 shadow-raised"
+    <div ref={trackRef} role="tablist" aria-label={label} className="relative inline-flex gap-1 rounded-[9px] bg-[#EDF1F7] p-[3px]">
+      <span
+        ref={thumbRef}
+        aria-hidden="true"
+        className={`pointer-events-none absolute left-[3px] top-[3px] h-[calc(100%-6px)] rounded-[7px] bg-surface-default shadow-[0_1px_3px_rgba(16,43,76,0.10)] hof-thumb ${
+          ready ? "transition-[transform,width] duration-200 ease-out" : ""
+        }`}
+      />
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          role="tab"
+          aria-selected={value === option.key}
+          onClick={() => onChange(option.key)}
+          className={`relative z-10 rounded-[7px] px-3 py-1.5 text-body-small transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua ${
+            value === option.key ? "font-bold text-info-text" : "font-medium text-ink-muted hover:text-ink-strong"
+          }`}
         >
-          <span className="block space-y-1">
-            {others.map((item, i) => (
-              <span key={i} className="block text-body-small text-ink-default">
-                {render(item)}
-              </span>
-            ))}
-            {hiddenCount > 0 && (
-              <span className="block text-body-small text-ink-muted">외 {hiddenCount}명 더</span>
-            )}
-          </span>
-        </span>
-      )}
-    </span>
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-/** 순위 원반. 1·2·3 이 곧 금·은·동이다. 색만으로는 구분이 어려우므로 숫자를 함께 새긴다. */
+const MEDAL_TONE = {
+  1: { disc: "border-[#DEC489] bg-[#F7EBCB] text-[#8A6416]", ribbon: "bg-[#D9B96F]", delay: "0ms" },
+  2: { disc: "border-[#C9D4DE] bg-[#EAEFF4] text-[#5A6875]", ribbon: "bg-[#B9C6D2]", delay: "80ms" },
+  3: { disc: "border-[#D9B594] bg-[#F3E1D3] text-[#8A5731]", ribbon: "bg-[#CFA381]", delay: "160ms" },
+};
+
+/**
+ * 금·은·동 원반과 리본. 원반 22px, 상자 27px.
+ *
+ * 상자 높이가 리본까지 품는다(원반 22px + 드러나는 리본 5px). 리본을 상자 밖에 두면
+ * 가운데 정렬이 원반만 기준으로 맞아, 눈에 보이는 덩어리가 글자보다 위로 뜬다 -
+ * 정렬은 맞는데 어긋나 보이는 상태가 된다(2026-09-03 실측).
+ *
+ * 리본을 원반 앞에 두는 것도 규칙이다. 둘 다 자리를 잡은 요소라 나중에 오는 원반이
+ * 리본 위에 그려져, 겹치는 아래쪽이 가려진다. z-index 로 뒤에 깔면 안 된다 - Surface 가
+ * 쌓임 맥락을 만들지 않아 음수 z-index 가 카드의 흰 배경 뒤까지 내려가 리본이 통째로
+ * 사라진다(2026-09-03 실측).
+ *
+ * 숫자를 원반 안에 새기는 이유는 세 금속의 밝기가 비슷해 색만으로는 순서가 안 읽히기 때문이다.
+ */
 function Medal({ rank }) {
-  const tone = {
-    1: "border-[#DEC489] bg-[#F7EBCB] text-[#8A6416]",
-    2: "border-[#C9D4DE] bg-[#EAEFF4] text-[#5A6875]",
-    3: "border-[#D9B594] bg-[#F3E1D3] text-[#8A5731]",
-  }[rank];
-  const ribbon = { 1: "bg-[#D9B96F]", 2: "bg-[#B9C6D2]", 3: "bg-[#CFA381]" }[rank];
+  const tone = MEDAL_TONE[rank];
+  const ribbon = `absolute top-0 h-[13px] w-[4px] rounded-[1px] ${tone.ribbon}`;
   return (
-    <span className="relative inline-block h-6 w-6 shrink-0">
-      {/*
-        리본 두 가닥은 원반보다 **먼저** 그린다. 둘 다 자리를 잡은 요소라 나중에 오는
-        원반이 위에 덮여, 겹치는 아래쪽은 가려지고 위로 5px 만 드러난다.
-        z-index 로 뒤에 깔면 안 된다 — Surface 가 쌓임 맥락을 만들지 않아 음수 z-index 가
-        카드의 흰 배경 뒤까지 내려가 리본이 통째로 사라진다(2026-09-03 실측).
-      */}
-      <span aria-hidden="true" className={`absolute -top-[5px] left-1 h-[14px] w-[5px] rotate-[20deg] rounded-[1px] ${ribbon}`} />
-      <span aria-hidden="true" className={`absolute -top-[5px] right-1 h-[14px] w-[5px] -rotate-[20deg] rounded-[1px] ${ribbon}`} />
+    <span
+      className="hof-medal relative inline-block h-[27px] w-[22px] shrink-0 pt-[5px] origin-[50%_40%] transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:-rotate-6"
+      style={{ animation: `medal-pop 380ms cubic-bezier(0.34,1.56,0.64,1) ${tone.delay} backwards` }}
+    >
+      <span aria-hidden="true" className={`${ribbon} left-1 rotate-[20deg]`} />
+      <span aria-hidden="true" className={`${ribbon} right-1 -rotate-[20deg]`} />
       <span
         aria-hidden="true"
-        className={`relative grid h-full w-full place-items-center rounded-full border text-body-small font-bold tabular-nums ${tone}`}
+        className={`relative grid h-[22px] w-[22px] place-items-center rounded-full border text-body-small font-bold tabular-nums ${tone.disc}`}
       >
         {rank}
       </span>
@@ -1017,16 +1068,75 @@ function Medal({ rank }) {
   );
 }
 
-function RankList({ rows, renderName }) {
+/**
+ * 동점자 목록을 여는 작은 펼침.
+ *
+ * components/ui 에 툴팁이 없어 여기서만 쓰는 것으로 둔다. 마우스를 올리거나 키보드
+ * 포커스가 닿으면 열리고, 누르면 고정된다 - 휴대폰에는 마우스 올리기가 없어서
+ * 누르기를 함께 받아야 한다. Esc 로 닫는다.
+ */
+function OtherNames({ others, otherCount, unit, render }) {
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const panelId = useId();
+  const hiddenCount = otherCount - others.length;
+  const open = hovered || pinned;
+
+  useEffect(() => {
+    if (!pinned) return undefined;
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        setPinned(false);
+        setHovered(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [pinned]);
+
   return (
-    <ol className="space-y-1">
+    <span className="relative inline-block">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
+        onClick={() => setPinned((v) => !v)}
+        className="ml-1 rounded-sm text-body-small font-medium text-action-secondary-text underline decoration-dotted underline-offset-2 focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+      >
+        외 {otherCount}{unit}
+      </button>
+      {open && (
+        <span
+          id={panelId}
+          role="tooltip"
+          className="absolute left-0 top-full z-10 mt-1 flex w-max max-w-[240px] flex-col gap-1 rounded-md border border-line-default bg-surface-default p-3 shadow-raised"
+        >
+          {others.map((item, index) => (
+            <span key={index} className="text-body-small text-ink-default">{render(item)}</span>
+          ))}
+          {hiddenCount > 0 && (
+            <span className="text-body-small text-ink-muted">외 {hiddenCount}{unit} 더</span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function RankList({ rows, unit, render }) {
+  return (
+    <ol className="flex flex-col gap-1">
       {rows.map((row) => (
-        <li key={row.rank} className="flex items-center gap-2.5 py-1">
+        <li key={row.rank} className="group -mx-1.5 flex items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors hover:bg-surface-subtle">
           <Medal rank={row.rank} />
           <span className="flex-1 text-body text-ink-strong">
-            {renderName(row.leader)}
+            {render(row.leader)}
             {row.otherCount > 0 && (
-              <OtherNames others={row.others} otherCount={row.otherCount} render={renderName} />
+              <OtherNames others={row.others} otherCount={row.otherCount} unit={unit} render={render} />
             )}
           </span>
           <span className="shrink-0 text-body-small font-medium tabular-nums text-ink-default">
@@ -1038,49 +1148,38 @@ function RankList({ rows, renderName }) {
   );
 }
 
-function Board({ board }) {
-  if (board.people.top.length === 0) {
-    return (
-      <p className="px-1 py-6 text-center text-body-small text-ink-muted">
-        아직 아무도 문제를 맞히지 않았습니다.
-      </p>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <p className="mb-2 text-label font-bold uppercase tracking-wide text-ink-muted">개인</p>
-        <RankList rows={board.people.top} renderName={(p) => `${p.departmentName} ${p.name}`} />
-        <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
-          {board.people.me
-            ? `내 순위 ${board.people.me.rank}위 · ${board.people.me.correctCount}개`
-            : "아직 맞힌 문제가 없습니다."}
-        </p>
-      </div>
-
-      <div>
-        <p className="mb-2 text-label font-bold uppercase tracking-wide text-ink-muted">팀</p>
-        <RankList rows={board.teams.top} renderName={(t) => t.departmentName} />
-        <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
-          {board.teams.mine
-            ? `우리 팀 ${board.teams.mine.rank}위 · ${board.teams.mine.correctCount}개`
-            : "우리 팀은 아직 맞힌 문제가 없습니다."}
-        </p>
-      </div>
-    </div>
-  );
-}
+const VIEW = {
+  people: {
+    unit: "명",
+    render: (p) => `${p.departmentName} ${p.name}`,
+    rows: (board) => board.people.top,
+    foot: (board) =>
+      board.people.me
+        ? `내 순위 ${board.people.me.rank}위 · ${board.people.me.correctCount}개`
+        : "아직 맞힌 문제가 없습니다.",
+  },
+  teams: {
+    unit: "팀",
+    render: (t) => t.departmentName,
+    rows: (board) => board.teams.top,
+    foot: (board) =>
+      board.teams.mine
+        ? `우리 팀 ${board.teams.mine.rank}위 · ${board.teams.mine.correctCount}개`
+        : "우리 팀은 아직 맞힌 문제가 없습니다.",
+  },
+};
 
 /**
  * 학습 홈의 명예의 전당. 맞힌 개수로 줄을 세운다.
  *
- * 순위 숫자는 "몇 번째 점수대"라는 뜻이다 — 1위가 여러 명이어도 다음 줄은 2위다. 그래서
- * 내 순위에도 맞힌 개수를 함께 적는다. "3위"만 있으면 위에 두 사람만 있다고 오해한다.
+ * 순위 숫자는 "몇 번째 점수대"라는 뜻이다 - 1위가 여러 명이어도 다음 줄은 2위다. 그래서
+ * 아래 한 줄에 맞힌 개수를 함께 적는다. "3위"만 있으면 위에 두 사람만 있다고 오해한다.
  */
 export default function HallOfFameCard() {
   const [data, setData] = useState(null);
-  const [tab, setTab] = useState("month");
   const [error, setError] = useState(null);
+  const [period, setPeriod] = useState("month");
+  const [target, setTarget] = useState("people");
 
   useEffect(() => {
     let cancelled = false;
@@ -1096,6 +1195,9 @@ export default function HallOfFameCard() {
     };
   }, []);
 
+  const board = data ? data[period] : null;
+  const view = VIEW[target];
+
   return (
     <Surface className="p-5">
       <div className="flex items-center gap-2">
@@ -1105,30 +1207,28 @@ export default function HallOfFameCard() {
         <p className="text-section-title font-semibold text-ink-strong">명예의 전당</p>
       </div>
 
-      <div className="mt-3 flex gap-1" role="tablist" aria-label="집계 기간">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => setTab(t.key)}
-            className={`rounded-sm px-3 py-1 text-body-small font-medium focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua ${
-              tab === t.key ? "bg-surface-blue text-info-text" : "text-ink-muted hover:text-ink-strong"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5">
+        <Segmented label="집계 기간" options={PERIODS} value={period} onChange={setPeriod} />
+        <Segmented label="순위 대상" options={TARGETS} value={target} onChange={setTarget} />
       </div>
 
       <div className="mt-4">
         {error ? (
           <p className="px-1 py-6 text-center text-body-small text-ink-muted">{error}</p>
-        ) : !data ? (
+        ) : !board ? (
           <p className="px-1 py-6 text-center text-body-small text-ink-muted">불러오는 중...</p>
+        ) : view.rows(board).length === 0 ? (
+          <p className="px-1 py-6 text-center text-body-small text-ink-muted">
+            아직 아무도 문제를 맞히지 않았습니다.
+          </p>
         ) : (
-          <Board board={data[tab]} />
+          // key 를 조합으로 두면 버튼을 누를 때마다 다시 마운트돼 등장 움직임이 다시 돈다.
+          <div key={`${period}-${target}`} className="hof-board" style={{ animation: "board-in 180ms ease-out" }}>
+            <RankList rows={view.rows(board)} unit={view.unit} render={view.render} />
+            <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
+              {view.foot(board)}
+            </p>
+          </div>
         )}
       </div>
     </Surface>
@@ -1136,7 +1236,7 @@ export default function HallOfFameCard() {
 }
 ```
 
-- [ ] **Step 2: 학습 홈에 붙인다**
+- [ ] **Step 3: 학습 홈에 붙인다**
 
 `web/screens/solve/SolveHomePage.jsx` 의 import 에 한 줄을 더한다:
 
@@ -1152,7 +1252,7 @@ import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
       </div>
 ```
 
-- [ ] **Step 3: 구문·타입 검사와 전체 스위트**
+- [ ] **Step 4: 구문·타입 검사와 전체 스위트**
 
 ```bash
 cd web && ./node_modules/.bin/esbuild components/solve/HallOfFameCard.jsx --loader:.jsx=jsx --outfile=/dev/null
@@ -1160,9 +1260,9 @@ cd web && node node_modules/vitest/vitest.mjs run
 cd web && npx tsc --noEmit
 ```
 
-`esbuild` 는 반드시 `web` 디렉터리에서 실행한다 — 상위에서 부르면 실행 파일을 못 찾아 실패한다(2026-09-03 실측).
+`esbuild` 는 반드시 `web` 디렉터리에서 실행한다 - 상위에서 부르면 실행 파일을 못 찾아 실패한다(2026-09-03 실측).
 
-- [ ] **Step 4: 빌드**
+- [ ] **Step 5: 빌드**
 
 dev 서버가 떠 있으면 먼저 내린다.
 
@@ -1172,7 +1272,7 @@ cd web && rm -rf .next && npx next build
 
 기대: Errors 0, Warnings 0.
 
-- [ ] **Step 5: 브라우저로 실측한다**
+- [ ] **Step 6: 브라우저로 실측한다**
 
 ```bash
 cd web && rm -rf .next && npx next dev -p 3300
@@ -1181,20 +1281,21 @@ cd web && rm -rf .next && npx next dev -p 3300
 `plan_emp` / `Test1234!` 로 로그인해 학습 홈에서 확인한다.
 
 - 카드 세 개 아래 "명예의 전당"이 보인다
-- 탭이 **이번 달**·**전체 기간** 둘이고 기본은 이번 달이다
-- 아무도 맞히지 않은 기간에는 "아직 아무도 문제를 맞히지 않았습니다"가 나온다
-- **개인 묶음과 팀 묶음이 위아래로 보이고**, 각 줄 앞에 금·은·동 원반과 리본이 그려진다
-- 리본이 원반 위로 5px 만 드러나고 잘리지 않는다
-- 문제를 몇 개 풀고 돌아오면 내 이름과 우리 팀이 뜬다
-- 다른 계정(`it_emp` 등)으로도 풀어 동점을 만든 뒤, "외 N명"에 **마우스를 올리면** 이름이 뜨고 **누르면** 고정되고 **Esc** 로 닫힌다
-- 내 순위 줄과 우리 팀 줄에 순위와 개수가 함께 적힌다
+- 버튼 묶음이 둘이다 - **이번 달·전체 기간**과 **개인·팀**. 기본은 이번 달·개인
+- 버튼을 누르면 **흰 알약이 미끄러지고 너비도 따라 바뀐다**("이번 달" -> "전체 기간")
+- 순위 줄 앞에 금·은·동 원반과 리본이 그려지고, **메달 덩어리의 세로 중심이 이름·개수와 같다**
+- 원반이 22px 라 이름(14px)보다 먼저 읽히지 않는다
+- 메달이 나타날 때 톡 튀고, 금·은·동이 차례로 들어온다
+- 순위 줄에 마우스를 올리면 메달이 살짝 들리며 기운다
+- 팀으로 바꾸면 "외 N**팀**"으로 단위가 바뀐다
+- 아무도 맞히지 않은 조합에는 "아직 아무도 문제를 맞히지 않았습니다"가 나온다
 - 다른 팀 계정(`sales_emp` 등)으로도 풀어 팀 순위가 두 줄 이상이 되는지 본다
 - 콘솔 오류 0건
 
-- [ ] **Step 6: 커밋**
+- [ ] **Step 7: 커밋**
 
 ```bash
-git add web/components/solve/HallOfFameCard.jsx web/screens/solve/SolveHomePage.jsx
+git add web/components/solve/HallOfFameCard.jsx web/screens/solve/SolveHomePage.jsx web/app/globals.css
 git commit -m "[ADD] 학습 홈 명예의 전당 카드"
 ```
 
