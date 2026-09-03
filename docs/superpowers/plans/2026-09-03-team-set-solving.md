@@ -65,7 +65,7 @@
 - Consumes: 없음
 - Produces: `solveRuns` 테이블. 컬럼은 `id`·`userId`·`departmentId`·`mode`·`problemIds`·`cursor`·`results`·`status`·`createdAt`·`updatedAt`
 
-- [ ] **Step 1: 스키마에 테이블을 추가한다**
+- [x] **Step 1: 스키마에 테이블을 추가한다**
 
 `web/lib/db/schema.ts` 최상단 import 에서 `uniqueIndex` 를 추가한다. 지금은 다음과 같다:
 
@@ -119,7 +119,7 @@ export const solveRuns = pgTable("solve_runs", {
 }));
 ```
 
-- [ ] **Step 2: 마이그레이션을 만든다**
+- [x] **Step 2: 마이그레이션을 만든다**
 
 ```bash
 cd web && npx drizzle-kit generate
@@ -131,7 +131,7 @@ cd web && npx drizzle-kit generate
 
 **이미 만들어진 마이그레이션 파일은 절대 수정하지 마라.** 내용이 틀렸으면 스키마를 고치고 그 파일을 지운 뒤 다시 generate 한다(아직 어디에도 적용하기 전이므로 안전하다).
 
-- [ ] **Step 3: truncateAll 에 테이블을 추가한다**
+- [x] **Step 3: truncateAll 에 테이블을 추가한다**
 
 `web/test/db.ts` 의 `truncateAll` 은 지금 이렇다:
 
@@ -153,7 +153,7 @@ cd web && npx drizzle-kit generate
 
 같은 파일 위쪽 주석의 "13개 테이블"을 "14개 테이블"로 고친다.
 
-- [ ] **Step 4: 실패하는 테스트를 쓴다**
+- [x] **Step 4: 실패하는 테스트를 쓴다**
 
 `web/lib/db/solveRunsSchema.test.ts` 를 새로 만든다:
 
@@ -213,14 +213,14 @@ describe("solve_runs", () => {
 });
 ```
 
-- [ ] **Step 5: 테스트가 실패하는지 확인한다**
+- [x] **Step 5: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/db/solveRunsSchema.test.ts`
 Expected: FAIL — 테스트 DB 에 아직 테이블이 없다(마이그레이션이 적용되기 전).
 
 `migrateTestDb()` 가 `beforeAll` 에서 새 마이그레이션을 적용하므로, Step 2 를 마쳤다면 이 단계에서 바로 통과할 수도 있다. 그 경우 Step 4 의 테스트가 실제로 무언가를 지키는지 Step 6 의 변이로 확인한다.
 
-- [ ] **Step 6: 변이로 테스트가 실제로 지키는지 확인한다**
+- [x] **Step 6: 변이로 테스트가 실제로 지키는지 확인한다**
 
 테스트 DB 의 부분 인덱스를 잠시 전체 인덱스로 바꿔, 인덱스의 `WHERE` 절이 실제로 무언가를 지키는지 본다. `web/_tmp_index_mutation.ts` 를 임시로 만든다:
 
@@ -265,7 +265,7 @@ cd web && rm _tmp_index_mutation.ts
 
 `web/lib/db/schema.ts` 는 이 절차에서 건드리지 않는다 — 스키마를 고치면 마이그레이션과 어긋난다.
 
-- [ ] **Step 7: 개발 DB 에 적용하고 전체 스위트를 돌린다**
+- [x] **Step 7: 개발 DB 에 적용하고 전체 스위트를 돌린다**
 
 ```bash
 cd web && npx drizzle-kit migrate
@@ -273,7 +273,7 @@ cd web && npx vitest run
 cd web && npx tsc --noEmit
 ```
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 git add web/lib/db/schema.ts web/drizzle web/test/db.ts web/lib/db/solveRunsSchema.test.ts
@@ -297,7 +297,7 @@ git commit -m "[ADD] 팀 단위 풀이 진행을 담는 solve_runs 테이블"
   - `canAdvance(fromCursor: number, cursor: number): boolean`
   - `summarizeResults(results: RunResult[]): { answeredCount: number; correctCount: number; wrongProblemIds: number[] }`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/solve/teamRun.test.ts` 를 새로 만든다:
 
@@ -366,12 +366,12 @@ describe("summarizeResults", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/solve/teamRun.test.ts`
 Expected: FAIL — `./teamRun` 모듈이 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/solve/teamRun.ts` 를 새로 만든다:
 
@@ -418,12 +418,12 @@ export function summarizeResults(results: RunResult[]): {
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/solve/teamRun.test.ts`
 Expected: PASS (10개)
 
-- [ ] **Step 5: 변이 테스트**
+- [x] **Step 5: 변이 테스트**
 
 `summarizeResults` 의 `const answered = results.filter((r) => r.correct !== null);` 를 `const answered = results;` 로 잠시 바꾼다.
 
@@ -432,7 +432,7 @@ Expected: FAIL — "건너뛴 문제(correct 가 null)는 어느 쪽으로도 �
 
 되돌리고 다시 PASS 를 확인한다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add web/lib/solve/teamRun.ts web/lib/solve/teamRun.test.ts
@@ -457,7 +457,7 @@ git commit -m "[ADD] 바퀴 진행 계산 순수 함수"
   - `countWrongByDepartment(db: DbConn, userId: number): Promise<Map<number, number>>`
   - `findSolveRowsByIds(db: DbConn, ids: number[]): Promise<SolveListRow[]>` — `SolveListRow` 는 `lib/db/solveProblems.ts` 가 이미 내보내는 타입이다
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/db/solveTeams.test.ts` 를 새로 만든다:
 
@@ -632,14 +632,14 @@ describe("findSolveRowsByIds", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/db/solveTeams.test.ts`
 Expected: FAIL — `./solveTeams` 모듈이 없다.
 
 **첫 초록불이 전제 하나를 함께 증명한다.** 이 저장소에는 `db.execute(sql...)` 로 SELECT 하는 곳이 아직 없다(`grep -rn "db.execute(sql" lib/` 는 0건이고 `test/db.ts:44` 의 TRUNCATE 가 유일한 사용이다). Step 3 의 네 쿼리는 `rows as unknown as T[]` 캐스트에 기대는데, 이 캐스트는 타입 검사를 통과시킬 뿐 반환 모양을 보장하지 않는다. 만들고 돌렸을 때 `rows.map is not a function` 이 나면 드라이버가 배열이 아니라 `{ rows }` 를 돌려주는 것이므로 `(rows as unknown as { rows: T[] }).rows` 로 바꾼다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/db/solveTeams.ts` 를 새로 만든다:
 
@@ -774,12 +774,12 @@ export async function findSolveRowsByIds(db: DbConn, ids: number[]): Promise<Sol
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/db/solveTeams.test.ts`
 Expected: PASS (12개)
 
-- [ ] **Step 5: 변이 테스트 두 가지**
+- [x] **Step 5: 변이 테스트 두 가지**
 
 첫째. `findTeamProblemIds` 의 `ORDER BY p.source_number ASC NULLS LAST, p.id ASC` 에서 `NULLS LAST` 를 지운다.
 Run: `cd web && npx vitest run lib/db/solveTeams.test.ts`
@@ -791,7 +791,7 @@ Expected: FAIL — "같은 시각이면 나중에 들어간 답을 마지막으�
 
 두 변이가 모두 실패를 냈으면 다시 PASS 를 확인한다.
 
-- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -824,7 +824,7 @@ git commit -m "[ADD] 팀별 문제와 틀린 문제 조회"
   - `updateRunProgress(db, runId: number, patch: { cursor: number; results: RunResult[]; status: "IN_PROGRESS" | "FINISHED" }): Promise<void>`
   - `markRunFinished(db, runId: number): Promise<void>`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/db/solveRuns.test.ts` 를 새로 만든다:
 
@@ -961,12 +961,12 @@ describe("updateRunProgress", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/db/solveRuns.test.ts`
 Expected: FAIL — `./solveRuns` 모듈이 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/db/solveRuns.ts` 를 새로 만든다:
 
@@ -1089,19 +1089,19 @@ export async function markRunFinished(db: DbConn, runId: number): Promise<void> 
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/db/solveRuns.test.ts`
 Expected: PASS (11개)
 
-- [ ] **Step 5: 변이 테스트**
+- [x] **Step 5: 변이 테스트**
 
 `findActiveRun` 의 `eq(solveRuns.status, "IN_PROGRESS"),` 줄을 잠시 지운다.
 
 Run: `cd web && npx vitest run lib/db/solveRuns.test.ts`
 Expected: FAIL — "끝난 바퀴는 주지 않는다" 가 깨진다. 되돌리고 다시 PASS 를 확인한다.
 
-- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -1140,7 +1140,7 @@ git commit -m "[ADD] 바퀴 저장소"
   - `getLatestRunView(db, actor, departmentId: number): Promise<RunView | null>`
   - `NO_PROBLEMS_MESSAGE`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `web/lib/solve/teamRunService.test.ts` 를 새로 만든다:
 
@@ -1405,12 +1405,12 @@ describe("getRunView", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/solve/teamRunService.test.ts`
 Expected: FAIL — `./teamRunService` 모듈이 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/lib/solve/teamRunService.ts` 를 새로 만든다:
 
@@ -1600,12 +1600,12 @@ async function toRunView(db: DbConn, run: SolveRunRow): Promise<RunView> {
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/solve/teamRunService.test.ts`
 Expected: PASS (16개)
 
-- [ ] **Step 5: 변이 테스트 두 가지**
+- [x] **Step 5: 변이 테스트 두 가지**
 
 첫째. `advanceRun` 의 `if (run.status === "FINISHED" || !canAdvance(fromCursor, run.cursor)) {` 를 `if (run.status === "FINISHED") {` 로 바꾼다.
 Run: `cd web && npx vitest run lib/solve/teamRunService.test.ts`
@@ -1615,7 +1615,7 @@ Expected: FAIL — "보낸 위치가 어긋나면 아무것도 하지 않는다"
 Run: 같은 명령
 Expected: FAIL — "진행 중인 바퀴가 있으면 새로 만들지 않고 그것을 돌려준다" 가 깨진다(유니크 인덱스 위반으로 던진다). 되돌리고 다시 PASS 를 확인한다.
 
-- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -1647,7 +1647,7 @@ git commit -m "[ADD] 팀 바퀴 시작·전진·종료 서비스"
   - `toStartRunBody(raw: Record<string, unknown>): { mode: RunMode }`
   - `toAdvanceBody(raw: Record<string, unknown>): { fromCursor: number; correct: boolean | null }`
 
-- [ ] **Step 1: 본문 파서의 실패하는 테스트를 쓴다**
+- [x] **Step 1: 본문 파서의 실패하는 테스트를 쓴다**
 
 `web/lib/solve/teamRunRequestBody.test.ts` 를 새로 만든다:
 
@@ -1693,12 +1693,12 @@ describe("toAdvanceBody", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/solve/teamRunRequestBody.test.ts`
 Expected: FAIL — `./teamRunRequestBody` 모듈이 없다.
 
-- [ ] **Step 3: 본문 파서를 구현한다**
+- [x] **Step 3: 본문 파서를 구현한다**
 
 `web/lib/solve/teamRunRequestBody.ts` 를 새로 만든다:
 
@@ -1740,12 +1740,12 @@ export function toAdvanceBody(
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run lib/solve/teamRunRequestBody.test.ts`
 Expected: PASS (8개)
 
-- [ ] **Step 5: 라우트 여섯 개를 만든다**
+- [x] **Step 5: 라우트 여섯 개를 만든다**
 
 `web/app/api/solve/teams/route.ts`:
 
@@ -1892,7 +1892,7 @@ export async function POST(
 }
 ```
 
-- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -1921,7 +1921,7 @@ git commit -m "[ADD] 팀 바퀴 API 라우트"
   - `listTeams()`·`startTeamRun(departmentId, mode)`·`getRun(runId)`·`getLatestRun(departmentId)`·`advanceRun(runId, fromCursor, correct)`·`finishRun(runId)` — `apiClient/teamRuns.js`
   - `teamStateLabel(team): { text: string; kind: "progress" | "wrong" | "none" }` — `utils/teamRunLabel.js`
 
-- [ ] **Step 1: 표시 문구의 실패하는 테스트를 쓴다**
+- [x] **Step 1: 표시 문구의 실패하는 테스트를 쓴다**
 
 `web/utils/teamRunLabel.test.js` 를 새로 만든다:
 
@@ -1957,12 +1957,12 @@ describe("teamStateLabel", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+- [x] **Step 2: 테스트가 실패하는지 확인한다**
 
 Run: `cd web && npx vitest run utils/teamRunLabel.test.js`
 Expected: FAIL — `./teamRunLabel.js` 가 없다.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `web/utils/teamRunLabel.js` 를 새로 만든다:
 
@@ -1987,12 +1987,12 @@ export function teamStateLabel(team) {
 }
 ```
 
-- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+- [x] **Step 4: 테스트가 통과하는지 확인한다**
 
 Run: `cd web && npx vitest run utils/teamRunLabel.test.js`
 Expected: PASS (5개)
 
-- [ ] **Step 5: API 클라이언트를 만든다**
+- [x] **Step 5: API 클라이언트를 만든다**
 
 `web/apiClient/teamRuns.js` 를 새로 만든다:
 
@@ -2025,7 +2025,7 @@ export function finishRun(runId) {
 }
 ```
 
-- [ ] **Step 6: 팀 목록 화면을 만든다**
+- [x] **Step 6: 팀 목록 화면을 만든다**
 
 `web/screens/solve/SolveTeamListPage.jsx` 를 새로 만든다:
 
@@ -2158,7 +2158,7 @@ export default function SolveTeamListPage() {
 }
 ```
 
-- [ ] **Step 7: 라우트가 새 화면을 그리게 한다**
+- [x] **Step 7: 라우트가 새 화면을 그리게 한다**
 
 `web/app/(protected)/solve/problems/page.tsx` 를 연다. 지금은 `SolveProblemListPage` 를 그린다. 그 파일 전체를 다음으로 바꾼다(파일에 있던 `"use client"` 나 메타데이터 같은 다른 줄이 있으면 그대로 두고 import 와 반환 컴포넌트만 바꾼다):
 
@@ -2185,7 +2185,7 @@ export default function Page() {
           <p className="mt-1 text-body-small text-ink-muted">팀을 골라 그 팀 문제를 처음부터 끝까지 풉니다.</p>
 ```
 
-- [ ] **Step 8: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 8: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -2213,7 +2213,7 @@ git commit -m "[ADD] 팀 목록 화면"
 - Consumes: `listTeams`·`startTeamRun`·`getRun`·`advanceRun`·`finishRun`(Task 7), `ProblemSolveCard`(`components/solve/ProblemSolveCard.jsx`), `getSolveProblem`(`apiClient/solve.js`)
 - Produces: 없음(화면 종단)
 
-- [ ] **Step 1: 선택 화면을 만든다**
+- [x] **Step 1: 선택 화면을 만든다**
 
 `web/screens/solve/TeamRunChoicePage.jsx` 를 새로 만든다:
 
@@ -2319,7 +2319,7 @@ export default function TeamRunChoicePage() {
 }
 ```
 
-- [ ] **Step 2: 진행 화면을 만든다**
+- [x] **Step 2: 진행 화면을 만든다**
 
 `web/screens/solve/TeamRunPlayPage.jsx` 를 새로 만든다:
 
@@ -2483,7 +2483,7 @@ export default function TeamRunPlayPage() {
 }
 ```
 
-- [ ] **Step 3: 결과 화면을 만든다**
+- [x] **Step 3: 결과 화면을 만든다**
 
 `web/screens/solve/TeamRunResultPage.jsx` 를 새로 만든다:
 
@@ -2620,7 +2620,7 @@ export default function TeamRunResultPage() {
 }
 ```
 
-- [ ] **Step 4: 세 라우트를 만든다**
+- [x] **Step 4: 세 라우트를 만든다**
 
 세 파일 모두 **첫 줄이 `"use client";`** 다 — 화면이 훅을 쓰기 때문이다.
 
@@ -2664,7 +2664,7 @@ export default function Page() {
 }
 ```
 
-- [ ] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
+- [x] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
 
 ```bash
 cd web && npx vitest run
@@ -2689,7 +2689,7 @@ git commit -m "[ADD] 팀 바퀴 선택·진행·결과 화면"
 - Consumes: 없음
 - Produces: 없음(종단)
 
-- [ ] **Step 1: 지울 파일이 아무 데서도 안 쓰이는지 확인한다**
+- [x] **Step 1: 지울 파일이 아무 데서도 안 쓰이는지 확인한다**
 
 ```bash
 cd web && grep -rn "SolveProblemListPage\|ProblemSolvePage\|listSolveProblems" screens/ components/ app/ apiClient/ | grep -v node_modules
@@ -2697,7 +2697,7 @@ cd web && grep -rn "SolveProblemListPage\|ProblemSolvePage\|listSolveProblems" s
 
 기대: `apiClient/solve.js` 의 `listSolveProblems` 정의 한 줄만 남는다. 화면에서 이 셋을 import 하는 곳이 있으면 **지우지 말고 멈춰서 보고한다** — Task 7·8 이 덜 끝났다는 뜻이다.
 
-- [ ] **Step 2: 세 파일을 지운다**
+- [x] **Step 2: 세 파일을 지운다**
 
 ```bash
 cd web && rm screens/solve/SolveProblemListPage.jsx screens/solve/ProblemSolvePage.jsx "app/(protected)/solve/[id]/page.tsx"
@@ -2707,14 +2707,14 @@ cd web && rm screens/solve/SolveProblemListPage.jsx screens/solve/ProblemSolvePa
 
 **API 와 그 뒤의 쿼리·테스트는 지우지 마라.** `apiClient/solve.js` 의 `listSolveProblems`, `app/api/problems/route.ts`, `lib/db/solveProblems.ts` 의 `findActiveSolveProblems` 와 그 테스트는 그대로 둔다. 그 쿼리에는 옛 Spring 동작을 그대로 옮겼다는 기록(파리티 테스트 S5-1·S7·S9)이 붙어 있어, 지우면 이관 근거가 함께 사라진다.
 
-- [ ] **Step 3: 전체 스위트 + 타입 검사**
+- [x] **Step 3: 전체 스위트 + 타입 검사**
 
 ```bash
 cd web && npx vitest run
 cd web && npx tsc --noEmit
 ```
 
-- [ ] **Step 4: 빌드로 확인한다**
+- [x] **Step 4: 빌드로 확인한다**
 
 dev 서버가 떠 있으면 먼저 내린다(같은 `.next` 를 공유하면 화면이 "세션 확인 중..."에서 멈춘다).
 
@@ -2724,7 +2724,7 @@ cd web && rm -rf .next && npx next build
 
 기대: Errors 0, Warnings 0.
 
-- [ ] **Step 5: 브라우저로 실측한다**
+- [x] **Step 5: 브라우저로 실측한다**
 
 ```bash
 cd web && rm -rf .next && npx next dev -p 3300
@@ -2744,7 +2744,7 @@ cd web && rm -rf .next && npx next dev -p 3300
 - 옛 주소 `/solve/1` 로 직접 들어가면 404 가 난다
 - 콘솔 오류 0건
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add -A web/screens/solve "web/app/(protected)/solve"
