@@ -9,8 +9,8 @@ import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/
 import { submitAttempt } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
-import { resolveEnter } from "@/utils/blankFocus.js";
-import { blankHostField } from "@/lib/problem/blankHost";
+import { blankOrderFrom, resolveEnter } from "@/utils/blankFocus.js";
+import { blankHostField, blankHostText } from "@/lib/problem/blankHost";
 import { hasNoAnswer } from "@/utils/answerState.js";
 import { problemTypeLabel } from "@/utils/problemLabels.js";
 
@@ -91,6 +91,18 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
     problem.type === "FILL_BLANK" && blankHostField(problem.referenceText) === "content";
 
   /**
+   * 화면에 그려진 칸 차례. 엔터가 "다음 칸"을 찾을 때 쓴다.
+   *
+   * problem.blanksToAnswer 를 쓰면 안 된다 — 서버가 섞어 내려주므로 화면 차례와 다르다
+   * (utils/blankFocus.js 의 blankOrderFrom 주석).
+   */
+  const blankOrder = useMemo(() => {
+    if (problem.type !== "FILL_BLANK") return [];
+    const hostText = blankHostText(problem.content, problem.referenceText);
+    return blankOrderFrom(parseBlankContent(hostText, problem.blanksToAnswer ?? [], revealedAnswers));
+  }, [problem, revealedAnswers]);
+
+  /**
    * 엔터를 제출로 받을 수 있는 상태인지. 제출 버튼과 같은 조건을 쓴다 — 버튼이 잠겨
    * 있는데 엔터로는 낼 수 있으면 두 길이 어긋난다.
    *
@@ -117,7 +129,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
   function handleBlankKeyDown(event, blankKey) {
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
     event.preventDefault();
-    const next = resolveEnter(problem.blanksToAnswer, blankKey);
+    const next = resolveEnter(blankOrder, blankKey);
     if (next.action === "focus") {
       blankRefs.current[next.key]?.focus();
       return;
