@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
+import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
 
 /**
  * 직원 학습 홈. 랜덤으로 풀거나, 골라서 풀거나, 본인 풀이 이력을 확인하는 착지 지점이다.
@@ -47,6 +48,10 @@ export default function SolveHomePage() {
           </p>
           <p className="mt-1 text-body-small text-ink-muted">지금까지 제출한 문제와 정답 여부를 확인합니다.</p>
         </Surface>
+      </div>
+
+      <div className="mt-4">
+        <HallOfFameCard />
       </div>
     </>
   );
