@@ -1,0 +1,991 @@
+# 문제 풀이 명예의 전당 구현 계획
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 전 사용자의 맞힌 개수로 이번 달·전체 기간 순위를 매겨 학습 홈에 보여 준다.
+
+**Architecture:** DB 는 사람 한 명당 한 행을 **정렬된 채로** 낸다. 순위를 매기고 동점을 줄로 접는 일은 DB 를 모르는 순수 함수가 한다 — 목록 순위와 내 순위가 **같은 함수**에서 나오므로 두 숫자가 어긋날 수 없다. 새 표도 마이그레이션도 없다.
+
+**Tech Stack:** Next.js 15 (App Router), Drizzle ORM, Postgres, Vitest, Tailwind
+
+**Spec:** `docs/superpowers/specs/2026-09-03-hall-of-fame-design.md`
+
+## Global Constraints
+
+- 응답 봉투는 `{ resultCode, resultMsg, data }` 다. 라우트는 `handleRoute` 로 감싸고 서비스가 `data` 를 그대로 반환한다.
+- **맞힌 개수**로 줄 세운다. `attempts.is_correct = true` 인 행을 그대로 센다 — 같은 문제를 여러 번 맞히면 그만큼 센다.
+- 대상은 **`users.status = 'ACTIVE'` 인 전 사용자**다. 관리자도 포함한다. 부서 상태는 보지 않는다.
+- 정렬은 **맞힌 개수 내림차순 → 마지막 정답 시각 오름차순 → 사용자 번호 오름차순**이다. 세 번째 항이 없으면 화면에 보이는 대표 이름이 새로고침마다 바뀐다.
+- 순위는 **`DENSE_RANK` 의미**다 — 동점은 같은 순위이고 다음 줄은 바로 다음 숫자다(1위가 5명이어도 다음은 2위).
+- 이번 달 경계는 **서울 기준 1일 0시**이며 SQL 은 아래 한 가지 표현만 쓴다:
+  `((date_trunc('month', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'UTC')`
+- **postgres.js 는 `COUNT`·`SUM` 을 문자열로 준다**(`lib/db/stats.ts:36` 주석). 집계값에는 반드시 `::int` 를 붙인다.
+- 원시 SQL 결과는 **`executeRows<T>`**(`lib/db/raw.ts:5`)로 받는다. 직접 `as unknown as` 하지 않는다.
+- 전체 검증은 `cd web && npx vitest run` 과 `cd web && npx tsc --noEmit` 이다.
+- **`next build` 를 dev 서버와 동시에 돌리지 마라.** 같은 `.next` 를 공유해 화면이 "세션 확인 중..."에서 멈춘다.
+
+## 이 계획의 설계서 대비 판단 두 가지
+
+**① 순위를 SQL 창 함수가 아니라 순수 함수에서 매긴다.** 설계서는 "`DENSE_RANK` 로 매긴다"고 적었는데, 이 계획은 SQL 이 정렬만 하고 순위는 JS 가 붙인다. 결과는 같고, 이렇게 하면 **목록 순위와 내 순위가 같은 함수에서 나와** 두 숫자가 구조적으로 어긋날 수 없다. 설계서가 막으려던 결함이 바로 그것이다.
+
+**② 접는 로직을 서비스 파일이 아니라 옆 파일에 둔다.** 설계서는 "순수 함수로 떼어 서비스에 둔다"고 적었다. 서비스는 DB 를 부르므로 같은 파일에 두면 순수 함수 테스트에도 DB 가 필요해진다. 파일을 나눠 DB 없이 테스트한다.
+
+## 파일 구조
+
+| 파일 | 책임 |
+|---|---|
+| `web/lib/db/hallOfFame.ts` (신규) | 기간별 사용자 집계 질의. 정렬까지 한다 |
+| `web/lib/solve/hallOfFameRanking.ts` (신규) | 순수 함수 — 순위 매기기·동점 접기·내 순위 찾기 |
+| `web/lib/solve/hallOfFameService.ts` (신규) | 두 기간을 묶어 응답을 만든다 |
+| `web/app/api/solve/hall-of-fame/route.ts` (신규) | 창구 |
+| `web/apiClient/hallOfFame.js` (신규) | 클라이언트 |
+| `web/components/solve/HallOfFameCard.jsx` (신규) | 카드·탭·"외 N명" 펼침 |
+| `web/screens/solve/SolveHomePage.jsx` | 카드 한 줄 추가 |
+
+---
+
+### Task 1: 기간별 집계 질의
+
+**Files:**
+- Create: `web/lib/db/hallOfFame.ts`
+- Test: `web/lib/db/hallOfFame.test.ts`
+
+**Interfaces:**
+- Consumes: `executeRows<T>`(`web/lib/db/raw.ts`)
+- Produces:
+  - `type Period = "MONTH" | "ALL"`
+  - `type HallOfFameRow = { userId: number; name: string; departmentName: string; correctCount: number; lastCorrectAt: string }`
+  - `findCorrectCountsByUser(db: DbConn, period: Period): Promise<HallOfFameRow[]>` — 정렬된 채로 돌아온다
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`web/lib/db/hallOfFame.test.ts` 를 새로 만든다:
+
+```typescript
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { migrateTestDb, testDb, truncateAll } from "../../test/db";
+import { attempts, departments, problems, users } from "./schema";
+import { findCorrectCountsByUser } from "./hallOfFame";
+
+const db = testDb();
+let planId = 0;
+let salesId = 0;
+let problemId = 0;
+let otherProblemId = 0;
+
+async function seedUser(employeeNo: string, name: string, over: Partial<typeof users.$inferInsert> = {}) {
+  const [row] = await db.insert(users).values({
+    employeeNo, name, email: `${employeeNo}@b.c`, passwordHash: "x",
+    departmentId: planId, role: "EMPLOYEE", status: "ACTIVE", mustChangePassword: false, ...over,
+  }).returning({ id: users.id });
+  return row.id;
+}
+
+async function seedAttempt(userId: number, isCorrect: boolean, at: string, pid = problemId) {
+  await db.insert(attempts).values({
+    userId, problemId: pid, isCorrect, submittedAt: new Date(at),
+  });
+}
+
+beforeAll(async () => { await migrateTestDb(); });
+beforeEach(async () => {
+  await truncateAll();
+  [{ id: planId }] = await db.insert(departments)
+    .values({ name: "기획팀", code: "PLAN", status: "ACTIVE" }).returning({ id: departments.id });
+  [{ id: salesId }] = await db.insert(departments)
+    .values({ name: "영업팀", code: "SALES", status: "ACTIVE" }).returning({ id: departments.id });
+  const author = await seedUser("author", "출제자");
+  [{ id: problemId }] = await db.insert(problems).values({
+    type: "OX", content: "문제", departmentId: planId, status: "ACTIVE",
+    createdBy: author, sourceNumber: 1,
+  }).returning({ id: problems.id });
+  [{ id: otherProblemId }] = await db.insert(problems).values({
+    type: "OX", content: "다른 문제", departmentId: planId, status: "ACTIVE",
+    createdBy: author, sourceNumber: 2,
+  }).returning({ id: problems.id });
+});
+
+describe("findCorrectCountsByUser — ALL", () => {
+  it("맞힌 것만 세고 오답은 빼놓는다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    await seedAttempt(me, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(me, false, "2026-09-01T02:00:00Z");
+
+    const rows = await findCorrectCountsByUser(db, "ALL");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ userId: me, name: "김하나", departmentName: "기획팀", correctCount: 1 });
+  });
+
+  it("같은 문제를 두 번 맞히면 2로 센다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    await seedAttempt(me, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(me, true, "2026-09-01T02:00:00Z");
+
+    expect((await findCorrectCountsByUser(db, "ALL"))[0].correctCount).toBe(2);
+  });
+
+  it("서로 다른 문제를 맞히면 합쳐 센다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    await seedAttempt(me, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(me, true, "2026-09-01T02:00:00Z", otherProblemId);
+
+    expect((await findCorrectCountsByUser(db, "ALL"))[0].correctCount).toBe(2);
+  });
+
+  it("비활성 계정은 빼놓는다", async () => {
+    const gone = await seedUser("emp1", "퇴사자", { status: "INACTIVE" });
+    await seedAttempt(gone, true, "2026-09-01T01:00:00Z");
+
+    expect(await findCorrectCountsByUser(db, "ALL")).toEqual([]);
+  });
+
+  it("한 번도 안 맞힌 사람은 아예 나오지 않는다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    await seedAttempt(me, false, "2026-09-01T01:00:00Z");
+
+    expect(await findCorrectCountsByUser(db, "ALL")).toEqual([]);
+  });
+
+  it("맞힌 개수 내림차순, 같으면 마지막 정답이 이른 사람이 앞이다", async () => {
+    const many = await seedUser("emp1", "많이");
+    const early = await seedUser("emp2", "일찍");
+    const late = await seedUser("emp3", "늦게");
+    await seedAttempt(many, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(many, true, "2026-09-01T02:00:00Z");
+    await seedAttempt(early, true, "2026-09-01T03:00:00Z");
+    await seedAttempt(late, true, "2026-09-01T04:00:00Z");
+
+    expect((await findCorrectCountsByUser(db, "ALL")).map((r) => r.name)).toEqual(["많이", "일찍", "늦게"]);
+  });
+
+  it("개수와 마지막 시각이 모두 같으면 사용자 번호가 작은 쪽이 앞이다", async () => {
+    const first = await seedUser("emp1", "먼저");
+    const second = await seedUser("emp2", "나중");
+    await seedAttempt(first, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(second, true, "2026-09-01T01:00:00Z");
+
+    expect((await findCorrectCountsByUser(db, "ALL")).map((r) => r.name)).toEqual(["먼저", "나중"]);
+    expect(first).toBeLessThan(second);
+  });
+
+  it("다른 부서 사람도 함께 나온다 — 부서로 거르지 않는다", async () => {
+    const mine = await seedUser("emp1", "기획");
+    const yours = await seedUser("emp2", "영업", { departmentId: salesId });
+    await seedAttempt(mine, true, "2026-09-01T01:00:00Z");
+    await seedAttempt(yours, true, "2026-09-01T02:00:00Z");
+
+    expect((await findCorrectCountsByUser(db, "ALL")).map((r) => r.departmentName)).toEqual(["기획팀", "영업팀"]);
+  });
+});
+
+describe("findCorrectCountsByUser — MONTH", () => {
+  /**
+   * 서울 기준 이번 달 1일 0시 = UTC 로 지난달 말일 15시.
+   * 그 직전 1분과 직후 1분을 심어, 경계가 서울 기준인지 UTC 기준인지 갈라낸다.
+   * UTC 기준으로 자르면 둘 다 이번 달로 들어와 이 테스트가 깨진다.
+   */
+  function monthBoundaryUtc(): Date {
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), 1) - 9 * 60 * 60 * 1000);
+  }
+
+  it("서울 기준 이달 1일 0시 이전 기록은 빠진다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    const boundary = monthBoundaryUtc();
+    await seedAttempt(me, true, new Date(boundary.getTime() - 60_000).toISOString());
+    await seedAttempt(me, true, new Date(boundary.getTime() + 60_000).toISOString());
+
+    expect((await findCorrectCountsByUser(db, "MONTH"))[0].correctCount).toBe(1);
+    expect((await findCorrectCountsByUser(db, "ALL"))[0].correctCount).toBe(2);
+  });
+
+  it("이번 달에 맞힌 것이 없으면 빈 목록이다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    const boundary = monthBoundaryUtc();
+    await seedAttempt(me, true, new Date(boundary.getTime() - 60_000).toISOString());
+
+    expect(await findCorrectCountsByUser(db, "MONTH")).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `cd web && node node_modules/vitest/vitest.mjs run lib/db/hallOfFame.test.ts`
+Expected: FAIL — `./hallOfFame` 모듈이 없다.
+
+**vitest 실행은 `node node_modules/vitest/vitest.mjs run` 을 쓴다.** `npx vitest` 는 이 환경의 래퍼가 출력을 삼켜 실패 내용을 못 본다(2026-09-03 실측).
+
+- [ ] **Step 3: 구현한다**
+
+`web/lib/db/hallOfFame.ts` 를 새로 만든다:
+
+```typescript
+import { sql } from "drizzle-orm";
+import type { DbConn } from "./client";
+import { executeRows } from "./raw";
+
+export type Period = "MONTH" | "ALL";
+
+export type HallOfFameRow = {
+  userId: number;
+  name: string;
+  departmentName: string;
+  correctCount: number;
+  /** 동점 순서를 가르는 값. 화면에 나가지 않는다. */
+  lastCorrectAt: string;
+};
+
+/**
+ * 서울 기준 이번 달 1일 0시를, 시간대 없는 UTC 값으로 옮긴 것.
+ *
+ * attempts.submitted_at 은 시간대 없는 컬럼이고 값은 UTC 로 들어간다. 변환 없이 비교하면
+ * **매달 1일 오전 9시간 동안 지난달 기록이 섞여 들어온다.** 2026-09-03 실측으로 이 식은
+ * 서버 TimeZone 이 Etc/UTC 일 때 '2026-08-31 15:00:00' 을 냈다 — 서울 9월 1일 0시다.
+ */
+const MONTH_START = sql`((date_trunc('month', now() AT TIME ZONE 'Asia/Seoul')
+  AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'UTC')`;
+
+/**
+ * 사람 한 명당 한 행. **정렬까지 여기서 끝낸다** — 순위를 매기는 순수 함수는 이 순서를
+ * 그대로 믿는다(lib/solve/hallOfFameRanking.ts).
+ *
+ * 정렬은 맞힌 개수 내림차순 → 마지막 정답이 이른 순 → 사용자 번호 순이다. 마지막 항이
+ * 없으면 개수와 시각이 모두 같은 두 사람의 순서가 실행마다 달라져, 화면에 보이는 대표
+ * 이름이 새로고침마다 바뀐다.
+ *
+ * 집계값에 ::int 를 붙이는 이유는 postgres.js 가 COUNT 를 문자열로 주기 때문이다
+ * (lib/db/stats.ts:36 의 같은 주석).
+ */
+export async function findCorrectCountsByUser(db: DbConn, period: Period): Promise<HallOfFameRow[]> {
+  const periodFilter = period === "MONTH" ? sql`AND a.submitted_at >= ${MONTH_START}` : sql``;
+  return executeRows<HallOfFameRow>(db, sql`
+    SELECT u.id::int AS "userId", u.name, d.name AS "departmentName",
+           count(*)::int AS "correctCount",
+           max(a.submitted_at)::text AS "lastCorrectAt"
+    FROM attempts a
+    JOIN users u ON u.id = a.user_id
+    JOIN departments d ON d.id = u.department_id
+    WHERE a.is_correct = true AND u.status = 'ACTIVE' ${periodFilter}
+    GROUP BY u.id, u.name, d.name
+    ORDER BY count(*) DESC, max(a.submitted_at) ASC, u.id ASC
+  `);
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `cd web && node node_modules/vitest/vitest.mjs run lib/db/hallOfFame.test.ts`
+Expected: PASS (9개)
+
+- [ ] **Step 5: 변이 테스트 세 가지**
+
+각각 하나씩 되돌려 가며 확인한다.
+
+첫째. `ORDER BY` 에서 `, u.id ASC` 를 지운다 → "개수와 마지막 시각이 모두 같으면 사용자 번호가 작은 쪽이 앞이다" 가 깨져야 한다.
+
+둘째. `MONTH_START` 에서 마지막 `AT TIME ZONE 'UTC'` 를 지운다 → 월 경계 테스트가 깨져야 한다.
+
+셋째. `WHERE` 에서 `u.status = 'ACTIVE'` 를 지운다 → "비활성 계정은 빼놓는다" 가 깨져야 한다.
+
+세 변이가 모두 해당 테스트를 깨뜨렸으면 원상복구하고 다시 PASS 를 확인한다.
+
+- [ ] **Step 6: 전체 스위트 + 타입 검사 + 커밋**
+
+```bash
+cd web && node node_modules/vitest/vitest.mjs run
+cd web && npx tsc --noEmit
+```
+
+```bash
+git add web/lib/db/hallOfFame.ts web/lib/db/hallOfFame.test.ts
+git commit -m "[ADD] 명예의 전당 기간별 집계 질의"
+```
+
+---
+
+### Task 2: 순위 매기기 순수 함수
+
+**Files:**
+- Create: `web/lib/solve/hallOfFameRanking.ts`
+- Test: `web/lib/solve/hallOfFameRanking.test.ts`
+
+**Interfaces:**
+- Consumes: `HallOfFameRow`(Task 1)
+- Produces:
+  - `MAX_OTHERS = 10`, `TOP_ROWS = 3`
+  - `type Person = { userId: number; name: string; departmentName: string }`
+  - `type RankRow = { rank: number; correctCount: number; leader: Person; others: Person[]; otherCount: number }`
+  - `type MyRank = { rank: number; correctCount: number }`
+  - `buildTopRows(rows: HallOfFameRow[]): RankRow[]`
+  - `findMyRank(rows: HallOfFameRow[], userId: number): MyRank | null`
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`web/lib/solve/hallOfFameRanking.test.ts` 를 새로 만든다:
+
+```typescript
+import { describe, it, expect } from "vitest";
+import type { HallOfFameRow } from "../db/hallOfFame";
+import { buildTopRows, findMyRank, MAX_OTHERS } from "./hallOfFameRanking";
+
+// 입력은 DB 가 이미 정렬해 준 순서다(개수 내림차순 → 마지막 정답 이른 순 → id 순).
+function row(userId: number, name: string, correctCount: number): HallOfFameRow {
+  return { userId, name, departmentName: "기획팀", correctCount, lastCorrectAt: "2026-09-01 00:00:00" };
+}
+
+describe("buildTopRows", () => {
+  it("동점은 한 줄로 접고 대표는 맨 앞 사람이다", () => {
+    const out = buildTopRows([row(1, "가", 5), row(2, "나", 5), row(3, "다", 3)]);
+    expect(out).toHaveLength(2);
+    expect(out[0].rank).toBe(1);
+    expect(out[0].leader.name).toBe("가");
+    expect(out[0].others.map((p) => p.name)).toEqual(["나"]);
+    expect(out[0].otherCount).toBe(1);
+  });
+
+  it("동점 다음 줄은 바로 다음 숫자다 — 6위로 건너뛰지 않는다", () => {
+    const out = buildTopRows([
+      row(1, "가", 5), row(2, "나", 5), row(3, "다", 5),
+      row(4, "라", 3),
+    ]);
+    expect(out.map((r) => r.rank)).toEqual([1, 2]);
+    expect(out[1].leader.name).toBe("라");
+  });
+
+  it("줄은 최대 세 개다", () => {
+    const out = buildTopRows([row(1, "가", 5), row(2, "나", 4), row(3, "다", 3), row(4, "라", 2)]);
+    expect(out.map((r) => r.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("동점 무리를 쪼개지 않는다 — 세 번째 줄에 다섯 명이면 다섯 명 다 담는다", () => {
+    const out = buildTopRows([
+      row(1, "가", 9), row(2, "나", 8),
+      row(3, "다", 7), row(4, "라", 7), row(5, "마", 7), row(6, "바", 7), row(7, "사", 7),
+    ]);
+    expect(out[2].otherCount).toBe(4);
+    expect(out[2].others.map((p) => p.name)).toEqual(["라", "마", "바", "사"]);
+  });
+
+  it("동점자가 많으면 목록은 10명까지만 담되 인원수는 실제 수를 적는다", () => {
+    const rows = Array.from({ length: 30 }, (_, i) => row(i + 1, `사람${i + 1}`, 5));
+    const out = buildTopRows(rows);
+    expect(out[0].leader.name).toBe("사람1");
+    expect(out[0].others).toHaveLength(MAX_OTHERS);
+    expect(out[0].otherCount).toBe(29);
+  });
+
+  it("혼자면 others 는 비고 인원수는 0이다", () => {
+    const out = buildTopRows([row(1, "가", 5)]);
+    expect(out[0].others).toEqual([]);
+    expect(out[0].otherCount).toBe(0);
+  });
+
+  it("아무도 없으면 빈 배열이다", () => {
+    expect(buildTopRows([])).toEqual([]);
+  });
+});
+
+describe("findMyRank", () => {
+  it("목록과 같은 순위 값을 준다", () => {
+    const rows = [row(1, "가", 5), row(2, "나", 5), row(3, "다", 3)];
+    expect(findMyRank(rows, 2)).toEqual({ rank: 1, correctCount: 5 });
+    expect(buildTopRows(rows)[0].rank).toBe(1);
+  });
+
+  it("상위 세 줄 밖에 있어도 순위를 준다", () => {
+    const rows = [row(1, "가", 9), row(2, "나", 8), row(3, "다", 7), row(4, "라", 6), row(5, "마", 5)];
+    expect(findMyRank(rows, 5)).toEqual({ rank: 5, correctCount: 5 });
+  });
+
+  it("맞힌 것이 없어 목록에 없으면 null 이다", () => {
+    expect(findMyRank([row(1, "가", 5)], 99)).toBeNull();
+  });
+
+  it("아무도 없으면 null 이다", () => {
+    expect(findMyRank([], 1)).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameRanking.test.ts`
+Expected: FAIL — `./hallOfFameRanking` 모듈이 없다.
+
+- [ ] **Step 3: 구현한다**
+
+`web/lib/solve/hallOfFameRanking.ts` 를 새로 만든다:
+
+```typescript
+import type { HallOfFameRow } from "../db/hallOfFame";
+
+/** 펼침 목록에 담는 최대 인원. 나머지는 "외 N명 더"로 접는다. */
+export const MAX_OTHERS = 10;
+
+/** 화면에 보여 줄 줄 수. 사람 수가 아니라 순위 수다. */
+export const TOP_ROWS = 3;
+
+export type Person = { userId: number; name: string; departmentName: string };
+
+export type RankRow = {
+  rank: number;
+  correctCount: number;
+  leader: Person;
+  /** 대표 외 동점자. 최대 MAX_OTHERS 명. */
+  others: Person[];
+  /** 대표 외 전체 인원. MAX_OTHERS 를 넘어도 실제 수를 담는다. */
+  otherCount: number;
+};
+
+export type MyRank = { rank: number; correctCount: number };
+
+type Group = { rank: number; correctCount: number; members: HallOfFameRow[] };
+
+function toPerson(r: HallOfFameRow): Person {
+  return { userId: r.userId, name: r.name, departmentName: r.departmentName };
+}
+
+/**
+ * 정렬된 행을 맞힌 개수가 같은 무리로 묶고 순위를 붙인다.
+ *
+ * 순위는 무리의 차례다 — 1위가 5명이어도 다음 무리는 2위다(DENSE_RANK 와 같은 뜻).
+ * 목록과 내 순위가 **이 함수 하나에서** 나오므로 두 숫자가 어긋날 수 없다. 각자 계산하면
+ * 한쪽이 공동 순위, 다른 쪽이 총 순서가 되어 같은 사람이 3위와 1위로 동시에 보인다.
+ *
+ * 입력이 개수 내림차순으로 정렬돼 있다는 전제다(lib/db/hallOfFame.ts 의 ORDER BY).
+ */
+function toGroups(rows: HallOfFameRow[]): Group[] {
+  const groups: Group[] = [];
+  for (const r of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.correctCount === r.correctCount) {
+      last.members.push(r);
+    } else {
+      groups.push({ rank: groups.length + 1, correctCount: r.correctCount, members: [r] });
+    }
+  }
+  return groups;
+}
+
+export function buildTopRows(rows: HallOfFameRow[]): RankRow[] {
+  return toGroups(rows).slice(0, TOP_ROWS).map((g) => {
+    const [leader, ...rest] = g.members;
+    return {
+      rank: g.rank,
+      correctCount: g.correctCount,
+      leader: toPerson(leader),
+      others: rest.slice(0, MAX_OTHERS).map(toPerson),
+      otherCount: rest.length,
+    };
+  });
+}
+
+export function findMyRank(rows: HallOfFameRow[], userId: number): MyRank | null {
+  for (const g of toGroups(rows)) {
+    if (g.members.some((m) => m.userId === userId)) {
+      return { rank: g.rank, correctCount: g.correctCount };
+    }
+  }
+  return null;
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameRanking.test.ts`
+Expected: PASS (11개)
+
+- [ ] **Step 5: 변이 테스트 두 가지**
+
+첫째. `toGroups` 의 `rank: groups.length + 1` 을 `rank: rows.indexOf(r) + 1` 로 바꾼다(총 순서로 만든다) → "동점 다음 줄은 바로 다음 숫자다" 가 깨져야 한다. 되돌린다.
+
+둘째. `buildTopRows` 의 `others: rest.slice(0, MAX_OTHERS)` 에서 `.slice(0, MAX_OTHERS)` 를 지운다 → "동점자가 많으면 목록은 10명까지만" 이 깨져야 한다. 되돌린다.
+
+되돌린 뒤 다시 PASS 를 확인한다.
+
+- [ ] **Step 6: 커밋**
+
+```bash
+git add web/lib/solve/hallOfFameRanking.ts web/lib/solve/hallOfFameRanking.test.ts
+git commit -m "[ADD] 명예의 전당 순위 매기기 순수 함수"
+```
+
+---
+
+### Task 3: 서비스
+
+**Files:**
+- Create: `web/lib/solve/hallOfFameService.ts`
+- Test: `web/lib/solve/hallOfFameService.test.ts`
+
+**Interfaces:**
+- Consumes: `findCorrectCountsByUser`(Task 1), `buildTopRows`·`findMyRank`·`RankRow`·`MyRank`(Task 2), `AuthUser`(`lib/auth/types.ts` — 필드는 `userId`·`role`·`departmentId` 등)
+- Produces:
+  - `type PeriodBoard = { top: RankRow[]; me: MyRank | null }`
+  - `type HallOfFame = { month: PeriodBoard; allTime: PeriodBoard }`
+  - `getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOfFame>`
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`web/lib/solve/hallOfFameService.test.ts` 를 새로 만든다:
+
+```typescript
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { migrateTestDb, testDb, truncateAll } from "../../test/db";
+import { attempts, departments, problems, users } from "../db/schema";
+import type { AuthUser } from "../auth/types";
+import { getHallOfFame } from "./hallOfFameService";
+
+const db = testDb();
+let planId = 0;
+let problemId = 0;
+let actor: AuthUser;
+
+async function seedUser(employeeNo: string, name: string) {
+  const [row] = await db.insert(users).values({
+    employeeNo, name, email: `${employeeNo}@b.c`, passwordHash: "x",
+    departmentId: planId, role: "EMPLOYEE", status: "ACTIVE", mustChangePassword: false,
+  }).returning({ id: users.id });
+  return row.id;
+}
+
+async function seedAttempt(userId: number, isCorrect: boolean, at: string) {
+  await db.insert(attempts).values({ userId, problemId, isCorrect, submittedAt: new Date(at) });
+}
+
+/** 서울 기준 이번 달 1일 0시를 UTC 로 옮긴 시각. */
+function monthBoundaryUtc(): Date {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), 1) - 9 * 60 * 60 * 1000);
+}
+
+beforeAll(async () => { await migrateTestDb(); });
+beforeEach(async () => {
+  await truncateAll();
+  [{ id: planId }] = await db.insert(departments)
+    .values({ name: "기획팀", code: "PLAN", status: "ACTIVE" }).returning({ id: departments.id });
+  const author = await seedUser("author", "출제자");
+  [{ id: problemId }] = await db.insert(problems).values({
+    type: "OX", content: "문제", departmentId: planId, status: "ACTIVE",
+    createdBy: author, sourceNumber: 1,
+  }).returning({ id: problems.id });
+  const me = await seedUser("emp1", "김하나");
+  actor = {
+    userId: me, employeeNo: "emp1", name: "김하나", role: "EMPLOYEE",
+    departmentId: planId, mustChangePassword: false,
+  };
+});
+
+describe("getHallOfFame", () => {
+  it("아무도 맞히지 않았으면 두 기간 모두 비어 있다", async () => {
+    const out = await getHallOfFame(db, actor);
+    expect(out.month).toEqual({ top: [], me: null });
+    expect(out.allTime).toEqual({ top: [], me: null });
+  });
+
+  it("내 순위가 목록의 순위와 같은 값이다", async () => {
+    const rival = await seedUser("emp2", "이둘");
+    const now = new Date().toISOString();
+    await seedAttempt(rival, true, now);
+    await seedAttempt(actor.userId, true, now);
+
+    const out = await getHallOfFame(db, actor);
+    // 둘 다 1개라 공동 1위다.
+    expect(out.allTime.top).toHaveLength(1);
+    expect(out.allTime.top[0].rank).toBe(1);
+    expect(out.allTime.me?.rank).toBe(1);
+  });
+
+  it("이번 달과 전체 기간이 서로 다른 숫자를 낸다", async () => {
+    const boundary = monthBoundaryUtc();
+    await seedAttempt(actor.userId, true, new Date(boundary.getTime() - 60_000).toISOString());
+    await seedAttempt(actor.userId, true, new Date(boundary.getTime() + 60_000).toISOString());
+
+    const out = await getHallOfFame(db, actor);
+    expect(out.month.me?.correctCount).toBe(1);
+    expect(out.allTime.me?.correctCount).toBe(2);
+  });
+
+  it("내가 맞힌 것이 없으면 me 는 null 이고 남의 순위는 그대로 나온다", async () => {
+    const rival = await seedUser("emp2", "이둘");
+    await seedAttempt(rival, true, new Date().toISOString());
+
+    const out = await getHallOfFame(db, actor);
+    expect(out.allTime.top[0].leader.name).toBe("이둘");
+    expect(out.allTime.me).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: 테스트가 실패하는지 확인한다**
+
+Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameService.test.ts`
+Expected: FAIL — `./hallOfFameService` 모듈이 없다.
+
+- [ ] **Step 3: 구현한다**
+
+`web/lib/solve/hallOfFameService.ts` 를 새로 만든다:
+
+```typescript
+import type { DbConn } from "../db/client";
+import { findCorrectCountsByUser } from "../db/hallOfFame";
+import { buildTopRows, findMyRank, type MyRank, type RankRow } from "./hallOfFameRanking";
+import type { AuthUser } from "../auth/types";
+
+export type PeriodBoard = { top: RankRow[]; me: MyRank | null };
+export type HallOfFame = { month: PeriodBoard; allTime: PeriodBoard };
+
+/**
+ * 두 기간의 순위표를 함께 만든다.
+ *
+ * 같은 기간의 목록과 내 순위는 **같은 행 묶음**에서 뽑는다. 각각 따로 질의하면 그 사이에
+ * 누가 문제를 맞혔을 때 두 숫자가 어긋난다.
+ */
+export async function getHallOfFame(db: DbConn, actor: AuthUser): Promise<HallOfFame> {
+  const monthRows = await findCorrectCountsByUser(db, "MONTH");
+  const allRows = await findCorrectCountsByUser(db, "ALL");
+  return {
+    month: { top: buildTopRows(monthRows), me: findMyRank(monthRows, actor.userId) },
+    allTime: { top: buildTopRows(allRows), me: findMyRank(allRows, actor.userId) },
+  };
+}
+```
+
+- [ ] **Step 4: 테스트가 통과하는지 확인한다**
+
+Run: `cd web && node node_modules/vitest/vitest.mjs run lib/solve/hallOfFameService.test.ts`
+Expected: PASS (4개)
+
+- [ ] **Step 5: 전체 스위트 + 타입 검사 + 커밋**
+
+```bash
+cd web && node node_modules/vitest/vitest.mjs run
+cd web && npx tsc --noEmit
+```
+
+```bash
+git add web/lib/solve/hallOfFameService.ts web/lib/solve/hallOfFameService.test.ts
+git commit -m "[ADD] 명예의 전당 서비스"
+```
+
+---
+
+### Task 4: 창구와 클라이언트
+
+**Files:**
+- Create: `web/app/api/solve/hall-of-fame/route.ts`
+- Create: `web/apiClient/hallOfFame.js`
+
+**Interfaces:**
+- Consumes: `getHallOfFame`(Task 3)
+- Produces: `fetchHallOfFame()` — `apiClient/hallOfFame.js`
+
+- [ ] **Step 1: 라우트를 만든다**
+
+`web/app/api/solve/hall-of-fame/route.ts`:
+
+```typescript
+import { getDb } from "@/lib/db/client";
+import { handleRoute } from "@/lib/http/errors";
+import { requireActor } from "@/lib/auth/currentUser";
+import { getHallOfFame } from "@/lib/solve/hallOfFameService";
+
+export const runtime = "nodejs";
+
+// 역할 제한이 없다 — 로그인만 하면 본다. 순위에는 관리자도 함께 들어간다.
+export async function GET(): Promise<Response> {
+  return handleRoute(async () => {
+    const actor = await requireActor();
+    return getHallOfFame(getDb(), actor);
+  });
+}
+```
+
+- [ ] **Step 2: 클라이언트를 만든다**
+
+`web/apiClient/hallOfFame.js`:
+
+```javascript
+import { apiGet } from "@/apiClient/client.js";
+
+export function fetchHallOfFame() {
+  return apiGet("/api/solve/hall-of-fame");
+}
+```
+
+- [ ] **Step 3: 전체 스위트 + 타입 검사 + 커밋**
+
+```bash
+cd web && node node_modules/vitest/vitest.mjs run
+cd web && npx tsc --noEmit
+```
+
+```bash
+git add web/app/api/solve/hall-of-fame web/apiClient/hallOfFame.js
+git commit -m "[ADD] 명예의 전당 창구"
+```
+
+---
+
+### Task 5: 화면
+
+**Files:**
+- Create: `web/components/solve/HallOfFameCard.jsx`
+- Modify: `web/screens/solve/SolveHomePage.jsx`
+
+**Interfaces:**
+- Consumes: `fetchHallOfFame()`(Task 4), `Surface`(`components/ui/Surface.jsx`), `resolveErrorMessage`(`apiClient/client.js`)
+- Produces: 없음(화면 종단)
+
+- [ ] **Step 1: 카드를 만든다**
+
+`web/components/solve/HallOfFameCard.jsx` 를 새로 만든다:
+
+```jsx
+import { useEffect, useId, useState } from "react";
+import { Trophy } from "@phosphor-icons/react";
+import Surface from "@/components/ui/Surface.jsx";
+import { fetchHallOfFame } from "@/apiClient/hallOfFame.js";
+import { resolveErrorMessage } from "@/apiClient/client.js";
+
+const TABS = [
+  { key: "month", label: "이번 달" },
+  { key: "allTime", label: "전체 기간" },
+];
+
+/**
+ * 동점자 목록을 여는 작은 펼침.
+ *
+ * components/ui 에 툴팁이 없어 여기서만 쓰는 것으로 둔다(2026-09-03 확인). 마우스를
+ * 올리거나 키보드 포커스가 닿으면 열리고, 누르면 고정된다 — **휴대폰에는 마우스 올리기가
+ * 없어서** 누르기를 함께 받아야 한다. Esc 로 닫는다.
+ */
+function OtherNames({ others, otherCount }) {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const panelId = useId();
+  const hiddenCount = otherCount - others.length;
+
+  useEffect(() => {
+    if (!pinned) return undefined;
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        setPinned(false);
+        setOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [pinned]);
+
+  const visible = open || pinned;
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        aria-expanded={visible}
+        aria-controls={panelId}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setPinned((v) => !v)}
+        className="ml-1 rounded-sm text-body-small font-medium text-action-secondary-text underline decoration-dotted underline-offset-2 focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+      >
+        외 {otherCount}명
+      </button>
+      {visible && (
+        <span
+          id={panelId}
+          role="tooltip"
+          className="absolute left-0 top-full z-10 mt-1 block w-max max-w-[240px] rounded-md border border-line-default bg-surface-default p-3 shadow-raised"
+        >
+          <span className="block space-y-1">
+            {others.map((p) => (
+              <span key={p.userId} className="block text-body-small text-ink-default">
+                {p.departmentName} {p.name}
+              </span>
+            ))}
+            {hiddenCount > 0 && (
+              <span className="block text-body-small text-ink-muted">외 {hiddenCount}명 더</span>
+            )}
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Board({ board }) {
+  if (board.top.length === 0) {
+    return (
+      <p className="px-1 py-6 text-center text-body-small text-ink-muted">
+        아직 아무도 문제를 맞히지 않았습니다.
+      </p>
+    );
+  }
+  return (
+    <>
+      <ol className="space-y-2">
+        {board.top.map((row) => (
+          <li key={row.rank} className="flex items-baseline gap-2">
+            <span className="w-8 shrink-0 text-body font-bold text-brand-blue">{row.rank}위</span>
+            <span className="flex-1 text-body text-ink-strong">
+              {row.leader.departmentName} {row.leader.name}
+              {row.otherCount > 0 && <OtherNames others={row.others} otherCount={row.otherCount} />}
+            </span>
+            <span className="shrink-0 text-body-small font-medium text-ink-default">{row.correctCount}개</span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 border-t border-line-default pt-3 text-body-small text-ink-muted">
+        {board.me
+          ? `내 순위 ${board.me.rank}위 · ${board.me.correctCount}개`
+          : "아직 맞힌 문제가 없습니다."}
+      </p>
+    </>
+  );
+}
+
+/**
+ * 학습 홈의 명예의 전당. 맞힌 개수로 줄을 세운다.
+ *
+ * 순위 숫자는 "몇 번째 점수대"라는 뜻이다 — 1위가 여러 명이어도 다음 줄은 2위다. 그래서
+ * 내 순위에도 맞힌 개수를 함께 적는다. "3위"만 있으면 위에 두 사람만 있다고 오해한다.
+ */
+export default function HallOfFameCard() {
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState("month");
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchHallOfFame()
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(resolveErrorMessage(err, "명예의 전당을 불러오지 못했습니다."));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <Surface className="p-5">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-surface-blue text-brand-blue">
+          <Trophy size={22} aria-hidden="true" />
+        </span>
+        <p className="text-section-title font-semibold text-ink-strong">명예의 전당</p>
+      </div>
+
+      <div className="mt-3 flex gap-1" role="tablist" aria-label="집계 기간">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={`rounded-sm px-3 py-1 text-body-small font-medium focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua ${
+              tab === t.key ? "bg-surface-blue text-info-text" : "text-ink-muted hover:text-ink-strong"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        {error ? (
+          <p className="px-1 py-6 text-center text-body-small text-ink-muted">{error}</p>
+        ) : !data ? (
+          <p className="px-1 py-6 text-center text-body-small text-ink-muted">불러오는 중...</p>
+        ) : (
+          <Board board={data[tab]} />
+        )}
+      </div>
+    </Surface>
+  );
+}
+```
+
+- [ ] **Step 2: 학습 홈에 붙인다**
+
+`web/screens/solve/SolveHomePage.jsx` 의 import 에 한 줄을 더한다:
+
+```jsx
+import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
+```
+
+그리고 카드 세 개를 감싼 `</div>` 뒤, `</>` 앞에 다음을 넣는다:
+
+```jsx
+      <div className="mt-4">
+        <HallOfFameCard />
+      </div>
+```
+
+- [ ] **Step 3: 구문·타입 검사와 전체 스위트**
+
+```bash
+cd web && ./node_modules/.bin/esbuild components/solve/HallOfFameCard.jsx --loader:.jsx=jsx --outfile=/dev/null
+cd web && node node_modules/vitest/vitest.mjs run
+cd web && npx tsc --noEmit
+```
+
+`esbuild` 는 반드시 `web` 디렉터리에서 실행한다 — 상위에서 부르면 실행 파일을 못 찾아 실패한다(2026-09-03 실측).
+
+- [ ] **Step 4: 빌드**
+
+dev 서버가 떠 있으면 먼저 내린다.
+
+```bash
+cd web && rm -rf .next && npx next build
+```
+
+기대: Errors 0, Warnings 0.
+
+- [ ] **Step 5: 브라우저로 실측한다**
+
+```bash
+cd web && rm -rf .next && npx next dev -p 3300
+```
+
+`plan_emp` / `Test1234!` 로 로그인해 학습 홈에서 확인한다.
+
+- 카드 세 개 아래 "명예의 전당"이 보인다
+- 탭이 **이번 달**·**전체 기간** 둘이고 기본은 이번 달이다
+- 아무도 맞히지 않은 기간에는 "아직 아무도 문제를 맞히지 않았습니다"가 나온다
+- 문제를 몇 개 풀고 돌아오면 내 이름이 뜬다
+- 다른 계정(`it_emp` 등)으로도 풀어 동점을 만든 뒤, "외 N명"에 **마우스를 올리면** 이름이 뜨고 **누르면** 고정되고 **Esc** 로 닫힌다
+- 내 순위 줄에 순위와 맞힌 개수가 함께 적힌다
+- 콘솔 오류 0건
+
+- [ ] **Step 6: 커밋**
+
+```bash
+git add web/components/solve/HallOfFameCard.jsx web/screens/solve/SolveHomePage.jsx
+git commit -m "[ADD] 학습 홈 명예의 전당 카드"
+```
+
+---
+
+## 운영 반영 시 주의
+
+**마이그레이션이 없다.** 새 표를 만들지 않으므로 코드만 배포하면 된다.
+
+배포 직후 명단은 비어 있거나 한 명뿐일 수 있다 — 2026-09-03 운영 실측으로 `attempts` 14건, 푼 사람 1명이다. 빈 상태가 예외가 아니라 기본이므로, 화면이 비었다고 고장으로 보지 마라.
+
+## 이 계획이 다루지 않는 것
+
+- 부서별 순위
+- 연속 학습일·배지·보상
+- 관리자용 전체 순위표
+- 지난달 순위 보관
+- `attempts` 인덱스 — 지금 14건이라 필요 없다. 수십만 건을 넘으면 `submitted_at` 인덱스를 더한다
