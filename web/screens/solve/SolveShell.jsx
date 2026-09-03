@@ -1,8 +1,11 @@
 import Link from "next/link";
 import LogoutButton from "@/components/ui/LogoutButton.jsx";
 import AccountInfo from "@/components/ui/AccountInfo.jsx";
+import AdminConsoleLink from "@/components/ui/AdminConsoleLink.jsx";
 import { useLogout } from "@/hooks/useLogout.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
+import { useDeviceType } from "@/hooks/useDeviceType.js";
+import { canAccessAdmin } from "@/utils/routing.js";
 import { roleLabel } from "@/utils/userRole.js";
 
 /**
@@ -12,10 +15,21 @@ import { roleLabel } from "@/utils/userRole.js";
  *
  * 접속자 정보는 md 이상에서만 보인다 — 모바일 헤더(px-5)는 이미 제목+로그아웃으로 폭이
  * 빠듯해 실측 검증(design QA)을 마친 레이아웃이라, 거기 끼워 넣지 않고 넓은 화면에서만 더한다.
+ *
+ * 관리자에게는 콘솔로 건너가는 링크를 더한다. 위 "관리자 메뉴는 노출하지 않는다"는 디자인
+ * 시스템 9.2 의 모바일 상단 내비 규칙(아이콘 4개까지)이라 PC 에는 걸리지 않는다.
+ *
+ * 노출 판단에 CSS 중단점을 쓰지 않고 canAccessAdmin 을 그대로 쓰는 이유: 관리자 콘솔은
+ * 640px 미만이면 역할과 무관하게 /solve 로 되돌려보낸다(app/(protected)/admin/layout.tsx).
+ * md(768px)로 숨기면 641~767px 에서 콘솔에는 들어가는데 버튼만 없는 상태가 된다.
+ * device 가 null(측정 전)이면 canAccessAdmin 이 false 라 그리지 않는다 — 잘못 그렸다
+ * 사라지는 깜빡임을 막는다.
  */
 export default function SolveShell({ children }) {
   const { handleLogout, loggingOut } = useLogout();
   const { session } = useSessionStatus();
+  const device = useDeviceType();
+  const showAdminLink = canAccessAdmin({ device, role: session?.role });
 
   return (
     <div className="min-h-screen bg-surface-page">
@@ -28,6 +42,7 @@ export default function SolveShell({ children }) {
         </Link>
         <div className="flex items-center gap-4">
           <AccountInfo name={session?.name} roleLabel={roleLabel(session?.role)} className="hidden text-right md:flex" />
+          {showAdminLink && <AdminConsoleLink />}
           <LogoutButton onLogout={handleLogout} loggingOut={loggingOut} />
         </div>
       </header>
