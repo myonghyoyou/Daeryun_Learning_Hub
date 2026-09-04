@@ -1,16 +1,29 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { DbConn } from "./client";
-import { departments } from "./schema";
+import { departments, problems } from "./schema";
+import type { Track } from "../problem/track";
 
 export async function findAllDepartments(db: DbConn) {
   return db.select().from(departments).orderBy(asc(departments.name));
 }
-// DepartmentMapper.xml:24-26 findAllActive 미러. **관리자 목록(findAllDepartments)과 다른
-// 쿼리다** — 여기는 활성만이고, 서비스가 id·name·code 3필드로 줄인다(DepartmentOptionServiceImpl).
-export async function findActiveDepartments(db: DbConn) {
-  return db.select({ id: departments.id, name: departments.name, code: departments.code })
+/**
+ * 그 직군의 ACTIVE 문제가 하나 이상 있는 활성 부서만. 랜덤 풀이의 부서 선택지다.
+ *
+ * 거르는 규칙이 `findTeamCounts`(lib/db/solveTeams.ts) 와 **같아야 한다** — 어긋나면
+ * 랜덤에서는 고를 수 있는데 팀 대항에는 없는 부서가 생긴다.
+ *
+ * DepartmentMapper.xml:24-26 findAllActive 를 대신한다. 관리자 목록(findAllDepartments)과는
+ * 다른 쿼리다 — 여기는 활성만이고 id·name·code 3필드로 줄인다.
+ */
+export async function findDepartmentsWithProblems(db: DbConn, track: Track) {
+  return db.selectDistinct({ id: departments.id, name: departments.name, code: departments.code })
     .from(departments)
-    .where(eq(departments.status, "ACTIVE"))
+    .innerJoin(problems, eq(problems.departmentId, departments.id))
+    .where(and(
+      eq(departments.status, "ACTIVE"),
+      eq(problems.status, "ACTIVE"),
+      eq(problems.track, track),
+    ))
     .orderBy(asc(departments.name));
 }
 export async function findDepartmentById(db: DbConn, id: number) {

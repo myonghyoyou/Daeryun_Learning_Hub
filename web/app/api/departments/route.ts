@@ -1,7 +1,7 @@
 import { getDb } from "@/lib/db/client";
 import { handleRoute } from "@/lib/http/errors";
 import { requireActor } from "@/lib/auth/currentUser";
-import { findActiveDepartments } from "@/lib/db/departments";
+import { findDepartmentsWithProblems } from "@/lib/db/departments";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,9 @@ export const runtime = "nodejs";
  */
 export async function GET(): Promise<Response> {
   return handleRoute(async () => {
-    await requireActor();        // 역할 제한 없음 — 로그인만 확인한다
-    return findActiveDepartments(getDb());
+    const actor = await requireActor();   // 역할 제한 없음 — 로그인만 확인한다
+    // 전 부서를 주면 행정직으로 들어온 사람의 랜덤 드롭다운에 `기술직` 이 뜨고, 고르면
+    // 문제 질의는 걸러지므로 0문제가 나와 화면이 고장난 것처럼 보인다.
+    return findDepartmentsWithProblems(getDb(), actor.track);
   });
 }
