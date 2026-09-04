@@ -1,7 +1,9 @@
+import { useState } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/ui/LogoutButton.jsx";
 import AccountInfo from "@/components/ui/AccountInfo.jsx";
 import AdminConsoleLink from "@/components/ui/AdminConsoleLink.jsx";
+import FeedbackModal from "@/components/feedback/FeedbackModal.jsx";
 import { useLogout } from "@/hooks/useLogout.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { useDeviceType } from "@/hooks/useDeviceType.js";
@@ -30,6 +32,7 @@ export default function SolveShell({ children }) {
   const { session } = useSessionStatus();
   const device = useDeviceType();
   const showAdminLink = canAccessAdmin({ device, role: session?.role });
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-surface-page">
@@ -47,6 +50,16 @@ export default function SolveShell({ children }) {
         </div>
       </header>
       <main className="mx-auto w-full max-w-[1120px] px-5 py-6 md:px-7 md:py-8">{children}</main>
+      <footer className="mx-auto w-full max-w-[1120px] px-5 pb-8 md:px-7">
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          className="text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline"
+        >
+          불편한 점이나 바라는 점 보내기
+        </button>
+      </footer>
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
 }

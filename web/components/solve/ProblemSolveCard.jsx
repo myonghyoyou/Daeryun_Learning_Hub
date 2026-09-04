@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
-import { CheckCircle, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, Flag } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
+import FeedbackModal from "@/components/feedback/FeedbackModal.jsx";
 import { CHOICE_LIST_CLASS, CHOICE_ITEM_MIN_HEIGHT, SUBMIT_AREA_CLASS } from "@/components/solve/choiceLayout.js";
 import { submitAttempt } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
@@ -45,6 +46,7 @@ export default function ProblemSolveCard({ problem, onSubmitted, nextAction = nu
   const [blankInputs, setBlankInputs] = useState({});
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   // 빈칸 입력칸을 키로 들고 있다가 엔터로 다음 칸에 포커스를 옮길 때 쓴다.
   const blankRefs = useRef({});
 
@@ -262,11 +264,20 @@ export default function ProblemSolveCard({ problem, onSubmitted, nextAction = nu
   return (
     <>
       <Surface className="p-5 md:p-6">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="inline-block rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
-            {problemTypeLabel(problem.type)}
-          </span>
-          <SourceBadge item={problem} />
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-block rounded-full bg-surface-blue px-2.5 py-1 text-body-small font-medium text-info-text">
+              {problemTypeLabel(problem.type)}
+            </span>
+            <SourceBadge item={problem} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            className="ml-auto shrink-0 rounded-sm px-2 py-1 text-body-small text-ink-muted hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+          >
+            <Flag size={16} aria-hidden="true" className="inline" /> 신고
+          </button>
         </div>
 
         {problem.imageUrl && (
@@ -441,6 +452,8 @@ export default function ProblemSolveCard({ problem, onSubmitted, nextAction = nu
           {nextAction && <div className="shrink-0">{nextAction}</div>}
         </div>
       )}
+
+      <FeedbackModal open={reportOpen} onClose={() => setReportOpen(false)} problemId={problem.id} />
     </>
   );
 }

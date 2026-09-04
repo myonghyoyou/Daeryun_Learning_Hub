@@ -1,13 +1,17 @@
+import { useState } from "react";
 import Link from "next/link";
 import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
+import FeedbackModal from "@/components/feedback/FeedbackModal.jsx";
 
 /**
  * 직원 학습 홈. 랜덤으로 풀거나, 골라서 풀거나, 본인 풀이 이력을 확인하는 착지 지점이다.
  * (Blue Bento Learning 학습 홈의 축약 구조 — 랜덤 풀기·골라서 풀기·내 이력.)
  */
 export default function SolveHomePage() {
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
   return (
     <>
       <section className="mb-6">
@@ -53,6 +57,17 @@ export default function SolveHomePage() {
       <div className="mt-4">
         <HallOfFameCard />
       </div>
+
+      <Surface className="mt-4 p-3">
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          className="text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline"
+        >
+          불편한 점이나 바라는 점 보내기
+        </button>
+      </Surface>
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );
 }
