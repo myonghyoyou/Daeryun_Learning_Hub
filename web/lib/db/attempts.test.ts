@@ -38,7 +38,7 @@ async function seed(over: Partial<typeof problems.$inferInsert> = {}) {
 describe("attempts DAO", () => {
   it("T1/H4: is_correct 를 저장하고 이력에서 correct 로 읽는다", async () => {
     const attemptId = await insertAttempt(db, { userId, problemId, submittedAnswer: "가", isCorrect: true });
-    const rows = await findAttemptsByUserId(db, userId);
+    const rows = await findAttemptsByUserId(db, userId, "ADMIN");
     // Java 는 `a.is_correct AS correct` 별칭이 없으면 항상 false 가 됐다(정답지 H4).
     // 여기서 true 가 나오는 것이 그 함정을 피했다는 증거다.
     expect(rows[0].correct).toBe(true);
@@ -47,7 +47,7 @@ describe("attempts DAO", () => {
 
   it("H1: 남의 시도는 안 나온다", async () => {
     await insertAttempt(db, { userId: otherUserId, problemId, submittedAnswer: null, isCorrect: false });
-    expect(await findAttemptsByUserId(db, userId)).toEqual([]);
+    expect(await findAttemptsByUserId(db, userId, "ADMIN")).toEqual([]);
   });
 
   it("H2: submitted_at 내림차순", async () => {
@@ -58,7 +58,7 @@ describe("attempts DAO", () => {
       { userId, problemId, submittedAnswer: "먼저", isCorrect: false, submittedAt: new Date("2026-01-01T00:00:00Z") },
       { userId, problemId, submittedAnswer: "나중", isCorrect: true, submittedAt: new Date("2026-01-02T00:00:00Z") },
     ]);
-    expect((await findAttemptsByUserId(db, userId)).map((r) => r.submittedAnswer)).toEqual(["나중", "먼저"]);
+    expect((await findAttemptsByUserId(db, userId, "ADMIN")).map((r) => r.submittedAnswer)).toEqual(["나중", "먼저"]);
   });
 
   it("H5: 응답 필드가 정확히 8개고, 값도 각 컬럼과 일치한다", async () => {
@@ -71,7 +71,7 @@ describe("attempts DAO", () => {
     await db.insert(attempts).values({
       userId, problemId: numberedId, submittedAnswer: "x", isCorrect: false, submittedAt: explicitSubmittedAt,
     });
-    const rows = await findAttemptsByUserId(db, userId);
+    const rows = await findAttemptsByUserId(db, userId, "ADMIN");
     expect(Object.keys(rows[0]).sort()).toEqual(
       ["correct", "departmentName", "problemContent", "problemId", "problemType", "sourceNumber", "submittedAnswer", "submittedAt"]);
     expect(rows[0].problemId).toBe(numberedId);
@@ -86,20 +86,20 @@ describe("attempts DAO", () => {
     // findAttemptsByUserId 에 p.status 조건을 넣고 싶어지는 자리다. Java 에는 없다.
     const archived = await seed({ status: "ARCHIVED" });
     await insertAttempt(db, { userId, problemId: archived, submittedAnswer: "x", isCorrect: false });
-    expect((await findAttemptsByUserId(db, userId)).length).toBe(1);
+    expect((await findAttemptsByUserId(db, userId, "ADMIN")).length).toBe(1);
   });
 
   it("H6: problems·departments 는 INNER JOIN 이다", async () => {
     // 문제는 보관만 되고 삭제되지 않으므로 실질 무해하지만, LEFT JOIN 으로 바꾸면 Java 와
     // 다른 행이 나올 수 있다. 조인 방식을 문서 대신 테스트로 남긴다.
     await insertAttempt(db, { userId, problemId, submittedAnswer: "x", isCorrect: false });
-    const row = (await findAttemptsByUserId(db, userId))[0];
+    const row = (await findAttemptsByUserId(db, userId, "ADMIN"))[0];
     expect(row.departmentName).toBe("가팀");
     expect(row.problemContent).toBe("본문");
   });
 
   it("H8: 이력이 없으면 빈 배열이다", async () => {
-    expect(await findAttemptsByUserId(db, userId)).toEqual([]);
+    expect(await findAttemptsByUserId(db, userId, "ADMIN")).toEqual([]);
   });
 
   it("T5/T7: 빈 배열이면 DB 를 건드리지 않는다(SQL 오류가 나면 안 된다)", async () => {
@@ -131,7 +131,21 @@ describe("attempts DAO", () => {
 
   it("이력 행에 problemType 이 실린다 — 정답 배치 조회가 유형별로 분기해야 한다", async () => {
     await insertAttempt(db, { userId, problemId, submittedAnswer: "X", isCorrect: false });
-    const rows = await findAttemptsByUserId(db, userId);
+    const rows = await findAttemptsByUserId(db, userId, "ADMIN");
     expect(rows[0].problemType).toBe("OX"); // beforeEach 의 seed() 기본값이 OX
+  });
+
+  it("이력은 고른 직군 것만 보인다", async () => {
+    const adminProblem = await seed({ content: "행정직", track: "ADMIN" });
+    const techProblem = await seed({ content: "기술직", track: "TECH" });
+    await insertAttempt(db, { userId, problemId: adminProblem, submittedAnswer: "O", isCorrect: true });
+    await insertAttempt(db, { userId, problemId: techProblem, submittedAnswer: "O", isCorrect: true });
+
+    const tech = await findAttemptsByUserId(db, userId, "TECH");
+    expect(tech.map((r) => r.problemContent)).toEqual(["기술직"]);
+
+    const admin = await findAttemptsByUserId(db, userId, "ADMIN");
+    expect(admin.map((r) => r.problemContent)).toContain("행정직");
+    expect(admin.map((r) => r.problemContent)).not.toContain("기술직");
   });
 });

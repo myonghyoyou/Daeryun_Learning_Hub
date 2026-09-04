@@ -36,7 +36,7 @@ describe("findAttemptHistoryWithAnswers", () => {
     ]);
     await insertAttempt(db, { userId, problemId, submittedAnswer: "부산", isCorrect: false });
 
-    const rows = await findAttemptHistoryWithAnswers(db, userId);
+    const rows = await findAttemptHistoryWithAnswers(db, userId, "ADMIN");
     expect(rows).toHaveLength(1);
     expect(rows[0].correctAnswerSummary).toBe("서울");
   });
@@ -52,7 +52,7 @@ describe("findAttemptHistoryWithAnswers", () => {
     ]);
     await insertAttempt(db, { userId, problemId, submittedAnswer: "나", isCorrect: false });
 
-    const rows = await findAttemptHistoryWithAnswers(db, userId);
+    const rows = await findAttemptHistoryWithAnswers(db, userId, "ADMIN");
     expect(rows[0].correctAnswerSummary).toBe("가, 다");
   });
 
@@ -64,7 +64,7 @@ describe("findAttemptHistoryWithAnswers", () => {
     ]);
     await insertAttempt(db, { userId, problemId, submittedAnswer: "부산", isCorrect: false });
 
-    const rows = await findAttemptHistoryWithAnswers(db, userId);
+    const rows = await findAttemptHistoryWithAnswers(db, userId, "ADMIN");
     expect(rows[0].correctAnswerSummary).toBe("서울, Seoul");
   });
 
@@ -76,7 +76,7 @@ describe("findAttemptHistoryWithAnswers", () => {
     ]);
     await insertAttempt(db, { userId, problemId, submittedAnswer: "다, 라", isCorrect: false });
 
-    const rows = await findAttemptHistoryWithAnswers(db, userId);
+    const rows = await findAttemptHistoryWithAnswers(db, userId, "ADMIN");
     expect(rows[0].correctAnswerSummary).toBe("가, 나");
   });
 
@@ -91,13 +91,13 @@ describe("findAttemptHistoryWithAnswers", () => {
     await insertAttempt(db, { userId, problemId: mcqId, submittedAnswer: "O", isCorrect: false });
     await insertAttempt(db, { userId, problemId: shortId, submittedAnswer: "오답", isCorrect: false });
 
-    const rows = await findAttemptHistoryWithAnswers(db, userId);
+    const rows = await findAttemptHistoryWithAnswers(db, userId, "ADMIN");
     const byProblem = new Map(rows.map((r) => [r.problemId, r.correctAnswerSummary]));
     expect(byProblem.get(mcqId)).toBe("X");
     expect(byProblem.get(shortId)).toBe("정답");
   });
 
   it("이력이 없으면 빈 배열을 즉시 돌려준다(배치 쿼리를 안 날린다)", async () => {
-    expect(await findAttemptHistoryWithAnswers(db, userId)).toEqual([]);
+    expect(await findAttemptHistoryWithAnswers(db, userId, "ADMIN")).toEqual([]);
   });
 });

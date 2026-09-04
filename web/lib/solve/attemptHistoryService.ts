@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { DbConn } from "../db/client";
 import { findAttemptsByUserId, type AttemptHistoryRow } from "../db/attempts";
 import { problemAnswers, problemBlanks, problemChoices } from "../db/schema";
+import type { Track } from "../problem/track";
 
 // correctAnswerSummary 는 "보여줄 게 없음"을 null 이 아니라 "" 로 표현한다(실시간 채점 경로의
 // AttemptResult.correctAnswerSummary: string | null 과 다르다) — 의도적인 선택이니 x === null 로 값 없음을 확인하지 마라.
@@ -62,8 +63,10 @@ async function fetchBlankAnswerTexts(db: DbConn, problemIds: number[]): Promise<
  * 여기서는 해당 문제의 빈칸 정답 전체를 한 줄로 나열한다 — 과거 문제를 복습하는
  * 화면이라 어느 제출값이 어느 빈칸에 대응했는지까지 재현할 필요는 없다는 판단이다.
  */
-export async function findAttemptHistoryWithAnswers(db: DbConn, userId: number): Promise<AttemptHistoryItem[]> {
-  const rows = await findAttemptsByUserId(db, userId);
+export async function findAttemptHistoryWithAnswers(
+  db: DbConn, userId: number, track: Track,
+): Promise<AttemptHistoryItem[]> {
+  const rows = await findAttemptsByUserId(db, userId, track);
   if (rows.length === 0) return [];
 
   const choiceProblemIds = [...new Set(rows.filter((r) => CHOICE_TYPES.has(r.problemType)).map((r) => r.problemId))];

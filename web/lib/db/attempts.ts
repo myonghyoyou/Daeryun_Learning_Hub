@@ -1,6 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { DbConn } from "./client";
 import { attempts, attemptBlankAnswers, attemptChoices, departments, problems } from "./schema";
+import type { Track } from "../problem/track";
 
 export type NewAttempt = { userId: number; problemId: number; submittedAnswer: string | null; isCorrect: boolean };
 
@@ -32,7 +33,9 @@ export type AttemptHistoryRow = {
 // AttemptMapper.xml:10 미러. Java 는 `a.is_correct AS correct` 별칭이 필수였다 —
 // 빼면 mapUnderscoreToCamelCase 가 isCorrect 로 만들어 DTO 에 안 붙고 항상 false 가 됐다.
 // 여기서는 select 의 키 이름이 곧 별칭이므로 `correct:` 로 적는 것이 그 미러다(정답지 H4).
-export async function findAttemptsByUserId(db: DbConn, userId: number): Promise<AttemptHistoryRow[]> {
+export async function findAttemptsByUserId(
+  db: DbConn, userId: number, track: Track,
+): Promise<AttemptHistoryRow[]> {
   return db.select({
     problemId: attempts.problemId, problemContent: problems.content,
     submittedAnswer: attempts.submittedAnswer, correct: attempts.isCorrect,
@@ -42,6 +45,8 @@ export async function findAttemptsByUserId(db: DbConn, userId: number): Promise<
     .from(attempts)
     .innerJoin(problems, eq(problems.id, attempts.problemId))
     .innerJoin(departments, eq(departments.id, problems.departmentId))
-    .where(eq(attempts.userId, userId))
+    // 이력은 "내가 푼 전부"가 아니라 "이번 직군에서 푼 것"이다. 두 직군을 다 푼 사람은
+    // 로그인한 직군에 따라 이력이 달라 보인다 — 의도한 동작이다.
+    .where(and(eq(attempts.userId, userId), eq(problems.track, track)))
     .orderBy(desc(attempts.submittedAt));
 }
