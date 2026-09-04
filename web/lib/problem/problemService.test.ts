@@ -40,7 +40,7 @@ function fillBlankRequest(o: Partial<ProblemCreateInput> = {}): ProblemCreateInp
 async function createAndReturnId(
   input: ProblemCreateInput, departmentId: number = deptA, actor: AuthUser = superAdmin,
 ): Promise<number> {
-  await createProblem(db, input, departmentId, actor);
+  await createProblem(db, input, departmentId, "ADMIN", actor);
   const owning = actor.role === "SUPER_ADMIN" ? departmentId : actor.departmentId;
   const [row] = await db.select().from(problems)
     .where(and(eq(problems.departmentId, owning), eq(problems.sourceNumber, input.sourceNumber!)));
@@ -62,29 +62,29 @@ beforeEach(async () => {
     employeeNo: "dept", name: "부서", email: "d@b.c", passwordHash: "x",
     departmentId: deptA, role: "DEPT_ADMIN", status: "ACTIVE", mustChangePassword: false,
   }).returning({ id: users.id });
-  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false };
-  deptAdminOfA = { userId: deptAdminId, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false };
+  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
+  deptAdminOfA = { userId: deptAdminId, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
 });
 
 describe("problem service", () => {
   it("중복 문항번호를 한국어로 안내한다", async () => {
     // 2026-08-14 Critical(QA-1) 재발 방지: 부서명 조회가 catch 안에 있으면
     // 트랜잭션 abort(25P02) 때문에 이 테스트가 BizError 대신 DB 예외로 실패한다.
-    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
-    await expect(createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin))
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin);
+    await expect(createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "가팀 5번은 이미 있습니다. 다른 번호를 입력하세요." });
   });
 
   it("수정 경로도 같은 문구를 낸다", async () => {
-    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin);
     const id = await createAndReturnId(oxRequest({ sourceNumber: 6 }));
-    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 5 }), superAdmin))
+    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 5 }), "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "가팀 5번은 이미 있습니다. 다른 번호를 입력하세요." });
   });
 
   it("중복 안내는 BizError(1000) 이다", async () => {
-    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
-    await expect(createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin))
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin);
+    await expect(createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin))
       .rejects.toMatchObject({ errorCode: ErrorCode.INPUT_VALUE_INVALID });
   });
 
@@ -114,7 +114,7 @@ describe("problem service", () => {
   });
 
   it("실제 DB 의 중복 위반에도 isDuplicateSourceNumber 가 true 다", async () => {
-    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin);
     // 번역을 거치지 않은 **원본** 드라이버 오류로 판정한다 — Task 9 가 보게 될 모양 그대로.
     const raw = await db.insert(problems).values({
       type: "OX", content: "본문", status: "ACTIVE",
@@ -127,35 +127,35 @@ describe("problem service", () => {
   it("부서 관리자는 남의 부서 문제에 접근할 수 없다", async () => {
     const id = await createAndReturnId(oxRequest({}), deptB, superAdmin);
     await expect(getProblemDetail(db, id, deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
-    await expect(updateProblem(db, id, oxRequest({}), deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
+    await expect(updateProblem(db, id, oxRequest({}), "ADMIN", deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
     await expect(archiveProblem(db, id, deptAdminOfA)).rejects.toMatchObject({ errorCode: ErrorCode.ACCESS_AUTH_DENIED });
   });
 
   it("부서 관리자는 요청 부서를 무시하고 자기 부서에 등록한다", async () => {
-    await createProblem(db, oxRequest({ sourceNumber: 3 }), deptB, deptAdminOfA);
+    await createProblem(db, oxRequest({ sourceNumber: 3 }), deptB, "ADMIN", deptAdminOfA);
     const [row] = await db.select().from(problems);
     expect(row.departmentId).toBe(deptA);
   });
 
   it("비활성 부서에는 등록할 수 없다", async () => {
-    await expect(createProblem(db, oxRequest({}), inactiveDeptId, superAdmin))
+    await expect(createProblem(db, oxRequest({}), inactiveDeptId, "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "비활성 부서에는 문제를 등록할 수 없습니다: 폐지팀" });
   });
 
   it("문항번호 검증이 부서 해석보다 먼저다", async () => {
     // 정답지 R12: 부서도 번호도 없으면 "문항 번호를 입력하세요."가 먼저 뜬다.
-    await expect(createProblem(db, oxRequest({ sourceNumber: null }), null, superAdmin))
+    await expect(createProblem(db, oxRequest({ sourceNumber: null }), null, "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "문항 번호를 입력하세요." });
   });
 
   it("수정은 유형을 바꿀 수 없다", async () => {
     const id = await createAndReturnId(oxRequest({}));
-    await expect(updateProblem(db, id, shortAnswerRequest({}), superAdmin)).rejects.toMatchObject({ message: "문제 유형은 수정할 수 없습니다." });
+    await expect(updateProblem(db, id, shortAnswerRequest({}), "ADMIN", superAdmin)).rejects.toMatchObject({ message: "문제 유형은 수정할 수 없습니다." });
   });
 
   it("수정은 보기·정답·빈칸을 지우고 다시 넣는다", async () => {
     const id = await createAndReturnId(mcqRequest({ choices: [c("가", true), c("나")] }));
-    await updateProblem(db, id, mcqRequest({ choices: [c("다", true), c("라"), c("마")] }), superAdmin);
+    await updateProblem(db, id, mcqRequest({ choices: [c("다", true), c("라"), c("마")] }), "ADMIN", superAdmin);
     const detail = await getProblemDetail(db, id, superAdmin);
     expect(detail.choices.map((x) => x.choiceText)).toEqual(["다", "라", "마"]);
   });
@@ -169,7 +169,7 @@ describe("problem service", () => {
   it("없는 문제는 안내 문구가 같다", async () => {
     await expect(archiveProblem(db, 999999, superAdmin)).rejects.toMatchObject({ message: "존재하지 않는 문제입니다." });
     await expect(getProblemDetail(db, 999999, superAdmin)).rejects.toMatchObject({ message: "존재하지 않는 문제입니다." });
-    await expect(updateProblem(db, 999999, oxRequest({}), superAdmin)).rejects.toMatchObject({ message: "존재하지 않는 문제입니다." });
+    await expect(updateProblem(db, 999999, oxRequest({}), "ADMIN", superAdmin)).rejects.toMatchObject({ message: "존재하지 않는 문제입니다." });
   });
 
   it("상세조회 보기의 정답 플래그 이름은 correct 다", async () => {
@@ -186,7 +186,7 @@ describe("problem service", () => {
     const detail = await getProblemDetail(db, id, superAdmin);
     expect(Object.keys(detail)).toEqual([
       "id", "type", "content", "imageUrl", "referenceText", "explanation", "blankRevealCount",
-      "status", "departmentId", "sourceNumber", "choices", "answers", "blanks", "tags",
+      "status", "departmentId", "sourceNumber", "track", "choices", "answers", "blanks", "tags",
     ]);
     // 정답지 D4: answers·tags 는 객체가 아니라 문자열 배열이다.
     expect(detail.answers).toEqual(["서울"]);
@@ -207,13 +207,13 @@ describe("problem service", () => {
     // 정답지 V31: 요청에 값이 실려 와도 저장은 null 이다(생성·수정 모두).
     const id = await createAndReturnId(oxRequest({ blankRevealCount: 3 }));
     expect((await getProblemDetail(db, id, superAdmin)).blankRevealCount).toBeNull();
-    await updateProblem(db, id, oxRequest({ sourceNumber: 1, blankRevealCount: 4 }), superAdmin);
+    await updateProblem(db, id, oxRequest({ sourceNumber: 1, blankRevealCount: 4 }), "ADMIN", superAdmin);
     expect((await getProblemDetail(db, id, superAdmin)).blankRevealCount).toBeNull();
   });
 
   it("감사 로그를 남긴다", async () => {
     const id = await createAndReturnId(oxRequest({}));
-    await updateProblem(db, id, oxRequest({ sourceNumber: 1 }), superAdmin);
+    await updateProblem(db, id, oxRequest({ sourceNumber: 1 }), "ADMIN", superAdmin);
     await archiveProblem(db, id, superAdmin);
     const rows = await db.select().from(auditLogs).orderBy(auditLogs.id);
     expect(rows.map((r) => r.action)).toEqual(["PROBLEM_CREATED", "PROBLEM_UPDATED", "PROBLEM_ARCHIVED"]);
@@ -227,16 +227,16 @@ describe("problem service", () => {
     // :162 update) — 즉 INSERT/UPDATE 보다 뒤다. 트랜잭션 밖으로 끌어올리면 태그 21개 + 이미
     // 쓰인 번호일 때 태그 문구가 중복 번호 안내를 가로채 Spring 과 다른 메시지가 나간다.
     const manyTags = Array.from({ length: 21 }, (_, i) => `tag${i}`);
-    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, superAdmin);
-    await expect(createProblem(db, oxRequest({ sourceNumber: 5, tags: manyTags }), deptA, superAdmin))
+    await createProblem(db, oxRequest({ sourceNumber: 5 }), deptA, "ADMIN", superAdmin);
+    await expect(createProblem(db, oxRequest({ sourceNumber: 5, tags: manyTags }), deptA, "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "가팀 5번은 이미 있습니다. 다른 번호를 입력하세요." });
     const id = await createAndReturnId(oxRequest({ sourceNumber: 6 }));
-    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 5, tags: manyTags }), superAdmin))
+    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 5, tags: manyTags }), "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "가팀 5번은 이미 있습니다. 다른 번호를 입력하세요." });
   });
 
   it("태그 위반 자체는 그대로 막는다", async () => {
-    await expect(createProblem(db, oxRequest({ tags: Array.from({ length: 21 }, (_, i) => `tag${i}`) }), deptA, superAdmin))
+    await expect(createProblem(db, oxRequest({ tags: Array.from({ length: 21 }, (_, i) => `tag${i}`) }), deptA, "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "태그는 문제당 20개, 태그명은 100자 이하여야 합니다." });
     expect(await db.select().from(problems)).toHaveLength(0); // 롤백까지 확인
   });
@@ -245,7 +245,7 @@ describe("problem service", () => {
     // 정답지 V30: 보기뿐 아니라 정답·빈칸도 전량 삭제 후 재삽입이다. 유형은 못 바꾸므로(V4)
     // 유형별로 각각 확인하지 않으면 delete 한 줄이 빠져도 스위트가 초록으로 남는다.
     const id = await createAndReturnId(shortAnswerRequest({ answers: ["서울", "경성"] }));
-    await updateProblem(db, id, shortAnswerRequest({ sourceNumber: 1, answers: ["부산"] }), superAdmin);
+    await updateProblem(db, id, shortAnswerRequest({ sourceNumber: 1, answers: ["부산"] }), "ADMIN", superAdmin);
     expect((await getProblemDetail(db, id, superAdmin)).answers).toEqual(["부산"]);
   });
 
@@ -255,7 +255,7 @@ describe("problem service", () => {
       sourceNumber: 1, content: "{{b}} 와 {{c}} 이다.",
       blanks: [{ blankKey: "b", answerText: "부산" }, { blankKey: "c", answerText: "대구" }],
       blankRevealCount: 2,
-    }), superAdmin);
+    }), "ADMIN", superAdmin);
     const detail = await getProblemDetail(db, id, superAdmin);
     expect(detail.blanks.map((b) => b.blankKey)).toEqual(["b", "c"]);
     expect(detail.blanks.map((b) => b.displayOrder)).toEqual([1, 2]);
@@ -271,16 +271,36 @@ describe("problem service", () => {
   it("검증이 문항번호 검사보다 먼저다", async () => {
     // 정답지 V1: normalize → validate → validateSourceNumber. 내용이 비고 번호도 없으면
     // Spring 은 내용 문구를 낸다 — 두 검사를 맞바꾸면 이 테스트만 빨개진다.
-    await expect(createProblem(db, oxRequest({ content: "   ", sourceNumber: null }), deptA, superAdmin))
+    await expect(createProblem(db, oxRequest({ content: "   ", sourceNumber: null }), deptA, "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "문제 내용을 입력하세요." });
   });
 
   it("수정도 문항번호가 필수다", async () => {
     // 정답지 N3: validateSourceNumber 는 create·update 두 경로 모두에서 호출된다.
     const id = await createAndReturnId(oxRequest({}));
-    await expect(updateProblem(db, id, oxRequest({ sourceNumber: null }), superAdmin))
+    await expect(updateProblem(db, id, oxRequest({ sourceNumber: null }), "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "문항 번호를 입력하세요." });
-    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 0 }), superAdmin))
+    await expect(updateProblem(db, id, oxRequest({ sourceNumber: 0 }), "ADMIN", superAdmin))
       .rejects.toMatchObject({ message: "문항 번호는 1 이상이어야 합니다." });
+  });
+});
+
+describe("직군", () => {
+  it("등록할 때 고른 직군이 저장된다", async () => {
+    await createProblem(db, oxRequest({}), deptA, "TECH", superAdmin);
+    const [row] = await db.select().from(problems);
+    expect(row.track).toBe("TECH");
+  });
+
+  // 잘못 등록한 직군을 되돌릴 유일한 통로다 — 부서와 달리 전용 이동 기능이 없다.
+  it("수정으로 직군을 바꿀 수 있다", async () => {
+    const input = oxRequest({});
+    await createProblem(db, input, deptA, "ADMIN", superAdmin);
+    const [before] = await db.select().from(problems);
+    expect(before.track).toBe("ADMIN");
+
+    await updateProblem(db, before.id, input, "TECH", superAdmin);
+    const [after] = await db.select().from(problems);
+    expect(after.track).toBe("TECH");
   });
 });

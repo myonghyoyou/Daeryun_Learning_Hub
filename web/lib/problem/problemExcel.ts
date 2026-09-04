@@ -11,6 +11,7 @@ import { checkImageUrl } from "./imageUrl";
 import type { ProblemCreateInput, ProblemType } from "./problemValidation";
 import { isDuplicateSourceNumber, saveTypeSpecificData } from "./problemService";
 import { resolveOwningDepartment } from "./owningDepartment";
+import type { Track } from "./track";
 
 /**
  * 문제 엑셀 일괄 등록(ExcelProblemUploadServiceImpl.java 이식, 정답지 X·F 구획).
@@ -260,6 +261,7 @@ export async function uploadProblemsExcel(
   db: Db,
   file: { buffer: ArrayBuffer; fileName: string },
   requestedDepartmentId: number | null,
+  track: Track,
   actor: AuthUser,
 ): Promise<ExcelResult> {
   validateExtension(file.fileName);
@@ -302,6 +304,9 @@ export async function uploadProblemsExcel(
           departmentId: effectiveDepartmentId,
           sourceNumber: parsed.sourceNumber,
           createdBy: actor.userId,
+          // 직군은 엑셀 열이 아니라 화면에서 고른다 — 한 파일은 어차피 한 직군이고,
+          // 13번째 컬럼을 뒤에 붙였을 때 겪은 문제를 다시 만들 이유가 없다.
+          track,
         });
         await saveTypeSpecificData(tx, problemId, parsed.input);
         await replaceProblemTags(tx, problemId, await findOrCreateTagsByNames(tx, parsed.tags));

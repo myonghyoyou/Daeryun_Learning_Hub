@@ -8,7 +8,8 @@ export type ProblemRow = typeof problems.$inferSelect;
 // departmentId·createdBy 는 전용 statement(updateStatus / updateDepartmentAndSourceNumber)
 // 를 갖고 있고, 일반 수정 경로에서는 절대 바뀌면 안 된다 — 여기 넣으면 컴파일 오류다.
 export type ProblemPatch = Partial<
-  Pick<NewProblem, "content" | "imageUrl" | "referenceText" | "explanation" | "blankRevealCount" | "sourceNumber">
+  Pick<NewProblem, "content" | "imageUrl" | "referenceText" | "explanation" | "blankRevealCount"
+    | "sourceNumber" | "track">
 >;
 
 export async function insertProblem(db: DbConn, row: NewProblem): Promise<number> {
@@ -150,6 +151,7 @@ export async function listProblems(db: DbConn, query: ProblemListQuery): Promise
       status: problems.status,
       departmentId: problems.departmentId,
       departmentName: departments.name,
+      track: problems.track,
       createdAt: problems.createdAt,
       tags: sql<string[]>`COALESCE(array_agg(DISTINCT ${tags.name}) FILTER (WHERE ${tags.name} IS NOT NULL), '{}')`,
     })
@@ -197,6 +199,7 @@ export async function findRecent(db: DbConn, departmentId: number | null, limit:
       status: problems.status,
       departmentId: problems.departmentId,
       departmentName: departments.name,
+      track: problems.track,
       createdAt: problems.createdAt,
       tags: sql<string[]>`COALESCE(array_agg(DISTINCT ${tags.name}) FILTER (WHERE ${tags.name} IS NOT NULL), '{}')`,
     })

@@ -5,6 +5,7 @@ import { okMessage } from "@/lib/http/envelope";
 import { parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { uploadProblemsExcel } from "@/lib/problem/problemExcel";
+import { parseTrack } from "@/lib/problem/track";
 
 export const runtime = "nodejs";
 // 500행 × (문제 insert + 보기/정답 + 태그 + 감사) 를 행별 트랜잭션으로 직렬 처리한다.
@@ -71,7 +72,9 @@ export async function POST(request: Request): Promise<Response> {
     // departmentId 는 쿼리 파라미터다(ProblemController.java:117). 부서 관리자가 무엇을 보내든
     // resolveOwningDepartment 가 본인 부서로 강제한다(정답지 R5).
     const departmentId = parseNumericParam(new URL(request.url).searchParams.get("departmentId"), "departmentId");
+    // 직군도 부서와 같이 쿼리 파라미터다. 한 파일은 한 직군이므로 엑셀 열로 받지 않는다.
+    const track = parseTrack(new URL(request.url).searchParams.get("track"));
     return uploadProblemsExcel(getDb(),
-      { buffer: await uploaded.arrayBuffer(), fileName: uploaded.name }, departmentId, actor);
+      { buffer: await uploaded.arrayBuffer(), fileName: uploaded.name }, departmentId, track, actor);
   });
 }

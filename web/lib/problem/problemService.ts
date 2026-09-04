@@ -18,6 +18,7 @@ import {
   type ProblemCreateInput, type ProblemType,
 } from "./problemValidation";
 import { resolveOwningDepartment } from "./owningDepartment";
+import type { Track } from "./track";
 
 const SOURCE_NUMBER_UNIQUE_CONSTRAINT = "uq_problems_department_source_number";
 
@@ -49,6 +50,8 @@ export interface ProblemDetailResponse {
   status: string;
   departmentId: number;
   sourceNumber: number | null;
+  /** 직군. Spring 원본에는 없던 필드다 — 수정 화면이 현재 값으로 초기화하려면 필요하다. */
+  track: Track;
   choices: ProblemDetailChoice[];
   answers: string[];
   blanks: ProblemDetailBlank[];
@@ -145,7 +148,8 @@ function blankRevealCountToStore(req: ProblemCreateInput): number | null {
 }
 
 export async function createProblem(
-  conn: DbConn, input: ProblemCreateInput, requestedDepartmentId: number | null, actor: AuthUser,
+  conn: DbConn, input: ProblemCreateInput, requestedDepartmentId: number | null,
+  track: Track, actor: AuthUser,
 ): Promise<void> {
   // 순서 고정(정답지 V1·R12): normalize → validate → validateSourceNumber → 부서 해석.
   const req = normalizeProblemRequest(input);
@@ -169,6 +173,7 @@ export async function createProblem(
         departmentId: owningDepartmentId,
         sourceNumber: req.sourceNumber ?? null,
         createdBy: actor.userId,
+        track,
       });
     } catch (error) {
       throw translateDuplicateSourceNumber(error, departmentName, req.sourceNumber!);
@@ -186,7 +191,7 @@ export async function createProblem(
 }
 
 export async function updateProblem(
-  conn: DbConn, id: number, input: ProblemCreateInput, actor: AuthUser,
+  conn: DbConn, id: number, input: ProblemCreateInput, track: Track, actor: AuthUser,
 ): Promise<void> {
   // 순서 고정(정답지 V2): 존재 확인 → assertOwnership → 유형 변경 금지 → normalize → validate → 번호.
   const existing = await findProblemById(conn, id);
@@ -205,6 +210,8 @@ export async function updateProblem(
     try {
       // type·status·departmentId·createdBy 는 이 경로에서 바뀌지 않는다(ProblemPatch 가 막는다).
       // updated_at 도 DAO 가 찍는다.
+      // track 은 **일부러** 바뀐다 — 잘못 등록한 직군을 되돌릴 유일한 통로다(부서와 달리
+      // 전용 이동 기능이 없다). 그래서 수정 화면이 현재 직군을 반드시 실어 보내야 한다.
       await updateProblemRow(tx, id, {
         content: req.content!,
         imageUrl: req.imageUrl ?? null,
@@ -212,6 +219,7 @@ export async function updateProblem(
         explanation: req.explanation ?? null,
         blankRevealCount: blankRevealCountToStore(req),
         sourceNumber: req.sourceNumber ?? null,
+        track,
       });
     } catch (error) {
       throw translateDuplicateSourceNumber(error, departmentName, req.sourceNumber!);
@@ -263,6 +271,9 @@ export async function getProblemDetail(conn: DbConn, id: number, actor: AuthUser
     status: problem.status,
     departmentId: problem.departmentId,
     sourceNumber: problem.sourceNumber,
+    // 수정 화면이 현재 직군으로 선택을 초기화해야 한다. 이게 없으면 저장할 때마다
+    // 서버가 행정직으로 읽어 기술직 문제가 조용히 바뀐다.
+    track: problem.track as Track,
     // 정답지 D2: 정답 플래그의 이름은 `correct` 다(`isCorrect` 아님). Java 의 ProblemChoice 는
     // `private boolean correct` 라 Jackson 이 `correct` 로 직렬화하고, 프론트도 choice.correct 로
     // 읽는다(ProblemFormPage.jsx:577). Drizzle 행을 그대로 펼치면(...row) 이름이 어긋나는데,

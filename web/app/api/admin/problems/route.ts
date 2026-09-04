@@ -5,6 +5,7 @@ import { parseDateParam, parseNumericParam } from "@/lib/http/params";
 import { requireActor } from "@/lib/auth/currentUser";
 import { createProblem } from "@/lib/problem/problemService";
 import { toProblemCreateInput } from "@/lib/problem/problemRequestBody";
+import { parseTrack } from "@/lib/problem/track";
 import { listProblems } from "@/lib/problem/problemListService";
 
 export const runtime = "nodejs";
@@ -19,7 +20,9 @@ export async function POST(request: Request): Promise<Response> {
     // departmentId 는 본문이 아니라 쿼리 파라미터다 — ProblemCreateRequest 는 update 와 공유되므로
     // 필드로 넣으면 수정 경로에도 부서 지정 표면이 생긴다(ProblemController.java:37-39).
     const departmentId = parseNumericParam(new URL(request.url).searchParams.get("departmentId"), "departmentId");
-    await createProblem(getDb(), body, departmentId, actor);
+    // 직군도 부서와 같이 쿼리 파라미터다. 화면이 안 보내면 행정직으로 들어간다.
+    const track = parseTrack(new URL(request.url).searchParams.get("track"));
+    await createProblem(getDb(), body, departmentId, track, actor);
     return undefined; // ok()
   });
 }
