@@ -1,7 +1,7 @@
 import { apiGet, apiPost } from "@/apiClient/client.js";
 
-export function login({ employeeNo, password }) {
-  return apiPost("/api/auth/login", { employeeNo, password });
+export function login({ employeeNo, password, track }) {
+  return apiPost("/api/auth/login", { employeeNo, password, track });
 }
 
 export function logout() {

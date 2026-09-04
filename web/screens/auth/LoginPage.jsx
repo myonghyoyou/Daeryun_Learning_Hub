@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Eye,
@@ -53,12 +53,37 @@ function fieldBorderClass(tone) {
   return "border-line-default";
 }
 
+const TRACKS = [
+  { value: "ADMIN", label: "행정직" },
+  { value: "TECH", label: "기술직" },
+];
+
+/** 지난번에 고른 직군을 기억해 두는 자리. 이 브라우저에만 남는다. */
+const TRACK_KEY = "solve.track";
+
+function readSavedTrack() {
+  try {
+    const saved = window.localStorage.getItem(TRACK_KEY);
+    return TRACKS.some((t) => t.value === saved) ? saved : TRACKS[0].value;
+  } catch {
+    // 사생활 보호 모드 등에서 localStorage 접근 자체가 막힐 수 있다. 기본값으로 간다.
+    return TRACKS[0].value;
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [employeeNo, setEmployeeNo] = useState("");
   const [password, setPassword] = useState("");
+  // 직군은 자격증명이 아니라 **화면 필터**다. 서버는 맞는지 확인하지 않는다 — 두 직군의
+  // 문제은행은 이미 사내 파일서버에 서로 열려 있어 감출 대상이 아니고, 목적은 접근 차단이
+  // 아니라 화면 정리다. 기억은 이 브라우저에만 남긴다(사람마다 DB 에 저장하지 않는다).
+  const [track, setTrack] = useState(TRACKS[0].value);
+  // 서버 렌더에는 localStorage 가 없다. 첫 렌더는 기본값으로 두고 마운트 뒤에 덮어
+  // 하이드레이션 불일치를 피한다.
+  useEffect(() => { setTrack(readSavedTrack()); }, []);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -100,7 +125,9 @@ export default function LoginPage() {
 
     setSubmitting(true);
     try {
-      const result = await login({ employeeNo, password });
+      // 고른 값을 이 브라우저에 남긴다. 다른 PC 에서는 처음 한 번 다시 골라야 한다.
+      try { window.localStorage.setItem(TRACK_KEY, track); } catch { /* 저장 실패는 무시 */ }
+      const result = await login({ employeeNo, password, track });
       // Task 13의 세션 스토어는 캐시된 상태를 스스로 재조회하지 않는다.
       // navigate()는 클라이언트 라우팅만 수행하므로, refetchSession()으로
       // 캐시를 무효화하지 않으면 PrivateRoute/PublicRoute가 로그인 이전의
@@ -259,6 +286,35 @@ export default function LoginPage() {
                 </p>
               )}
             </div>
+
+            {/* 직군 토글. 고른 직군의 문제만 풀이 화면에 나온다. */}
+            <fieldset>
+              <legend className="mb-1 block text-label font-bold text-ink-default">직군</legend>
+              <div role="radiogroup" aria-label="직군" className="flex gap-2">
+                {TRACKS.map((option) => {
+                  const selected = track === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setTrack(option.value)}
+                      className={`h-11 flex-1 rounded-sm border text-body font-semibold transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua ${
+                        selected
+                          ? "border-action-primary-bg bg-action-primary-bg text-white"
+                          : "border-line-default bg-surface-default text-ink-default hover:bg-surface-subtle"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-body-small text-ink-muted">
+                고른 직군의 문제만 보입니다. 다음에 오시면 이 선택을 기억합니다.
+              </p>
+            </fieldset>
           </div>
 
           <button
