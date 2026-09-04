@@ -86,13 +86,20 @@ export default function TeamRunResultPage() {
       {wrongProblems.length > 0 && (
         <Surface className="mb-4 p-5">
           <p className="mb-3 text-section-title font-semibold text-ink-strong">틀린 문제</p>
+          {/*
+            번호를 글 안에 섞으면 여러 줄로 넘어갈 때 둘째 줄부터 번호 아래로 파고든다.
+            별도 칸으로 빼서 글 덩어리가 한 세로선에서 시작하게 한다.
+            items-baseline 이라 크기가 다른 번호와 본문이 첫 줄에서 밑선을 맞춘다.
+          */}
           <ul className="space-y-2">
             {wrongProblems.map((p) => (
-              <li key={p.id} className="text-body text-ink-default">
-                <span className="mr-2 text-body-small text-ink-muted">
+              <li key={p.id} className="flex items-baseline gap-2">
+                <span className="shrink-0 whitespace-nowrap text-body-small text-ink-muted">
                   {p.sourceNumber === null ? "번호 없음" : `${p.sourceNumber}번`}
                 </span>
-                <PreviewText text={p.content} />
+                <span className="flex-1 text-card-title text-ink-default">
+                  <PreviewText text={p.content} />
+                </span>
               </li>
             ))}
           </ul>

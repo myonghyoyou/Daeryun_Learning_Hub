@@ -87,13 +87,17 @@ export default function RandomResultPage() {
                 key={index}
                 className="flex items-start gap-3 rounded-md border border-line-default p-3"
               >
-                <span className="shrink-0 text-body-small font-medium text-ink-muted">{index + 1}</span>
-                <span className="line-clamp-2 flex-1 text-body-small text-ink-strong">
+                {/*
+                  줄 높이를 본문(22px)에 맞춘다. 번호와 결과는 12px/18px 이라 그대로 두면
+                  위쪽 정렬에서 첫 줄 밑선이 본문보다 3px 남짓 올라간다.
+                */}
+                <span className="shrink-0 text-body-small font-medium leading-[22px] text-ink-muted">{index + 1}</span>
+                <span className="line-clamp-2 flex-1 text-body text-ink-strong">
                   {problem?.content ? <PreviewText text={problem.content} /> : "(불러올 수 없는 문제)"}
                 </span>
                 <SourceBadge item={problem} />
                 <span
-                  className={`shrink-0 text-body-small font-semibold ${
+                  className={`shrink-0 text-body-small font-semibold leading-[22px] ${
                     r.correct ? "text-success-text" : "text-danger-text"
                   }`}
                 >
