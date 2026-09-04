@@ -20,7 +20,8 @@
     "proof:export": "tsx scripts/export-proof-sheet.ts",
     "proof:apply": "tsx scripts/apply-proof-sheet.ts",
     "proof:revert": "tsx scripts/revert-proof-sheet.ts",
-    "split:reference": "tsx scripts/split-reference-text.ts"
+    "split:reference": "tsx scripts/split-reference-text.ts",
+    "convert:tech-bank": "tsx scripts/convert-tech-bank.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
