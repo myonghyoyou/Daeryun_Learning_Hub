@@ -18,6 +18,23 @@ import { problemTypeLabel } from "@/utils/problemLabels.js";
 const CHOICE_TYPES = ["MCQ_SINGLE", "MCQ_MULTI", "OX"];
 
 /**
+ * 채점 결과에서 "내 답"과 "정답"을 한 줄씩 세운다.
+ *
+ * 예전에는 `정답: 대외경조금` 한 줄이 전부였다. 내가 뭐라고 썼는지가 없어서, 오타로 틀린
+ * 것인지 아예 모르고 틀린 것인지 구분되지 않았다. 라벨을 같은 너비로 고정해 두 줄의 값이
+ * 세로로 맞아떨어지게 한다 — 다른 글자를 눈으로 찾는 일이라 자리가 어긋나면 읽기 어렵다.
+ */
+function AnswerLine({ label, value, valueClass = "text-ink-strong", chip = null }) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <span className="w-10 shrink-0 text-body-small font-medium text-ink-muted">{label}</span>
+      <span className={`flex-1 whitespace-pre-wrap text-body ${valueClass}`}>{value}</span>
+      {chip}
+    </div>
+  );
+}
+
+/**
  * 문제 하나를 렌더하고 답 입력·제출·채점 결과 표시를 담당하는 표현 컴포넌트.
  * 단건 풀이 화면(/solve/:id)과 랜덤 세트 진행 화면이 함께 쓴다.
  */
@@ -249,12 +266,26 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           <ul className={CHOICE_LIST_CLASS}>
             {problem.choices.map((choice) => {
               const selected = selectedChoiceIds.includes(choice.id);
+              // 채점 전에는 어느 줄이 정답인지 드러나지 않는다 — correctChoiceIds 는 제출 응답에만 있다.
+              const isAnswer = answered && (result.correctChoiceIds ?? []).includes(choice.id);
+              const isMyWrongPick = answered && selected && !isAnswer;
+              // 채점 뒤에는 고른 줄을 파랑으로 두지 않는다. 파랑은 "고름"이지 "맞음"이 아닌데,
+              // 옆에 초록 정답이 서면 둘 중 어느 쪽이 내 답인지 읽히지 않는다.
+              const tone = !answered
+                ? selected
+                  ? "border-brand-blue bg-selection-bg text-ink-strong"
+                  : "border-line-default bg-surface-default text-ink-default hover:bg-surface-subtle"
+                : isAnswer
+                  ? "border-success-text bg-success-bg text-ink-strong"
+                  : isMyWrongPick
+                    ? "border-danger-text bg-danger-bg text-ink-strong"
+                    : "border-line-default bg-surface-default text-ink-default opacity-70";
               return (
                 <li key={choice.id}>
                   <label
-                    className={`solve-choice flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-body focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-brand-aqua ${CHOICE_ITEM_MIN_HEIGHT} ${
-                      selected ? "border-brand-blue bg-selection-bg text-ink-strong" : "border-line-default bg-surface-default text-ink-default hover:bg-surface-subtle"
-                    } ${answered ? "cursor-default opacity-70" : ""}`}
+                    className={`solve-choice flex items-center gap-3 rounded-md border px-4 py-3 text-body focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-brand-aqua ${CHOICE_ITEM_MIN_HEIGHT} ${tone} ${
+                      answered ? "cursor-default" : "cursor-pointer"
+                    }`}
                   >
                     <input
                       type={problem.type === "MCQ_MULTI" ? "checkbox" : "radio"}
@@ -264,7 +295,17 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
                       disabled={answered}
                       onChange={() => toggleChoice(choice.id)}
                     />
-                    {choice.text}
+                    <span className="flex-1">{choice.text}</span>
+                    {isAnswer && (
+                      <span className="shrink-0 rounded-full bg-success-text px-2 py-0.5 text-label font-bold text-surface-default">
+                        정답
+                      </span>
+                    )}
+                    {isMyWrongPick && (
+                      <span className="shrink-0 rounded-full bg-danger-text px-2 py-0.5 text-label font-bold text-surface-default">
+                        내 답
+                      </span>
+                    )}
                   </label>
                 </li>
               );
@@ -311,24 +352,41 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           </p>
           {result.explanation && <p className="mt-2 whitespace-pre-wrap text-body text-ink-default">{result.explanation}</p>}
           {result.blankResults && (
-            <ul className="mt-3 space-y-1 text-body-small">
+            <ul className="mt-3 space-y-2">
               {result.blankResults.map((b) => (
-                <li key={b.blankKey} className="text-ink-default">
-                  <span className="font-medium text-ink-strong">{b.submittedAnswer || "(미입력)"}</span>{" "}
-                  {b.correct ? (
-                    <span className="text-success-text">정답</span>
-                  ) : (
-                    <span className="text-danger-text">오답 · 정답은 {b.correctAnswer}</span>
+                <li key={b.blankKey} className="rounded-md bg-surface-default p-3">
+                  <AnswerLine
+                    label="내 답"
+                    value={b.submittedAnswer || "(미입력)"}
+                    chip={
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-label font-bold text-surface-default ${
+                          b.correct ? "bg-success-text" : "bg-danger-text"
+                        }`}
+                      >
+                        {b.correct ? "정답" : "오답"}
+                      </span>
+                    }
+                  />
+                  {/* 맞힌 빈칸에는 정답 줄을 더하지 않는다 — 바로 위에 같은 글자가 이미 있다. */}
+                  {!b.correct && (
+                    <div className="mt-1.5">
+                      <AnswerLine label="정답" value={b.correctAnswer} valueClass="font-bold text-success-text" />
+                    </div>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          {!result.correct && !result.blankResults && result.correctAnswerSummary && (
-            <p className="mt-3 text-body-small text-ink-default">
-              <span className="font-medium text-ink-strong">정답: </span>
-              {result.correctAnswerSummary}
-            </p>
+          {/*
+            객관식·OX 는 여기서 글로 적지 않는다 — 위 보기 목록에서 정답 줄에 표를 붙였다.
+            둘 다 하면 같은 사실이 두 자리에 흩어진다.
+          */}
+          {!result.correct && !result.blankResults && !CHOICE_TYPES.includes(problem.type) && result.correctAnswerSummary && (
+            <div className="mt-3 space-y-1.5 rounded-md bg-surface-default p-3">
+              <AnswerLine label="내 답" value={submittedText.trim() || "(미입력)"} />
+              <AnswerLine label="정답" value={result.correctAnswerSummary} valueClass="font-bold text-success-text" />
+            </div>
           )}
         </Surface>
       )}
