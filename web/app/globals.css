@@ -148,6 +148,54 @@ button:not(:disabled) {
 }
 
 /*
+ * ─── 로그인 화면 ─────────────────────────────────────────────────────────
+ *
+ * 입력칸의 포커스. 3px outline 을 툭 그리면 둥근 칸 밖에 각진 테가 얹혀 투박하다.
+ * 테두리 색과 그 둘레의 옅은 링(box-shadow)을 함께 바꿔 칸 자체가 살아나게 한다.
+ * box-shadow 는 border-radius 를 따라 돌지만 outline 은 따라가지 않는다 — 그래서 링이다.
+ *
+ * 시간·곡선은 문제 풀이 화면의 "즉각 반응" 단을 그대로 쓴다. 화면이 달라도 박자는 하나다.
+ */
+.login-field {
+  transition:
+    border-color var(--motion-tap) var(--motion-ease-enter),
+    box-shadow var(--motion-tap) var(--motion-ease-enter);
+}
+
+.login-field:focus {
+  border-color: var(--color-brand-blue);
+  box-shadow: 0 0 0 3px var(--color-surface-blue);
+}
+
+/* 비어 있어서 난 오류 — "채우면 된다". */
+.login-field-warning:focus {
+  border-color: var(--color-warning-text);
+  box-shadow: 0 0 0 3px var(--color-warning-bg);
+}
+
+/* 값이 틀렸다 — "다시 보라". 포커스 전에도 테가 보여야 어느 칸인지 눈에 들어온다. */
+.login-field-danger {
+  box-shadow: 0 0 0 3px var(--color-danger-bg);
+}
+
+.login-field-danger:focus {
+  border-color: var(--color-danger-text);
+  box-shadow: 0 0 0 3px var(--color-danger-bg);
+}
+
+/*
+ * 경고 배너. 같은 사번으로 두 번 틀리면 문구가 그대로라 "다시 떴다"는 것이 안 보인다.
+ * 아래에서 짧게 올라오며 나타나 매번 새로 왔음을 알린다. 200ms 는 이 앱의 "반복" 단이다 —
+ * 로그인은 여러 번 시도할 수 있는 자리라 등장(300ms)보다 짧게 둔다.
+ */
+@keyframes login-banner-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.login-banner { animation: login-banner-in var(--motion-repeat) var(--motion-ease-enter) both; }
+
+/*
  * 움직임 줄이기를 켠 기기에서는 모든 움직임을 없앤다.
  *
  * 예전에는 명예의 전당 클래스 세 개만 막고 있었다. 그 방식은 새 애니메이션을 넣을 때마다

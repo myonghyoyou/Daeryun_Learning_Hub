@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "react-toastify";
 import {
   Eye,
   EyeSlash,
@@ -29,12 +28,29 @@ const SESSION_EXPIRED_REASON = "session-expired";
 
 // 8.1.4: 모바일에서 자동 확대를 방지하려면 입력 글자 크기가 16px 미만이면 안 된다.
 // 디자인 시스템의 type-body 토큰(14px)보다 우선하는 의도된 예외이며, text-base(16px)를 쓴다.
+/*
+ * 포커스를 3px outline 으로 툭 그리면 칸 밖에 각진 테가 얹혀 투박하다. 테두리 색과
+ * 그 둘레의 옅은 링을 함께 바꿔 칸 자체가 살아나는 모양으로 만든다.
+ *
+ * outline 이 아니라 box-shadow 로 링을 그리는 이유는 반경(rounded-sm)을 따라 돌기 때문이다.
+ * outline 은 모서리를 따라가지 않아 둥근 칸에 각진 테가 생긴다.
+ *
+ * 시간·곡선은 문제 풀이 화면과 같은 "즉각 반응" 단(140ms · ease-out)을 쓴다 —
+ * 화면이 달라도 앱 전체의 박자는 하나로 둔다.
+ */
 const inputBaseClass =
-  "h-11 w-full rounded-sm border bg-surface-default px-3 text-base text-ink-strong placeholder:text-ink-subtle " +
-  "focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua";
+  "login-field h-11 w-full rounded-sm border bg-surface-default px-3 text-base text-ink-strong placeholder:text-ink-subtle " +
+  "focus:outline-none";
 
-function fieldBorderClass(hasError) {
-  return hasError ? "border-danger-text" : "border-line-default";
+/**
+ * 무엇이 잘못됐는지 칸 자체가 말하게 한다. 배너만으로는 두 칸 중 어느 쪽인지 알 수 없다.
+ * 비어 있어서 난 오류와 인증 실패를 같은 색으로 칠하지 않는다 —
+ * 비었을 때는 "채우세요"(경고), 틀렸을 때는 "다시 보세요"(위험)로 뜻이 다르다.
+ */
+function fieldBorderClass(tone) {
+  if (tone === "danger") return "border-danger-text login-field-danger";
+  if (tone === "warning") return "border-warning-text login-field-warning";
+  return "border-line-default";
 }
 
 export default function LoginPage() {
@@ -46,6 +62,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  // 인증 실패는 어느 칸의 문제인지 알 수 없으므로 fieldErrors 와 따로 둔다.
+  const [authFailed, setAuthFailed] = useState(false);
   const [banner, setBanner] = useState(() => {
     // 둘 중 하나만 참이어도 배너를 띄운다: URL 파라미터(직접 진입 시나리오,
     // 정답지 L1)와 sessionStore.expired(경합에서 파라미터가 유실된 시나리오, Task 7).
@@ -75,6 +93,7 @@ export default function LoginPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setBanner(null);
+    setAuthFailed(false);
     if (!validate()) {
       return;
     }
@@ -95,13 +114,28 @@ export default function LoginPage() {
     } catch (error) {
       const message = resolveErrorMessage(error, "로그인에 실패했습니다.");
       const isLockedError = error instanceof ApiError && error.resultCode === 1010;
-      setBanner({ tone: isLockedError ? "locked" : "error", message });
-      toast.error(message);
+      setBanner({ tone: isLockedError ? "locked" : "error", message, seq: Date.now() });
+      // 어느 칸이 틀렸는지 서버는 알려주지 않는다(알려주면 사번 존재 여부가 샌다).
+      // 그래서 둘 다 위험으로 칠해 "이 두 칸을 다시 보라"고만 말한다.
+      setFieldErrors({ employeeNo: null, password: null });
+      setAuthFailed(true);
+      // 토스트는 띄우지 않는다 — 바로 위 배너가 같은 말을 하고 있어 같은 문장이 두 번 뜬다.
       // 인증 실패 시 입력값은 유지하고 사번 필드로 포커스만 되돌린다.
       employeeNoRef.current?.focus();
     } finally {
       setSubmitting(false);
     }
+  }
+
+  /**
+   * 칸 테두리의 뜻을 정한다.
+   * - 비어 있어서 난 오류: 경고(채우면 된다)
+   * - 인증 실패: 위험(값 자체가 틀렸다). 어느 칸인지 모르므로 두 칸 다 칠한다
+   */
+  function fieldTone(fieldError) {
+    if (fieldError) return "warning";
+    if (authFailed) return "danger";
+    return null;
   }
 
   const bannerToneClass = {
@@ -132,9 +166,15 @@ export default function LoginPage() {
 
           <div aria-live="polite">
             {banner && (
+              /*
+                key 에 시도 횟수를 넣어 같은 문구로 다시 실패해도 다시 마운트되게 한다.
+                key 가 그대로면 React 가 같은 요소로 보고 애니메이션을 새로 돌리지 않아,
+                두 번째 실패에서는 배너가 이미 떠 있는 그대로라 "다시 틀렸다"가 안 보인다.
+              */
               <div
+                key={banner.seq}
                 role="alert"
-                className={`flex items-start gap-2 rounded-sm border px-3 py-2 text-body-small ${bannerToneClass[banner.tone]}`}
+                className={`login-banner flex items-start gap-2 rounded-sm border px-3 py-2 text-body-small ${bannerToneClass[banner.tone]}`}
               >
                 {banner.tone === "info" ? (
                   <Info size={18} className="mt-0.5 shrink-0" />
@@ -156,7 +196,7 @@ export default function LoginPage() {
               <input
                 id="employeeNo"
                 ref={employeeNoRef}
-                className={`${inputBaseClass} ${fieldBorderClass(Boolean(fieldErrors.employeeNo))}`}
+                className={`${inputBaseClass} ${fieldBorderClass(fieldTone(fieldErrors.employeeNo))}`}
                 placeholder="사번을 입력하세요"
                 value={employeeNo}
                 onChange={(event) => {
@@ -189,7 +229,7 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   id="password"
-                  className={`${inputBaseClass} pr-11 ${fieldBorderClass(Boolean(fieldErrors.password))}`}
+                  className={`${inputBaseClass} pr-11 ${fieldBorderClass(fieldTone(fieldErrors.password))}`}
                   type={showPassword ? "text" : "password"}
                   placeholder="비밀번호를 입력하세요"
                   value={password}
