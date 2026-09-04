@@ -66,7 +66,9 @@ body {
   to { opacity: 1; }
 }
 
-.solve-result { animation: solve-result-in var(--motion-in) var(--motion-ease-enter) both; }
+/* 결과 카드와 하단 고정 피드백 바. 둘 다 화면에 없던 것이 생기는 자리라 같은 움직임을 쓴다. */
+.solve-result,
+.solve-feedback { animation: solve-result-in var(--motion-in) var(--motion-ease-enter) both; }
 .solve-tick { animation: solve-tick-pop var(--motion-pop) var(--motion-ease-pop) both; }
 
 /* 문제를 넘길 때. 자리를 옮기지 않고 불투명도만 바꾼다 — 70번 반복될 움직임이다. */

@@ -156,15 +156,22 @@ export default function TeamRunPlayPage() {
         // key 가 바뀌면 다시 마운트되면서 등장 애니메이션이 새로 돈다. 문제를 넘겼다는
         // 신호가 이것뿐이다 — 본문과 보기가 통째로 갈리는데 화면은 제자리에 있다.
         <div key={problem.id} className="solve-swap">
-          <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
-        </div>
-      )}
+          {/*
+            다음 문제 버튼을 카드에 넘겨 하단 고정 바 안에서 그리게 한다. 넘어가는 판단은
+            여기(바퀴 위치를 아는 쪽)에 남는다 — 카드는 자리만 내준다.
 
-      {submittedResult && (
-        <div className="mt-4">
-          <Button size="lg" loading={advancing} onClick={() => goNext(submittedResult.correct)}>
-            {run.cursor + 1 >= run.total ? "결과 보기" : "다음 문제"}
-          </Button>
+            onClick 에서 submittedResult 를 확인하고 넘긴다. undefined 를 goNext 로 흘리면
+            advanceRun 의 correct 가 빠진 채로 나가 맞음/틀림이 아니라 "건너뜀"이 된다.
+          */}
+          <ProblemSolveCard
+            problem={problem}
+            onSubmitted={setSubmittedResult}
+            nextAction={
+              <Button variant="secondary" size="md" loading={advancing} onClick={() => submittedResult && goNext(submittedResult.correct)}>
+                {run.cursor + 1 >= run.total ? "결과 보기" : "다음 문제"}
+              </Button>
+            }
+          />
         </div>
       )}
     </>

@@ -10,6 +10,7 @@ import { submitAttempt } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { parseBlankContent } from "@/utils/blankContent.js";
 import { blankOrderFrom, resolveEnter } from "@/utils/blankFocus.js";
+import { revealMapFrom } from "@/utils/blankReveal.js";
 import { splitAnswerBlanks } from "@/utils/answerBlank.js";
 import { blankHostField, blankHostText } from "@/lib/problem/blankHost";
 import { hasNoAnswer } from "@/utils/answerState.js";
@@ -38,7 +39,7 @@ function AnswerLine({ label, value, valueClass = "text-ink-strong", chip = null 
  * 문제 하나를 렌더하고 답 입력·제출·채점 결과 표시를 담당하는 표현 컴포넌트.
  * 단건 풀이 화면(/solve/:id)과 랜덤 세트 진행 화면이 함께 쓴다.
  */
-export default function ProblemSolveCard({ problem, onSubmitted }) {
+export default function ProblemSolveCard({ problem, onSubmitted, nextAction = null }) {
   const [selectedChoiceIds, setSelectedChoiceIds] = useState([]);
   const [submittedText, setSubmittedText] = useState("");
   const [blankInputs, setBlankInputs] = useState({});
@@ -95,6 +96,11 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
   }
 
   const answered = result !== null;
+  // 채점 뒤 빈칸 자리에 되돌려 놓을 결과. 위치가 아니라 키로 찾는다(blankReveal.js 참고).
+  const blankResultByKey = revealMapFrom(result?.blankResults);
+  // 바에 정답을 적는 것은 주관식뿐이다(위 하단 바 주석 참고).
+  const barAnswer =
+    answered && !result.correct && problem.type === "SHORT_ANSWER" && result.correctAnswerSummary;
 
   const nothingEntered = hasNoAnswer({
     type: problem.type,
@@ -203,6 +209,39 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
       if (segment.type === "reveal") {
         return <strong key={index} className="font-semibold text-ink-strong">{segment.value}</strong>;
       }
+      // 채점이 끝나면 입력칸을 정답으로 바꿔 문장을 완성해 보여준다. 정답을 문장에서
+      // 떼어 목록으로 세우면 "이게 어느 칸 답이었지"를 되짚어야 해서, 읽기는 쉬워도
+      // 남지 않는다. 틀린 칸은 그 아래에 내가 쓴 답을 작게 달아 무엇이 달랐는지 보인다.
+      const graded = blankResultByKey[segment.blankKey];
+      if (graded) {
+        const missing = !(graded.submittedAnswer ?? "").trim();
+        return (
+          <span
+            key={index}
+            className={`mx-1 inline-flex items-baseline gap-1.5 whitespace-nowrap rounded-sm border-b-2 px-2 py-0.5 align-baseline ${
+              graded.correct ? "border-success-text bg-success-bg" : "border-danger-text bg-danger-bg"
+            }`}
+          >
+            {/*
+              내 답을 정답 앞에 같은 줄로 둔다. 세로로 쌓으면 문장 한가운데가 위아래로
+              벌어져 줄 밑선이 흐트러진다. 읽는 차례도 "내가 쓴 것 → 맞는 것" 이 자연스럽다.
+              (미입력) 은 취소선을 긋지 않는다 — 지울 글자가 없다.
+            */}
+            {!graded.correct && (
+              <span className={`text-body-small text-ink-muted ${missing ? "" : "line-through"}`}>
+                {missing ? "(미입력)" : graded.submittedAnswer}
+              </span>
+            )}
+            {/*
+              정답은 맞은 칸에서만 초록이다. 틀린 칸에서 정답까지 붉게 칠하면 붉은색이
+              "틀림"과 "정답" 두 가지를 동시에 뜻하게 된다 — 칸 색이 이미 틀림을 말한다.
+            */}
+            <span className={`font-bold ${graded.correct ? "text-success-text" : "text-ink-strong"}`}>
+              {graded.correctAnswer}
+            </span>
+          </span>
+        );
+      }
       return (
         <input
           key={index}
@@ -239,10 +278,15 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           (lib/problem/blankHost.ts) 입력칸도 그 글을 그리는 자리에서 나온다 — 두 자리 모두
           renderWithBlanks 를 쓰므로 어느 쪽에 있든 같은 모양으로 그려진다.
         */}
+        {/*
+          질문은 보기·지문보다 한 단 크고 굵다. 예전에는 셋 다 14px 보통 굵기라 무엇이
+          물음인지 눈에 먼저 들어오지 않았다. 지문(아래 박스)은 14px 그대로 둔다 —
+          읽을 거리이지 물음이 아니다.
+        */}
         {blanksLiveInContent ? (
-          <p className="text-body leading-loose text-ink-strong">{renderWithBlanks(problem.content)}</p>
+          <p className="text-section-title font-semibold leading-loose text-ink-strong">{renderWithBlanks(problem.content)}</p>
         ) : (
-          <p className="whitespace-pre-wrap text-body leading-relaxed text-ink-strong">{renderAnswerBlanks(problem.content)}</p>
+          <p className="whitespace-pre-wrap text-section-title font-semibold leading-relaxed text-ink-strong">{renderAnswerBlanks(problem.content)}</p>
         )}
 
         {problem.referenceText && (
@@ -255,7 +299,8 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           </div>
         )}
 
-        {problem.type === "FILL_BLANK" && (
+        {/* 채점이 끝나면 입력 진행도는 알려 줄 것이 없다 — 문장이 이미 정답을 보여준다. */}
+        {problem.type === "FILL_BLANK" && !answered && (
           <p className="mt-3 text-body-small text-ink-muted">
             빈칸 {problem.blanksToAnswer.length}개 중{" "}
             {problem.blanksToAnswer.filter((key) => (blankInputs[key] ?? "").trim()).length}개 입력
@@ -326,6 +371,20 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         )}
 
         {/*
+          해설과 빈칸별 내역은 답을 적은 자리 바로 아래에 둔다. 아래 고정 바는 판정과
+          다음 행동만 맡는다 — 길이가 정해지지 않은 글을 바에 넣으면 화면을 삼킨다.
+        */}
+        {/*
+          해설만 남긴다. 빈칸별 정답은 위 문장 안으로 되돌아갔다 — 같은 사실을 두 자리에
+          두면 어느 쪽을 봐야 할지 모르게 된다.
+        */}
+        {answered && result.explanation && (
+          <div className="mt-5 border-t border-line-default pt-4">
+            <p className="whitespace-pre-wrap text-body text-ink-default">{result.explanation}</p>
+          </div>
+        )}
+
+        {/*
           답을 내고 나서도 DOM 에서 지우지 않는다. 지우면 아래 결과 카드가 튀어 오르는데,
           자리를 접으면서 흐려지게 하려면 요소가 남아 있어야 한다.
           inert 는 접히는 동안 버튼이 눌리거나 화면 낭독기에 읽히는 것을 막는다.
@@ -340,55 +399,47 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
         </div>
       </Surface>
 
+      {/*
+        판정과 다음 행동을 화면 아래 한 곳에 붙박는다.
+        예전에는 문제 카드 · 결과 카드 · 다음 버튼이 세로로 셋이었고, 문제가 길면 판정도
+        버튼도 스크롤해야 나왔다. sticky bottom-0 은 넘칠 때만 붙고 짧은 화면에서는
+        제자리에 서므로, 짧은 문제에서 화면을 가리지 않는다.
+
+        해설과 빈칸별 내역은 바에 넣지 않는다 — 길이가 정해져 있지 않아 바가 화면을 삼킨다.
+        그것들은 문제 카드 안, 답을 적은 자리 바로 아래에 남는다.
+      */}
       {answered && (
-        <Surface background={result.correct ? "bg-success-bg" : "bg-danger-bg"} className="solve-result mt-4 p-5">
-          <p className={`flex items-center gap-2 text-section-title font-bold ${result.correct ? "text-success-text" : "text-danger-text"}`}>
+        <div
+          className={`solve-feedback sticky bottom-0 z-10 mt-4 flex items-center gap-3 rounded-lg border border-line-default px-4 py-3 shadow-surface ${
+            result.correct ? "bg-success-bg" : "bg-danger-bg"
+          }`}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <p className={`flex items-center gap-2 text-body font-bold ${result.correct ? "text-success-text" : "text-danger-text"}`}>
+              {/*
+                튐은 맞혔을 때만이다. 틀렸을 때 흔드는 관용구를 쓰지 않는 것과 같은 이유로 —
+                한 바퀴에 수십 번 나오는 자리에서 강조는 나무람으로 읽힌다. 색과 아이콘이면 충분하다.
+              */}
+              {result.correct ? (
+                <CheckCircle size={18} weight="fill" aria-hidden="true" className="solve-tick shrink-0" />
+              ) : (
+                <XCircle size={18} weight="fill" aria-hidden="true" className="shrink-0" />
+              )}
+              {result.correct ? "정답입니다" : "틀렸습니다"}
+            </p>
             {/*
-              튐은 맞혔을 때만이다. 틀렸을 때 흔드는 관용구를 쓰지 않는 것과 같은 이유로 —
-              한 바퀴에 수십 번 나오는 자리에서 강조는 나무람으로 읽힌다. 색과 아이콘이면 충분하다.
+              주관식만 정답을 바에 적는다. 객관식은 보기 줄에 이미 표가 붙어 있고,
+              빈칸 채우기는 여러 개라 바가 높아진다 — 둘 다 카드 안에서 담당한다.
             */}
-            {result.correct ? <CheckCircle size={20} weight="fill" aria-hidden="true" className="solve-tick" /> : <XCircle size={20} weight="fill" aria-hidden="true" />}
-            {result.correct ? "정답입니다!" : "오답입니다."}
-          </p>
-          {result.explanation && <p className="mt-2 whitespace-pre-wrap text-body text-ink-default">{result.explanation}</p>}
-          {result.blankResults && (
-            <ul className="mt-3 space-y-2">
-              {result.blankResults.map((b) => (
-                <li key={b.blankKey} className="rounded-md bg-surface-default p-3">
-                  <AnswerLine
-                    label="내 답"
-                    value={b.submittedAnswer || "(미입력)"}
-                    chip={
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-label font-bold text-surface-default ${
-                          b.correct ? "bg-success-text" : "bg-danger-text"
-                        }`}
-                      >
-                        {b.correct ? "정답" : "오답"}
-                      </span>
-                    }
-                  />
-                  {/* 맞힌 빈칸에는 정답 줄을 더하지 않는다 — 바로 위에 같은 글자가 이미 있다. */}
-                  {!b.correct && (
-                    <div className="mt-1.5">
-                      <AnswerLine label="정답" value={b.correctAnswer} valueClass="font-bold text-success-text" />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {/*
-            객관식·OX 는 여기서 글로 적지 않는다 — 위 보기 목록에서 정답 줄에 표를 붙였다.
-            둘 다 하면 같은 사실이 두 자리에 흩어진다.
-          */}
-          {!result.correct && !result.blankResults && !CHOICE_TYPES.includes(problem.type) && result.correctAnswerSummary && (
-            <div className="mt-3 space-y-1.5 rounded-md bg-surface-default p-3">
-              <AnswerLine label="내 답" value={submittedText.trim() || "(미입력)"} />
-              <AnswerLine label="정답" value={result.correctAnswerSummary} valueClass="font-bold text-success-text" />
-            </div>
-          )}
-        </Surface>
+            {barAnswer && (
+              <>
+                <AnswerLine label="정답" value={result.correctAnswerSummary} valueClass="font-bold text-success-text" />
+                <AnswerLine label="내 답" value={submittedText.trim() || "(미입력)"} />
+              </>
+            )}
+          </div>
+          {nextAction && <div className="shrink-0">{nextAction}</div>}
+        </div>
       )}
     </>
   );

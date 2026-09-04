@@ -201,16 +201,17 @@ export default function RandomPlayPage() {
 
       {/* 팀 바퀴 진행 화면과 같은 장치다 — key 가 바뀌면 등장 애니메이션이 새로 돈다. */}
       <div key={problem.id} className="solve-swap">
-        <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
+        {/* 팀 바퀴 진행 화면과 같은 장치다 — 버튼은 하단 고정 바 안에서 그려진다. */}
+        <ProblemSolveCard
+          problem={problem}
+          onSubmitted={setSubmittedResult}
+          nextAction={
+            <Button variant="secondary" size="md" onClick={handleNext}>
+              다음 문제
+            </Button>
+          }
+        />
       </div>
-
-      {submittedResult && (
-        <div className="mt-4">
-          <Button size="lg" onClick={handleNext}>
-            다음 문제
-          </Button>
-        </div>
-      )}
     </>
   );
 }
