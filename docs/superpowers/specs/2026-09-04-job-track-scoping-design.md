@@ -38,11 +38,26 @@
 ```sql
 ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
   CHECK (track IN ('ADMIN', 'TECH'));
+-- 기존 행을 채운 뒤 곧바로 기본값을 뗀다. 아래 "기본값을 남기면 안 되는 이유" 참고.
+ALTER TABLE problems ALTER COLUMN track DROP DEFAULT;
 ```
 
 - `ADMIN` = 행정직, `TECH` = 기술직
-- 기본값이 `ADMIN` 이라 **기존 722문항은 손댈 필요가 없다.** 지금 있는 건 전부 행정직이다
+- 기본값이 있는 채로 컬럼을 더하므로 **기존 722문항은 손댈 필요가 없다.** 지금 있는 건
+  전부 행정직이다
 - `users` 에는 아무것도 추가하지 않는다
+- `lib/db/schema.ts` 에는 `.notNull()` 만 적고 **`.default()` 는 적지 않는다**
+
+### 기본값을 남기면 안 되는 이유
+
+`insertProblem` 은 drizzle 이 추론한 삽입 타입을 그대로 받아 `values(row)` 한다
+(`lib/db/problems.ts:14`). 기본값이 있는 컬럼은 그 타입에서 **선택 필드**가 되므로, 엑셀
+업로드나 개별 등록이 `track` 을 안 넘겨도 타입 검사를 통과한다. 그러면 기술직 428행이
+조용히 `ADMIN` 으로 들어가고, **업로드는 되돌리기 어렵다**
+(`docs/문제은행_엑셀_기술직/README.md` 의 "부서를 잘못 고른 업로드는 되돌릴 수 없습니다").
+
+기본값을 떼면 삽입 타입에서 필수 필드가 되어, `track` 을 안 넘기는 경로가 **컴파일에서
+걸린다.** 사람이 기억해서 지키는 대신 타입이 지키게 한다.
 
 ### 왜 부서에 달지 않는가
 
@@ -74,6 +89,26 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
   값이 없다. 기존 사용자는 전부 행정직이므로 이 기본값이 정확하고, 강제 로그아웃이 필요 없다
 - 세션 동안 직군은 고정이다. 바꾸려면 다시 로그인한다
 
+### 토큰에서 값이 새지 않게 할 것
+
+`signSession` 은 `{...user}` 로 스프레드하지만 **`verifySession` 은 필드를 하나씩 나열해
+복원한다**(`lib/auth/jwt.ts:28-35`). 여기에 `track` 을 안 적으면 조용히 사라지는데,
+`middleware.ts:21` 이 요청마다 세션을 다시 서명하므로 **바로 다음 요청에 `ADMIN` 으로
+굳는다.** 두 곳을 같이 봐야 한다.
+
+비밀번호 변경 경로는 안전하다 — `changePassword` 가 `{...authUser, mustChangePassword: false}`
+로 스프레드해 돌려주므로 `track` 이 그대로 실려 간다(`lib/auth/authService.ts:83`). 새 계정은
+첫 로그인에서 반드시 이 경로를 타므로 확인해 둔다.
+
+### 토글 값이 흐르는 길
+
+`login()` 은 자격증명만 받는다. `track` 은 **라우트에서** `authUser` 에 붙인다.
+
+1. 로그인 화면 — 토글 값을 요청 본문에 함께 보낸다
+2. `app/api/auth/login/route.ts:11-17` — 지금은 `employeeNo`/`password` 만 읽는다.
+   `track` 을 읽어 `setSessionCookie({ ...authUser, track })` 로 넘긴다
+3. 값이 없거나 이상하면 `ADMIN`
+
 **기억은 브라우저에 남긴다**(`localStorage`). 다음 로그인 때 토글이 지난번 값으로 미리
 잡혀 있다. 사람마다 저장할 필요가 없다고 확인했으므로 DB 컬럼을 만들지 않는다.
 
@@ -93,9 +128,32 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 | 팀 대항 시작 | `findTeamProblemIds` | `lib/db/solveTeams.ts:45` |
 | 오답 다시풀기 | `findWrongProblemIds` | `lib/db/solveTeams.ts:61` |
 | 팀 목록의 오답 개수 배지 | `countWrongByDepartment` | `lib/db/solveTeams.ts:81` |
+| **랜덤 풀이의 부서 선택지** | `findActiveDepartments` | `app/api/departments/route.ts:19` |
+| **학습 이력** | `findAttemptsByUserId` | `lib/db/attempts.ts:35` |
 
 각 함수는 `track` 을 인자로 받아 `problems.track = :track` 을 `WHERE` 에 더한다.
 호출하는 서비스가 `actor.track` 을 넘긴다.
+
+### 부서 선택지도 걸러야 한다
+
+`/api/departments` 는 로그인만 하면 **활성 부서 전부**를 돌려주고, 랜덤 풀이 화면의 부서
+드롭다운이 이걸 쓴다(`RandomSetupPage.jsx:34`). 그냥 두면 행정직으로 들어온 사람의
+드롭다운에 `기술직` 이 뜨고, 고르면 문제 질의는 걸러지므로 0문제가 나온다. 팀 이름 단계에서
+이미 새는 것이다.
+
+거르는 규칙은 **팀 목록과 같아야 한다** — 그 직군의 ACTIVE 문제가 하나 이상 있는 부서만.
+두 곳이 어긋나면 랜덤에서는 고를 수 있는데 팀 대항에는 없는 부서가 생긴다.
+
+이 라우트는 관리자 화면이 쓰지 않는다(관리자는 `/api/admin/departments`). 걸러도 안전하다.
+
+### 학습 이력은 고른 직군 것만 보여 준다
+
+기술직으로 풀고 행정직으로 다시 들어오면 이력에 도시가스사업법 문제가 남는다. 고른 직군
+것만 보이는 쪽으로 정했다. `findAttemptsByUserId` 는 이미 `problems` 를 이너조인하고 있어
+조건 한 줄이면 된다.
+
+> 대가: 이력이 "내가 푼 전부"가 아니라 "이번 직군에서 푼 것"이 된다. 두 직군을 다 푼
+> 사람은 로그인한 직군에 따라 이력이 달라 보인다.
 
 `findSolveRowsByIds`(`:112`)는 거르지 않는다 — 이미 걸러진 곳에서 나온 id 목록을 받아
 본문을 채우는 함수다. 여기서 또 거르면 바퀴 중간의 문제가 조용히 사라진다.
@@ -109,6 +167,10 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 - 기술직으로 들어오면 → `기술직` 한 칸(다른 팀은 TECH 문제가 0개라 빠진다)
 
 부서에 직군을 달지 않아도 되는 이유가 이것이다.
+
+**단, 세는 식과 거르는 식이 같아야 한다.** `count(...) FILTER (...)`(`:34`)와
+`HAVING count(...) FILTER (...)`(`:39`)가 같은 식을 쓰고 있다. 한쪽에만 `track` 을 넣으면
+**다른 직군 문제만 있는 팀이 0건짜리로 목록에 남는다.**
 
 ### 한 부서에 두 직군이 섞여도 깨지지 않는다
 
@@ -130,11 +192,29 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 ## 명예의 전당
 
 `users.track` 이 없으므로 **푼 문제의 직군으로** 가른다 — `attempts JOIN problems` 후
-`problems.track = :actor.track`. `lib/db/hallOfFame.ts:44` 의 개인 순위와 팀 순위 둘 다.
+`problems.track = :actor.track`.
+
+**개인 순위와 팀 순위는 서로 다른 쿼리다. 둘 다 고쳐야 한다.**
+
+| 무엇 | 함수 | 파일 |
+|---|---|---|
+| 개인 순위 | `findCorrectCountsByUser` | `lib/db/hallOfFame.ts:37` |
+| 팀 순위 | `findCorrectCountsByTeam` | `lib/db/hallOfFame.ts:65` |
+
+팀 순위는 개인 행을 묶어 만드는 것이 아니라 **자체 SQL** 이다. 개인 쪽만 고치면 팀 순위만
+두 직군 합계로 남는다.
 
 라벨이 아니라 실제로 푼 것으로 재므로 오히려 정확하다. 기술직 500문항과 행정직 722문항은
 모수가 달라 맞힌 개수를 그대로 비교할 수 없는데, 이렇게 하면 같은 문제를 푼 사람끼리만
 줄을 선다.
+
+> **조인을 더하면서 `p.status = 'ACTIVE'` 를 같이 넣지 마라.** 두 쿼리에는 지금 문제 상태
+> 조건이 없어 **보관된 문제의 정답도 센다**(`:46`, `:75` 의 `WHERE` 는 `a.is_correct` 와
+> `u.status` 뿐이다). 무심코 붙이면 과거 점수가 조용히 바뀐다.
+>
+> 팀 순위는 **푼 사람의 부서**로 묶는다(`d.id = u.department_id`). 문제의 부서가 아니다.
+> 그래서 영업팀의 기술직 직원이 쌓은 점수는 기술직 순위의 영업팀 몫으로 간다 — 한 팀이
+> 두 직군 순위에 각각 제 몫으로 나오는 것이 맞는 동작이다.
 
 - 두 직군을 다 푼 사람은 양쪽 순위에 각각 **그 직군 몫만큼만** 나온다
 - 한 팀에 두 직군이 섞여 있으므로 팀 점수도 그 직군 사람들의 몫만 합산된다
@@ -145,7 +225,7 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 |---|---|
 | 문제 개별 등록·수정 | 직군 선택 추가(필수). 기본값 행정직 |
 | 문제 엑셀 일괄 등록 | 직군 선택 추가 — 부서 고르는 자리 바로 옆 |
-| 문제 목록(관리자) | 직군 열 표시. 필터는 부서 필터와 같은 방식으로 |
+| 문제 목록(관리자) | 직군 **열 표시만.** 필터는 넣지 않는다 — 아래 |
 | 관리자 통계·대시보드 | **손대지 않는다.** 관리자는 전체를 봐야 한다 |
 | 계정 관련 전부 | **손대지 않는다.** 사람에게 직군이 없다 |
 
@@ -156,6 +236,22 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 > 부서를 잘못 고른 업로드가 되돌리기 어렵다는 기존 위험이 직군에도 똑같이 붙는다.
 > 업로드 결과 화면에 **선택했던 부서와 직군을 같이 보여 준다** — 지금은 성공/실패 건수만
 > 나와서 어디로 들어갔는지 알 수가 없다.
+
+관리자 목록에 **직군 필터는 넣지 않는다.** 기술직 문제는 전부 `기술직` 부서에 들어가므로
+이미 있는 부서 필터가 같은 일을 한다. 지금은 중복이고, 한 부서에 두 직군이 실제로 섞이기
+시작하면 그때 넣는다.
+
+## 운영 → 로컬 동기화
+
+`SnapshotProblem` 에 `track` 을 더한다(`lib/problemSync/snapshot.ts:19-38`). 필드 목록이
+고정이고 검증기가 붙어 있어, 그대로 두면 `pnpm sync:problems` 로 가져온 로컬 문제가 전부
+`ADMIN` 이 된다 — **로컬에서 이 기능을 검증할 수 없게 된다.**
+
+`SNAPSHOT_VERSION` 은 1에서 올린다. 옛 스냅샷 파일을 읽을 때는 `track` 이 없으므로
+`ADMIN` 으로 채운다(토큰과 같은 규칙).
+
+교정용 시트(`lib/problemSync/proofSheet.ts`)에는 `track` 을 넣지 않는다. `EDITABLE_COLUMNS`
+가 아닌 열은 되돌려 쓰지 않으므로 값이 깨질 일이 없고, 교정은 문장을 보는 작업이다.
 
 ## 오류 처리
 
@@ -171,13 +267,18 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 
 | 무엇 | 어떻게 |
 |---|---|
-| 거르는 함수 6개 | 각 함수에 두 직군 문제를 섞어 넣고 `track` 별로 자기 것만 나오는지 |
+| 거르는 함수 8개 | 각 함수에 두 직군 문제를 섞어 넣고 `track` 별로 자기 것만 나오는지 |
 | 팀 목록 | 기술직으로 부르면 `기술직` 한 칸, 행정직으로 부르면 기존 팀만 나오는지 |
-| 섞인 부서 | 한 부서에 두 직군 문제를 넣고, 양쪽 목록에 각각 제 몫 개수로 나오는지 |
-| 명예의 전당 | 두 직군을 다 푼 사람이 양쪽에 각각 그 직군 몫으로만 나오는지 |
-| 토큰 하위호환 | `track` 없는 토큰이 `ADMIN` 으로 읽히는지 |
+| 부서 선택지 | `/api/departments` 결과가 팀 목록과 **같은 부서 집합**인지 |
+| 섞인 부서 | 한 부서에 두 직군 문제를 넣고, 양쪽 목록에 각각 제 몫 개수로 나오는지. 특히 **다른 직군 문제만 있는 팀이 0건으로 남지 않는지** |
+| 학습 이력 | 두 직군을 다 푼 사람이 로그인한 직군 것만 보는지 |
+| 명예의 전당 | 개인·팀 **두 순위 모두** 직군별로 갈리는지. 보관된 문제의 정답이 계속 세어지는지(기존 동작 유지) |
+| 삽입 경로 | `track` 을 안 넘기는 코드가 **컴파일에서 걸리는지**(기본값을 떼었으므로) |
+| 토큰 하위호환 | `track` 없는 토큰이 `ADMIN` 으로 읽히는지, 그리고 미들웨어 재서명 뒤에도 `track` 이 남는지 |
+| 비밀번호 강제 변경 | 변경 후 재발급된 세션에 `track` 이 그대로 있는지(새 계정의 첫 로그인 경로) |
 | 로그인 토글 | 고른 값이 세션에 실리는지, 다음 로그인 때 기본값으로 잡히는지 |
-| 기존 동작 | 행정직으로 들어왔을 때 지금과 똑같이 보이는지(회귀) |
+| 스냅샷 | 내보내고 들여왔을 때 `track` 이 살아 있는지, 옛 스냅샷이 `ADMIN` 으로 들어오는지 |
+| 기존 동작 | 행정직으로 들어왔을 때 문제 목록 건수가 마이그레이션 전과 같은지 |
 
 기존 시험이 `track` 컬럼 추가로 깨지는지 함께 본다 — 기본값이 `ADMIN` 이라 대부분 그대로
 지나가야 한다.
@@ -200,6 +301,9 @@ ALTER TABLE problems ADD COLUMN track varchar(20) NOT NULL DEFAULT 'ADMIN'
 - `departments.track` — 한 팀에 두 직군이 섞이므로 성립하지 않는다
 - `getSolveDetail`·`submitAttempt` 의 직군 검사 — 잠금장치가 아니다
 - 엑셀 파일의 직군 열 — 화면에서 고른다
-- 계정 화면·관리자 통계 — 바뀌지 않는다
+- 관리자 문제 목록의 직군 **필터** — 부서 필터가 이미 같은 일을 한다(열 표시만 넣는다)
+- 교정용 시트의 직군 열 — 되돌려 쓰는 열이 아니라 값이 깨지지 않는다
+- 계정 화면·관리자 통계 — 바뀌지 않는다. 대시보드는 `SUPER_ADMIN`·`DEPT_ADMIN` 전용임을
+  확인했다(`app/api/admin/dashboard/route.ts:14`)
 - 기술직 문제의 팀 분할 — 기술직 문제은행은 한 과목 통번 1~500이라 팀이 없다.
   나중에 나눌 일이 생기면 부서를 더 만들면 된다(이 설계는 그걸 막지 않는다)
