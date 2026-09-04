@@ -153,7 +153,11 @@ export default function TeamRunPlayPage() {
       ) : !problem ? (
         <ProblemSkeleton />
       ) : (
-        <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
+        // key 가 바뀌면 다시 마운트되면서 등장 애니메이션이 새로 돈다. 문제를 넘겼다는
+        // 신호가 이것뿐이다 — 본문과 보기가 통째로 갈리는데 화면은 제자리에 있다.
+        <div key={problem.id} className="solve-swap">
+          <ProblemSolveCard problem={problem} onSubmitted={setSubmittedResult} />
+        </div>
       )}
 
       {submittedResult && (

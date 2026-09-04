@@ -252,7 +252,7 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
               return (
                 <li key={choice.id}>
                   <label
-                    className={`flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-body transition-colors focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-brand-aqua ${CHOICE_ITEM_MIN_HEIGHT} ${
+                    className={`solve-choice flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-body focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-brand-aqua ${CHOICE_ITEM_MIN_HEIGHT} ${
                       selected ? "border-brand-blue bg-selection-bg text-ink-strong" : "border-line-default bg-surface-default text-ink-default hover:bg-surface-subtle"
                     } ${answered ? "cursor-default opacity-70" : ""}`}
                   >
@@ -284,22 +284,29 @@ export default function ProblemSolveCard({ problem, onSubmitted }) {
           />
         )}
 
-        {!answered && (
-          <div className={SUBMIT_AREA_CLASS}>
-            <Button onClick={handleSubmit} loading={submitting} disabled={nothingEntered} size="lg" className="w-full sm:w-auto">
-              제출
-            </Button>
-            {nothingEntered && (
-              <p className="mt-2 text-body-small text-ink-muted">답안을 입력하면 제출할 수 있습니다.</p>
-            )}
-          </div>
-        )}
+        {/*
+          답을 내고 나서도 DOM 에서 지우지 않는다. 지우면 아래 결과 카드가 튀어 오르는데,
+          자리를 접으면서 흐려지게 하려면 요소가 남아 있어야 한다.
+          inert 는 접히는 동안 버튼이 눌리거나 화면 낭독기에 읽히는 것을 막는다.
+        */}
+        <div className={`${SUBMIT_AREA_CLASS} solve-submit`} data-gone={answered ? "true" : "false"} inert={answered}>
+          <Button onClick={handleSubmit} loading={submitting} disabled={nothingEntered} size="lg" className="w-full sm:w-auto">
+            제출
+          </Button>
+          {nothingEntered && (
+            <p className="mt-2 text-body-small text-ink-muted">답안을 입력하면 제출할 수 있습니다.</p>
+          )}
+        </div>
       </Surface>
 
       {answered && (
-        <Surface background={result.correct ? "bg-success-bg" : "bg-danger-bg"} className="mt-4 p-5">
+        <Surface background={result.correct ? "bg-success-bg" : "bg-danger-bg"} className="solve-result mt-4 p-5">
           <p className={`flex items-center gap-2 text-section-title font-bold ${result.correct ? "text-success-text" : "text-danger-text"}`}>
-            {result.correct ? <CheckCircle size={20} weight="fill" aria-hidden="true" /> : <XCircle size={20} weight="fill" aria-hidden="true" />}
+            {/*
+              튐은 맞혔을 때만이다. 틀렸을 때 흔드는 관용구를 쓰지 않는 것과 같은 이유로 —
+              한 바퀴에 수십 번 나오는 자리에서 강조는 나무람으로 읽힌다. 색과 아이콘이면 충분하다.
+            */}
+            {result.correct ? <CheckCircle size={20} weight="fill" aria-hidden="true" className="solve-tick" /> : <XCircle size={20} weight="fill" aria-hidden="true" />}
             {result.correct ? "정답입니다!" : "오답입니다."}
           </p>
           {result.explanation && <p className="mt-2 whitespace-pre-wrap text-body text-ink-default">{result.explanation}</p>}

@@ -21,6 +21,116 @@ body {
   to { opacity: 1; transform: none; }
 }
 
+/*
+ * ─── 문제 풀이 모션 ───────────────────────────────────────────────────────
+ *
+ * 값은 세 단으로만 나눈다. 자리마다 다른 시간을 쓰면 화면 전체의 박자가 흐트러지고,
+ * 실제로 그렇게 흩어져 있었다(180·200·220·380ms 가 뒤섞여 있었다).
+ *
+ *   즉각 반응(--motion-tap)    누르는 손맛. 가장 짧다.
+ *   등장(--motion-in)          화면에 없던 것이 생길 때.
+ *   퇴장(--motion-out)         사라질 때. 등장보다 짧다 — 사라지는 것을 기다릴 이유가 없다.
+ *   반복(--motion-repeat)      한 바퀴에 70번 일어나는 문제 넘김. 등장보다 짧다.
+ *
+ * 곡선은 방향으로 정한다. 등장은 꼬리가 긴 ease-out 으로 천천히 잦아들고, 퇴장은
+ * ease-in 으로 빠져나간다. linear 는 쓰지 않는다 — 기계처럼 읽힌다.
+ *
+ * 가장 긴 값이 300ms 다. 400ms 를 넘는 움직임은 이 화면에 없다.
+ */
+:root {
+  --motion-tap: 140ms;
+  --motion-in: 300ms;
+  --motion-out: 220ms;
+  --motion-repeat: 200ms;
+  --motion-pop: 280ms;
+  --motion-travel: 12px;
+  --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-pop: cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+@keyframes solve-result-in {
+  from { opacity: 0; transform: translateY(var(--motion-travel)); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 살짝 부풀었다 제자리로. 한 문제에 한 번, 맞혔을 때만 나온다. */
+@keyframes solve-tick-pop {
+  from { transform: scale(0.6); }
+  60% { transform: scale(1.06); }
+  to { transform: scale(1); }
+}
+
+@keyframes solve-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.solve-result { animation: solve-result-in var(--motion-in) var(--motion-ease-enter) both; }
+.solve-tick { animation: solve-tick-pop var(--motion-pop) var(--motion-ease-pop) both; }
+
+/* 문제를 넘길 때. 자리를 옮기지 않고 불투명도만 바꾼다 — 70번 반복될 움직임이다. */
+.solve-swap { animation: solve-fade-in var(--motion-repeat) var(--motion-ease-enter) both; }
+
+.solve-choice {
+  transition:
+    background-color var(--motion-in) var(--motion-ease-enter),
+    border-color var(--motion-in) var(--motion-ease-enter),
+    color var(--motion-in) var(--motion-ease-enter),
+    opacity var(--motion-in) var(--motion-ease-enter),
+    transform var(--motion-tap) var(--motion-ease-enter);
+}
+
+.solve-choice:active { transform: scale(0.99); }
+
+/*
+ * 제출 영역은 답을 내고 나면 사라진다. display 로 끊으면 아래 내용이 툭 튀어 오르므로
+ * 자리를 접으면서 함께 흐려지게 한다.
+ *
+ * max-height 는 실제 높이보다 넉넉해야 한다 — 안내 문구("답안을 입력하면...")가 함께
+ * 있을 때가 가장 높다. 모바일에서는 위쪽 경계선과 패딩까지 같이 접어야 선 하나가 남지 않는다.
+ */
+.solve-submit {
+  overflow: hidden;
+  max-height: 200px;
+  transition:
+    opacity var(--motion-out) var(--motion-ease-exit),
+    max-height var(--motion-out) var(--motion-ease-exit),
+    margin-top var(--motion-out) var(--motion-ease-exit),
+    padding-top var(--motion-out) var(--motion-ease-exit),
+    padding-bottom var(--motion-out) var(--motion-ease-exit),
+    border-top-width var(--motion-out) var(--motion-ease-exit);
+}
+
+.solve-submit[data-gone="true"] {
+  opacity: 0;
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  pointer-events: none;
+}
+
+/*
+ * 움직임 줄이기를 켠 기기에서는 모든 움직임을 없앤다.
+ *
+ * 예전에는 명예의 전당 클래스 세 개만 막고 있었다. 그 방식은 새 애니메이션을 넣을 때마다
+ * 여기에 클래스를 더해야 하고, 한 번 잊으면 그대로 새어 나간다. 그래서 전체를 막고
+ * 예외만 적는다.
+ *
+ * 로딩 표시(회전·맥박)는 예외다. 멈추면 "기다리는 중"이라는 정보 자체가 사라진다.
+ * 제자리에서 도는 움직임이라 전정기관을 자극하는 종류(화면을 가로지르는 이동)가 아니다.
+ *
+ * 0 이 아니라 0.01ms 인 이유는 transitionend·animationend 가 계속 발생하게 하기 위해서다.
+ */
 @media (prefers-reduced-motion: reduce) {
-  .hof-medal, .hof-board, .hof-thumb { animation: none !important; transition: none !important; }
+  *:not(.animate-spin):not(.animate-pulse),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

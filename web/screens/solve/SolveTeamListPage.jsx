@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import { ArrowLeft, ArrowRight } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, SpinnerGap } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
@@ -114,7 +114,15 @@ export default function SolveTeamListPage() {
                     >
                       {label.text}
                     </span>
-                    <ArrowRight size={16} aria-hidden="true" className="shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                    {/*
+                      새 바퀴를 만드는 동안에는 화살표 자리에 로딩을 둔다. 서버 왕복이 끝나야
+                      화면이 넘어가는데, 그때까지 흐려지기만 하면 눌린 것인지 알 수 없다.
+                    */}
+                    {startingId === team.departmentId ? (
+                      <SpinnerGap size={16} aria-hidden="true" className="shrink-0 animate-spin text-brand-blue" />
+                    ) : (
+                      <ArrowRight size={16} aria-hidden="true" className="shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                    )}
                   </button>
                 </li>
               );
