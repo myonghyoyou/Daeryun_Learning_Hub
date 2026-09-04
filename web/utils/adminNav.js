@@ -1,4 +1,4 @@
-import { Buildings, Users, Upload, ClipboardText, House, ChartBar } from "@phosphor-icons/react";
+import { Buildings, Users, Upload, ClipboardText, House, ChartBar, ChatText } from "@phosphor-icons/react";
 
 /**
  * 8.6.1 관리자 Shell 메뉴 구성.
@@ -47,6 +47,9 @@ export function buildNavGroups(role) {
     { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", icon: Upload },
     // /admin/stats/:id 로 들어가도 "통계"가 켜져 있어야 하므로 end 를 주지 않는다.
     { to: "/admin/stats", label: "통계", icon: ChartBar },
+    // 피드백은 두 관리자 역할 모두가 의견을 보낼 수 있어야 한다. 전달 실패 목록/다시 보내기는
+    // SUPER_ADMIN 전용이며 화면(FeedbackPage) 안에서 role 로 가린다.
+    { to: "/admin/feedback", label: "피드백", icon: ChatText },
   );
   return [{ label: "관리 메뉴", items }];
 }

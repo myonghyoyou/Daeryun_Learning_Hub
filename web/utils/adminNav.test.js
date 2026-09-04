@@ -1,4 +1,4 @@
-import { test } from "vitest";
+import { test, it, expect } from "vitest";
 import assert from "node:assert/strict";
 import { buildNavGroups } from "./adminNav.js";
 
@@ -23,6 +23,7 @@ test("SUPER_ADMIN sees the department, account, and problem management menus", (
         { to: "/admin/problems", label: "문제 관리", end: true },
         { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
         { to: "/admin/stats", label: "통계", end: false },
+        { to: "/admin/feedback", label: "피드백", end: false },
       ],
     },
   ]);
@@ -66,6 +67,7 @@ test("DEPT_ADMIN does not see department or account management (hidden, not disa
         { to: "/admin/problems", label: "문제 관리", end: true },
         { to: "/admin/problems/excel-upload", label: "문제 엑셀 일괄 등록", end: false },
         { to: "/admin/stats", label: "통계", end: false },
+        { to: "/admin/feedback", label: "피드백", end: false },
       ],
     },
   ]);
@@ -110,4 +112,11 @@ test("the statistics menu is not exact-matched so the detail screen keeps it act
   const stats = buildNavGroups("SUPER_ADMIN").flatMap((group) => group.items)
     .find((item) => item.to === "/admin/stats");
   assert.notEqual(stats.end, true);
+});
+
+it("피드백은 두 관리자 역할 모두에게 보인다", () => {
+  for (const role of ["SUPER_ADMIN", "DEPT_ADMIN"]) {
+    const paths = buildNavGroups(role).flatMap((g) => g.items.map((i) => i.to));
+    expect(paths).toContain("/admin/feedback");
+  }
 });
