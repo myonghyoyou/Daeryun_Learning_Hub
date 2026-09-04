@@ -4,7 +4,10 @@
 // 사람 정보는 담지 않는다 — 운영 작성자(created_by)는 옮기지 않고, 들여올 때 로컬
 // 총괄관리자로 대체한다(설계 문서 "안전장치" 참고).
 
-export const SNAPSHOT_VERSION = 1;
+import { parseTrack, type Track } from "../problem/track";
+
+// 2: 문제에 직군(track)이 붙었다. 옛 파일(1)도 계속 읽는다 — track 이 없으면 ADMIN 이다.
+export const SNAPSHOT_VERSION = 2;
 
 // scripts 는 web/ 를 작업 디렉터리로 실행된다. .data/ 는 .gitignore 대상이다.
 export const SNAPSHOT_PATH = ".data/prod-problems.json";
@@ -27,6 +30,8 @@ export type SnapshotProblem = {
   // 번호를 그대로 옮기면 문제가 엉뚱한 부서에 붙는다.
   departmentCode: string;
   sourceNumber: number | null;
+  /** 직군. 버전 2 에서 추가됐다 — 없는 옛 파일은 들여올 때 ADMIN 으로 채운다. */
+  track: Track;
   createdAt: string;
   updatedAt: string;
   choices: SnapshotChoice[];
@@ -123,6 +128,9 @@ export function parseSnapshot(raw: unknown): ProblemSnapshot {
       status: asString(rec.status, `${at}.status`),
       departmentCode: asString(rec.departmentCode, `${at}.departmentCode`),
       sourceNumber: asNullableNumber(rec.sourceNumber, `${at}.sourceNumber`),
+      // 버전 1 로 만든 옛 파일에는 track 이 없다. 거절하면 아무 이득 없이 재수출만 강요하므로
+      // 없으면 행정직으로 채운다(세션 토큰과 같은 규칙).
+      track: parseTrack(rec.track),
       createdAt: asString(rec.createdAt, `${at}.createdAt`),
       updatedAt: asString(rec.updatedAt, `${at}.updatedAt`),
       choices: asArray(rec.choices, `${at}.choices`).map((c, j) => {

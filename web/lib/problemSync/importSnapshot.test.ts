@@ -26,7 +26,7 @@ function problemOf(over: Partial<SnapshotProblem> = {}): SnapshotProblem {
   return {
     id: 501, type: "MCQ_SINGLE", content: "본문", imageUrl: null, referenceText: null,
     explanation: null, blankRevealCount: null, status: "ACTIVE", departmentCode: "DEV",
-    sourceNumber: 1, createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
+    sourceNumber: 1, track: "ADMIN" as const, createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
     choices: [], answers: [], blanks: [], tags: [], ...over,
   };
 }
@@ -166,5 +166,11 @@ describe("importSnapshot", () => {
     await importSnapshot(db, snapshotOf([problemOf()]));
     const [row] = await db.select({ createdBy: problems.createdBy }).from(problems);
     expect(row.createdBy).toBe(adminId);
+  });
+
+  it("스냅샷의 직군이 들여올 때 살아 있다", async () => {
+    await importSnapshot(db, snapshotOf([problemOf({ track: "TECH" })]));
+    const [row] = await db.select({ track: problems.track }).from(problems);
+    expect(row.track).toBe("TECH");
   });
 });

@@ -11,7 +11,7 @@ function validSnapshot(): ProblemSnapshot {
     problems: [{
       id: 501, type: "MCQ_SINGLE", content: "본문", imageUrl: null, referenceText: null,
       explanation: null, blankRevealCount: null, status: "ACTIVE", departmentCode: "DEV",
-      sourceNumber: 3, createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
+      sourceNumber: 3, track: "ADMIN" as const, createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
       choices: [{ choiceText: "가", isCorrect: true, displayOrder: 1 }],
       answers: [{ answerText: "가" }],
       blanks: [{ blankKey: "a", answerText: "가", displayOrder: 1 }],
@@ -52,5 +52,18 @@ describe("parseSnapshot", () => {
     const bad = validSnapshot();
     bad.problems[0].departmentCode = "NOPE";
     expect(() => parseSnapshot(bad)).toThrow(/NOPE/);
+  });
+
+  it("직군을 그대로 읽는다", () => {
+    const snap = validSnapshot();
+    snap.problems[0].track = "TECH";
+    expect(parseSnapshot(snap).problems[0].track).toBe("TECH");
+  });
+
+  // 버전 1 로 만든 옛 파일에는 track 이 없다. 거절하지 말고 행정직으로 채운다.
+  it("직군이 없는 옛 스냅샷도 읽고, 행정직으로 채운다", () => {
+    const old = validSnapshot();
+    delete (old.problems[0] as Partial<ProblemSnapshot["problems"][number]>).track;
+    expect(parseSnapshot(old).problems[0].track).toBe("ADMIN");
   });
 });

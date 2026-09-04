@@ -90,6 +90,7 @@ export async function importSnapshot(db: Db, snapshot: ProblemSnapshot): Promise
         status: problem.status,
         departmentId: departmentIdByCode.get(problem.departmentCode)!,
         sourceNumber: problem.sourceNumber,
+        track: problem.track,
         createdBy: admin.id,
         createdAt: new Date(problem.createdAt),
         updatedAt: new Date(problem.updatedAt),
