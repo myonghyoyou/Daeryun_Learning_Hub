@@ -2,7 +2,13 @@ import { defineConfig } from "vitest/config";
 import { resolve } from "node:path";
 
 export default defineConfig({
-  resolve: { alias: { "@": resolve(__dirname, ".") } },
+  resolve: {
+    alias: { "@": resolve(__dirname, ".") },
+    // `server-only` 패키지는 "react-server" 조건이 없으면 무조건 throw 한다(클라이언트로
+    // 오인해). Next 빌드에서는 이 조건이 자동으로 잡히지만 vitest(순수 node)는 아니라서
+    // 여기서 직접 지정해 준다 — 실제 서버 코드 테스트가 이 이유로 막히면 안 된다.
+    conditions: ["react-server"],
+  },
   test: {
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.js", "**/*.test.jsx"],
