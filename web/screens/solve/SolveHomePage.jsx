@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Link from "next/link";
-import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight } from "@phosphor-icons/react";
+import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight, ChatText } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
 import FeedbackModal from "@/components/feedback/FeedbackModal.jsx";
@@ -58,14 +58,23 @@ export default function SolveHomePage() {
         <HallOfFameCard />
       </div>
 
-      <Surface className="mt-4 p-3">
-        <button
-          type="button"
-          onClick={() => setFeedbackOpen(true)}
-          className="text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline"
-        >
-          불편한 점이나 바라는 점 보내기
-        </button>
+      {/*
+        나머지 셋과 같은 모양(아이콘 타일 · 제목 · 설명)을 쓴다 — 얇은 테두리 상자 하나에
+        옅은 글자만 있으면 빈 컨테이너처럼 보인다(2026-09-04 실측). 이동이 아니라 모달을
+        여는 자리라 Surface as={Link}가 아니라 진짜 button으로 둔다 — 링크처럼 보이되
+        링크는 아니어야 한다.
+      */}
+      <Surface
+        as="button"
+        type="button"
+        onClick={() => setFeedbackOpen(true)}
+        className="group mt-4 block w-full p-5 text-left transition-shadow hover:shadow-raised focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+      >
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-surface-blue text-brand-blue">
+          <ChatText size={22} aria-hidden="true" />
+        </span>
+        <p className="mt-3 text-section-title font-semibold text-ink-strong">의견 보내기</p>
+        <p className="mt-1 text-body-small text-ink-muted">이 서비스에 바라는 점이나 불편한 점을 제작자에게 전합니다.</p>
       </Surface>
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>

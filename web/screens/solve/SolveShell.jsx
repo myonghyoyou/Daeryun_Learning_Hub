@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import LogoutButton from "@/components/ui/LogoutButton.jsx";
 import AccountInfo from "@/components/ui/AccountInfo.jsx";
 import AdminConsoleLink from "@/components/ui/AdminConsoleLink.jsx";
@@ -33,6 +34,10 @@ export default function SolveShell({ children }) {
   const device = useDeviceType();
   const showAdminLink = canAccessAdmin({ device, role: session?.role });
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const pathname = usePathname();
+  // 학습 홈(/solve)에는 같은 진입점을 여는 카드가 이미 있다. 바닥 링크까지 겹치면
+  // 같은 문구가 몇 픽셀 간격으로 두 줄 서서 렌더링 버그처럼 보인다 — 그 화면에서만 숨긴다.
+  const showFeedbackFooter = pathname !== "/solve";
 
   return (
     <div className="min-h-screen bg-surface-page">
@@ -50,15 +55,17 @@ export default function SolveShell({ children }) {
         </div>
       </header>
       <main className="mx-auto w-full max-w-[1120px] px-5 py-6 md:px-7 md:py-8">{children}</main>
-      <footer className="mx-auto w-full max-w-[1120px] px-5 pb-8 md:px-7">
-        <button
-          type="button"
-          onClick={() => setFeedbackOpen(true)}
-          className="text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline"
-        >
-          불편한 점이나 바라는 점 보내기
-        </button>
-      </footer>
+      {showFeedbackFooter && (
+        <footer className="mx-auto w-full max-w-[1120px] px-5 pb-8 md:px-7">
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            className="text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline"
+          >
+            불편한 점이나 바라는 점 보내기
+          </button>
+        </footer>
+      )}
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
