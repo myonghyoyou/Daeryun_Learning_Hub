@@ -60,7 +60,7 @@ export default function SolveShell({ children }) {
           <button
             type="button"
             onClick={() => setFeedbackOpen(true)}
-            className="text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline"
+            className="solve-tap rounded-sm text-body-small text-ink-muted underline-offset-2 hover:text-ink-strong hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
           >
             불편한 점이나 바라는 점 보내기
           </button>

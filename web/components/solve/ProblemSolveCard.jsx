@@ -274,10 +274,15 @@ export default function ProblemSolveCard({ problem, onSubmitted, nextAction = nu
             </span>
             <SourceBadge item={problem} />
           </div>
+          {/*
+            글자색만 바꾸면 누를 수 있는 자리라는 것이 잘 드러나지 않는다(2026-09-04 실측).
+            배경까지 함께 바뀌게 해 눌러 보라고 말한다. 시간·곡선은 이 화면의 "즉각 반응"
+            단(140ms · ease-out)을 그대로 쓴다 — 자리마다 다른 박자를 두지 않는다.
+          */}
           <button
             type="button"
             onClick={() => setReportOpen(true)}
-            className="ml-auto shrink-0 rounded-sm px-2 py-1 text-body-small text-ink-muted hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
+            className="solve-tap ml-auto shrink-0 rounded-sm px-2 py-1 text-body-small text-ink-muted hover:bg-surface-blue hover:text-ink-strong focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
           >
             <Flag size={16} aria-hidden="true" className="inline" /> 신고
           </button>

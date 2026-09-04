@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Link from "next/link";
-import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight, ChatText } from "@phosphor-icons/react";
+import { Shuffle, ListChecks, ClockCounterClockwise, ArrowRight, ChatText, CaretRight } from "@phosphor-icons/react";
 import Surface from "@/components/ui/Surface.jsx";
 import HallOfFameCard from "@/components/solve/HallOfFameCard.jsx";
 import FeedbackModal from "@/components/feedback/FeedbackModal.jsx";
@@ -73,7 +73,15 @@ export default function SolveHomePage() {
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-surface-blue text-brand-blue">
           <ChatText size={22} aria-hidden="true" />
         </span>
-        <p className="mt-3 text-section-title font-semibold text-ink-strong">의견 보내기</p>
+        {/*
+          옆 벤토 셋은 hover 에 화살표가 살짝 밀린다. 이 카드만 그림자만 뜨면 같은 줄에
+          있으면서 다르게 반응하는 것으로 읽힌다. 다만 화살표(ArrowRight)는 "이동"을 뜻하므로
+          모달을 여는 이 자리에는 쓰지 않고, 말풍선을 같은 거리만큼 움직인다.
+        */}
+        <p className="mt-3 flex items-center gap-1.5 text-section-title font-semibold text-ink-strong">
+          의견 보내기
+          <CaretRight size={16} aria-hidden="true" className="text-brand-blue transition-transform group-hover:translate-x-0.5" />
+        </p>
         <p className="mt-1 text-body-small text-ink-muted">이 서비스에 바라는 점이나 불편한 점을 제작자에게 전합니다.</p>
       </Surface>
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />

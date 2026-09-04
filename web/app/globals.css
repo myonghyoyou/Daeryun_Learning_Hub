@@ -105,6 +105,18 @@ button:not(:disabled) {
 
 .solve-choice:active { transform: scale(0.99); }
 
+/*
+ * 피드백 진입점(문제 카드 신고 · 셸 바닥 링크)의 hover. 색만 바뀌면 누를 수 있는 자리인지
+ * 잘 드러나지 않아 배경·밑줄을 함께 바꾸는데, 그 변화가 툭 끊기지 않도록 같은 박자를 준다.
+ * 값은 이 화면의 "즉각 반응" 단을 그대로 쓴다 — 자리마다 다른 시간을 두면 박자가 흐트러진다.
+ */
+.solve-tap {
+  transition:
+    background-color var(--motion-tap) var(--motion-ease-enter),
+    color var(--motion-tap) var(--motion-ease-enter),
+    text-decoration-color var(--motion-tap) var(--motion-ease-enter);
+}
+
 
 /*
  * 제출 영역은 답을 내고 나면 사라진다. display 로 끊으면 아래 내용이 툭 튀어 오르므로
