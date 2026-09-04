@@ -43,7 +43,7 @@ export async function migrateTestDb() {
 export async function truncateAll() {
   const db = testDb();
   await db.execute(sql`TRUNCATE TABLE
-    solve_runs, audit_logs, problem_tags, tags, excel_upload_logs, attempt_choices,
+    feedbacks, solve_runs, audit_logs, problem_tags, tags, excel_upload_logs, attempt_choices,
     attempt_blank_answers, attempts, problem_blanks, problem_answers,
     problem_choices, problems, users, departments RESTART IDENTITY CASCADE`);
 }

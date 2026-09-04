@@ -173,3 +173,33 @@ export const solveRuns = pgTable("solve_runs", {
   oneActive: uniqueIndex("solve_runs_one_active").on(t.userId, t.departmentId)
     .where(sql`${t.status} = 'IN_PROGRESS'`),
 }));
+
+/**
+ * 제작자에게 보낸 피드백. **먼저 저장하고 그다음 전달한다** — 받는 쪽이 죽어 있어도
+ * 말이 남고 나중에 다시 밀 수 있다.
+ *
+ * 사용자 원문만 담고 조립본(태그·문제 정보가 붙은 것)은 담지 않는다. 다시 보낼 때
+ * 그 시점 규칙으로 다시 조립하는 편이 낫고, 같은 사실을 두 벌 두면 한쪽만 고쳐진다.
+ *
+ * problem_id 는 ON DELETE SET NULL 이다. 문제가 지워졌다고 그 문제에 대한 의견까지
+ * 지울 이유가 없다 — 오히려 왜 지웠는지 아는 단서다.
+ */
+export const feedbacks = pgTable("feedbacks", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: bigint("user_id", { mode: "number" }).notNull().references(() => users.id),
+  problemId: bigint("problem_id", { mode: "number" }).references(() => problems.id, { onDelete: "set null" }),
+  sourcePath: varchar("source_path", { length: 200 }),
+  body: text("body").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("PENDING"),
+  failReason: varchar("fail_reason", { length: 20 }),
+  taskId: varchar("task_id", { length: 100 }),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  lastTriedAt: timestamp("last_tried_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => ({
+  statusCheck: check("feedbacks_status_check", sql`${t.status} IN ('PENDING', 'SENT', 'FAILED')`),
+  failReasonCheck: check("feedbacks_fail_reason_check",
+    sql`${t.failReason} IS NULL OR ${t.failReason} IN ('config', 'invalid', 'busy', 'down')`),
+  // 실패 목록은 status <> 'SENT' 로 잡는다. 그 조회가 이 인덱스를 쓴다.
+  statusCreated: index("feedbacks_status_created_idx").on(t.status, t.createdAt),
+}));

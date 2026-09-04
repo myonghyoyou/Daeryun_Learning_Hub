@@ -15,6 +15,13 @@
       "when": 1788402491737,
       "tag": "0001_cloudy_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788499916161,
+      "tag": "0002_overconfident_surge",
+      "breakpoints": true
     }
   ]
 }
