@@ -44,8 +44,8 @@ beforeEach(async () => {
   const [da] = await db.insert(users).values({
     employeeNo: "dept", name: "부서", email: "d@x.local", passwordHash: "h", departmentId: deptA, role: "DEPT_ADMIN",
   }).returning();
-  superAdmin = { userId: su.id, employeeNo: "super", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false };
-  deptAdminOfA = { userId: da.id, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false };
+  superAdmin = { userId: su.id, employeeNo: "super", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
+  deptAdminOfA = { userId: da.id, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
 });
 
 describe("problemListService — 클램프", () => {
@@ -157,7 +157,7 @@ describe("problemListService — 필터·응답", () => {
     const res = await listProblems(db, superAdmin, none);
     expect(Object.keys(res)).toEqual(["items", "totalCount", "page", "size"]);
     expect(Object.keys(res.items[0])).toEqual([
-      "id", "type", "content", "status", "departmentId", "departmentName", "createdAt", "tags",
+      "id", "type", "content", "status", "departmentId", "departmentName", "track", "createdAt", "tags",
     ]);
     expect(res.items[0].departmentName).toBe("가팀");
     expect(res.items[0].tags).toEqual(["회계"]);

@@ -349,7 +349,7 @@ describe("problems DAO — findRecent (B13·B14·B16)", () => {
     const id = await seed({ content: "본문", sourceNumber: 1, tags: ["태그"] });
     const [item] = await findRecent(db, null, 5);
     expect(Object.keys(item).sort()).toEqual(["content", "createdAt", "departmentId",
-      "departmentName", "id", "status", "tags", "type"]);
+      "departmentName", "id", "status", "tags", "track", "type"]);
     expect(item.id).toBe(id);
     expect(item.tags).toEqual(["태그"]);
   });

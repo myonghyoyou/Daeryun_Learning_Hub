@@ -91,6 +91,9 @@ export default function ProblemFormPage() {
   const canMoveDepartment = Boolean(id) && session?.role === "SUPER_ADMIN";
   // 등록 모드에서는 귀속 부서를 고른다. 부서 관리자는 자기 부서로 고정된다.
   const [createDepartmentId, setCreateDepartmentId] = useState("");
+  // 직군은 등록·수정 **양쪽**에서 고른다. 부서와 달리 전용 이동 기능이 없어, 잘못 등록한
+  // 직군을 되돌릴 통로가 수정 화면뿐이다. 수정 모드에서는 fetchProblem 이 현재 값으로 덮는다.
+  const [track, setTrack] = useState("ADMIN");
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -131,6 +134,9 @@ export default function ProblemFormPage() {
       setExplanation(problem.explanation ?? "");
       setTagsInput((problem.tags ?? []).join(", "));
       setSourceNumber(problem.sourceNumber == null ? "" : String(problem.sourceNumber));
+      // 현재 직군으로 초기화한다. 빠뜨리면 저장할 때마다 서버가 행정직으로 읽어
+      // 기술직 문제가 조용히 바뀐다.
+      setTrack(problem.track ?? "ADMIN");
       if (problem.type === "SHORT_ANSWER") {
         setAnswers(problem.answers?.length ? problem.answers : [""]);
       } else if (problem.type === "FILL_BLANK") {
@@ -397,10 +403,10 @@ export default function ProblemFormPage() {
     setSaving(true);
     try {
       if (isEdit) {
-        await updateProblem(id, payload);
+        await updateProblem(id, payload, track);
         toast.success("문제가 수정되었습니다.");
       } else {
-        await createProblem(payload, createDepartmentId);
+        await createProblem(payload, createDepartmentId, track);
         toast.success("문제가 등록되었습니다.");
       }
       router.push("/admin/problems");
@@ -520,6 +526,27 @@ export default function ProblemFormPage() {
             <p className="mt-1 text-body-small text-ink-muted">{createDepartmentField.helpText}</p>
           </div>
         )}
+
+        {/* 직군은 부서와 달리 **수정에서도** 고른다 — 전용 이동 기능이 없어 잘못 등록한
+            직군을 되돌릴 통로가 여기뿐이다. */}
+        <div className="mt-4">
+          <Select
+            id="problem-track"
+            label="직군"
+            required
+            value={track}
+            disabled={saving}
+            options={[
+              { value: "ADMIN", label: "행정직" },
+              { value: "TECH", label: "기술직" },
+            ]}
+            onChange={(event) => setTrack(event.target.value)}
+            className="w-full sm:w-64"
+          />
+          <p className="mt-1 text-body-small text-ink-muted">
+            고른 직군의 직원에게만 보입니다.{isEdit ? " 바꾸면 저장할 때 함께 반영됩니다." : ""}
+          </p>
+        </div>
 
         <Input
           id="problem-source-number"

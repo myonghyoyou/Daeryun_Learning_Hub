@@ -52,6 +52,8 @@ export default function ProblemExcelUploadPage() {
   const { session } = useSessionStatus();
   const [departments, setDepartments] = useState([]);
   const [departmentId, setDepartmentId] = useState("");
+  // 직군은 엑셀 열이 아니라 여기서 고른다 — 한 파일은 어차피 한 직군이다.
+  const [track, setTrack] = useState("ADMIN");
 
   // 부서 목록 API 는 총괄 관리자 전용이다. 부서 관리자가 호출하면 403 이 콘솔에 찍히므로
   // 역할을 보고 호출 자체를 하지 않는다.
@@ -99,8 +101,14 @@ export default function ProblemExcelUploadPage() {
     setUploading(true);
     setResult(null);
     try {
-      const uploadResult = await uploadProblemsExcel(file, departmentId);
-      setResult(uploadResult);
+      const uploadResult = await uploadProblemsExcel(file, departmentId, track);
+      // 어디로 들어갔는지는 결과에 안 나온다. 잘못 고른 업로드는 되돌리기 어려우므로
+      // 방금 고른 부서·직군을 결과와 함께 붙여 둔다(아래 결과 영역에서 보여 준다).
+      setResult({
+        ...uploadResult,
+        departmentName: departments.find((d) => String(d.id) === String(departmentId))?.name ?? "",
+        track,
+      });
       toast.success(`업로드 완료: 성공 ${uploadResult.successRows}건 / 실패 ${uploadResult.failRows}건`);
     } catch (error) {
       toast.error(resolveErrorMessage(error, "업로드에 실패했습니다."));
@@ -180,6 +188,26 @@ export default function ProblemExcelUploadPage() {
           <p className="mt-1 text-body-small text-ink-muted">{departmentField.helpText}</p>
         </div>
 
+        {/* 직군. 엑셀 파일에는 직군 열이 없다 — 한 파일은 한 직군이므로 여기서 고른다. */}
+        <div className="mt-4">
+          <Select
+            id="problem-excel-track"
+            label="직군"
+            required
+            value={track}
+            disabled={uploading}
+            options={[
+              { value: "ADMIN", label: "행정직" },
+              { value: "TECH", label: "기술직" },
+            ]}
+            onChange={(event) => setTrack(event.target.value)}
+            className="w-72"
+          />
+          <p className="mt-1 text-body-small text-ink-muted">
+            고른 직군의 직원에게만 보입니다. 파일 하나는 한 직군입니다.
+          </p>
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
             ref={fileInputRef}
@@ -208,7 +236,12 @@ export default function ProblemExcelUploadPage() {
             <div className="mt-4 space-y-4">
               {/* 8.6.3 부분 성공: 결과 요약과 오류 목록을 각각 제공한다. */}
               <div className="rounded-sm border border-line-default bg-surface-subtle p-4">
-                <p className="text-body font-semibold text-ink-strong">
+                {/* 어디로 들어갔는지 안 보이면 잘못 고른 업로드를 알아챌 방법이 없다.
+                    부서 오선택은 사실상 되돌릴 수 없으므로 이 표시가 유일한 사후 확인이다. */}
+                <p className="text-body-small text-ink-muted">
+                  {result.departmentName} · {result.track === "TECH" ? "기술직" : "행정직"} 으로 등록
+                </p>
+                <p className="mt-1 text-body font-semibold text-ink-strong">
                   전체 {result.totalRows}건 중 성공 {result.successRows}건 / 실패 {result.failRows}건
                 </p>
               </div>

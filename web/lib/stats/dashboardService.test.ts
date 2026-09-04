@@ -23,8 +23,8 @@ beforeEach(async () => {
     employeeNo: "dept-a", name: "부서관리자A", email: "b@b.c", passwordHash: "x",
     departmentId: deptA, role: "DEPT_ADMIN", status: "ACTIVE", mustChangePassword: false,
   }).returning({ id: users.id });
-  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false };
-  deptAdmin = { userId: deptAdminId, employeeNo: "dept-a", name: "부서관리자A", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false };
+  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
+  deptAdmin = { userId: deptAdminId, employeeNo: "dept-a", name: "부서관리자A", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
 });
 
 /** 문제 하나를 만들고 정답/오답 시도를 원하는 만큼 붙인다. statsService.test.ts 와 같은 헬퍼. */
@@ -161,7 +161,7 @@ describe("getDashboardSummary — 응답 형태 (B1·B15)", () => {
       "reviewNeededCount", "totalAttempts", "totalCorrectAttempts", "totalProblems"]);
     // B15: recentProblems 는 ProblemListItem 이라 `id` 를 쓴다 — 통계 항목의 `problemId` 와 다르다.
     expect(Object.keys(s.recentProblems[0]).sort()).toEqual(["content", "createdAt", "departmentId",
-      "departmentName", "id", "status", "tags", "type"]);
+      "departmentName", "id", "status", "tags", "track", "type"]);
   });
 
   it("B12: lowAccuracyProblems[i] 는 ProblemStatItem 10필드, problemId 를 쓴다", async () => {

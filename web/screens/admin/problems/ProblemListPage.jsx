@@ -219,6 +219,9 @@ export default function ProblemListPage() {
             { key: "type", label: "유형" },
             { key: "content", label: "내용" },
             { key: "department", label: "부서" },
+            // 직군 **필터**는 넣지 않는다 — 기술직 문제는 전용 부서에 들어가므로 이미 있는
+            // 부서 필터가 같은 일을 한다. 한 부서에 두 직군이 실제로 섞이면 그때 넣는다.
+            { key: "track", label: "직군" },
             { key: "status", label: "상태" },
             { key: "tags", label: "태그" },
             { key: "actions", label: "관리" },
@@ -231,6 +234,7 @@ export default function ProblemListPage() {
                 {problem.content}
               </TableCell>
               <TableCell>{problem.departmentName}</TableCell>
+              <TableCell>{problem.track === "TECH" ? "기술직" : "행정직"}</TableCell>
               <TableCell>
                 <StatusBadge status={problem.status} label={problemStatusLabel(problem.status)} />
               </TableCell>

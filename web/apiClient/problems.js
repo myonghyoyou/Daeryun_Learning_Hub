@@ -20,15 +20,27 @@ export function getProblem(id) {
   return apiGet(`/api/admin/problems/${id}`);
 }
 
-// 컨트롤러가 @RequestParam 으로 받는다. ProblemCreateRequest 는 update() 와 공유되는 DTO 라
-// 본문에 넣지 않는다 — 넣으면 수정 경로에도 부서 지정 표면이 생긴다.
-export function createProblem(payload, departmentId) {
-  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
-  return apiPost(`/api/admin/problems${query}`, payload);
+/** 값이 있는 것만 쿼리스트링으로 만든다. 부서·직군 모두 @RequestParam 이다. */
+function adminQuery(params) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, value);
+  }
+  const qs = query.toString();
+  return qs ? `?${qs}` : "";
 }
 
-export function updateProblem(id, payload) {
-  return apiPut(`/api/admin/problems/${id}`, payload);
+// 컨트롤러가 @RequestParam 으로 받는다. ProblemCreateRequest 는 update() 와 공유되는 DTO 라
+// 본문에 넣지 않는다 — 넣으면 수정 경로에도 부서 지정 표면이 생긴다.
+export function createProblem(payload, departmentId, track) {
+  return apiPost(`/api/admin/problems${adminQuery({ departmentId, track })}`, payload);
+}
+
+// 직군은 수정으로도 바꿀 수 있다 — 부서와 달리 전용 이동 기능이 없어, 잘못 등록한 직군을
+// 되돌릴 유일한 통로가 수정 화면이다. **화면이 현재 직군을 반드시 실어 보내야 한다.**
+// 안 보내면 서버가 행정직으로 읽어 기술직 문제가 조용히 바뀐다.
+export function updateProblem(id, payload, track) {
+  return apiPut(`/api/admin/problems/${id}${adminQuery({ track })}`, payload);
 }
 
 export function changeProblemDepartment(id, departmentId) {
@@ -51,10 +63,9 @@ export function uploadProblemImage(file) {
   return apiPostForm("/api/admin/problems/images", formData);
 }
 
-export function uploadProblemsExcel(file, departmentId) {
+export function uploadProblemsExcel(file, departmentId, track) {
   const formData = new FormData();
   formData.append("file", file);
   // 컨트롤러가 @RequestParam 으로 받으므로 쿼리스트링으로 보낸다.
-  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : "";
-  return apiPostForm(`/api/admin/problems/excel-upload${query}`, formData);
+  return apiPostForm(`/api/admin/problems/excel-upload${adminQuery({ departmentId, track })}`, formData);
 }
