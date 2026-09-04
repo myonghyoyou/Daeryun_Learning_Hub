@@ -35,24 +35,24 @@ describe("findActiveSolveProblems", () => {
     // createdAt 은 defaultNow() 라 명시적으로 넣어야 두 행이 같은 값을 받지 않는다.
     await seed({ content: "먼저", createdAt: new Date("2026-01-01T00:00:00Z") });
     await seed({ content: "나중", createdAt: new Date("2026-01-02T00:00:00Z") });
-    expect((await findActiveSolveProblems(db, {})).map((r) => r.content)).toEqual(["나중", "먼저"]);
+    expect((await findActiveSolveProblems(db, {}, "ADMIN")).map((r) => r.content)).toEqual(["나중", "먼저"]);
   });
 
   it("S5-1: 공백만 있는 keyword·tag 는 필터로 쓴다 — 빈 문자열과 다르다", async () => {
     // Spring 실측: keyword= 는 65건(필터 미적용), keyword=<공백3> 은 0건(필터 적용).
     // MyBatis 의 OGNL 은 "   " != '' 를 참으로 보기 때문이다.
     await seed({ content: "본문" });
-    expect((await findActiveSolveProblems(db, { keyword: "" })).length).toBe(1);
-    expect((await findActiveSolveProblems(db, { keyword: "   " })).length).toBe(0);
-    expect((await findActiveSolveProblems(db, { tag: "" })).length).toBe(1);
-    expect((await findActiveSolveProblems(db, { tag: " " })).length).toBe(0);
+    expect((await findActiveSolveProblems(db, { keyword: "" }, "ADMIN")).length).toBe(1);
+    expect((await findActiveSolveProblems(db, { keyword: "   " }, "ADMIN")).length).toBe(0);
+    expect((await findActiveSolveProblems(db, { tag: "" }, "ADMIN")).length).toBe(1);
+    expect((await findActiveSolveProblems(db, { tag: " " }, "ADMIN")).length).toBe(0);
   });
 
   it("keyword 가 참조지문에도 걸린다", async () => {
     // 관리자 목록(lib/db/problems.ts)과 같은 이유다 — 지문에만 있는 낱말로도 찾아야 한다.
     await seed({ content: "다음 괄호 안에 적합한 용어는?", referenceText: "총괄원가를 판매열량으로 나눈다" });
     await seed({ content: "무관한 문제" });
-    const rows = await findActiveSolveProblems(db, { keyword: "판매열량" });
+    const rows = await findActiveSolveProblems(db, { keyword: "판매열량" }, "ADMIN");
     expect(rows.map((r) => r.content)).toEqual(["다음 괄호 안에 적합한 용어는?"]);
   });
 
@@ -65,35 +65,35 @@ describe("findActiveSolveProblems", () => {
       .values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
     await seed({ content: "가팀 문제" });
     await seed({ content: "나팀 문제", departmentId: other.id });
-    const rows = await findActiveSolveProblems(db, {});
+    const rows = await findActiveSolveProblems(db, {}, "ADMIN");
     expect(rows.map((r) => r.departmentName).sort()).toEqual(["가팀", "나팀"]);
   });
 
   it("S2: ARCHIVED 는 제외한다", async () => {
     await seed({ content: "살아있음" });
     await seed({ content: "보관됨", status: "ARCHIVED" });
-    const rows = await findActiveSolveProblems(db, {});
+    const rows = await findActiveSolveProblems(db, {}, "ADMIN");
     expect(rows.map((r) => r.content)).toEqual(["살아있음"]);
   });
 
   it("S3: keyword 는 대소문자를 무시하고 부분 일치한다", async () => {
     await seed({ content: "SWOT 분석" });
     await seed({ content: "무관" });
-    expect((await findActiveSolveProblems(db, { keyword: "swot" })).length).toBe(1);
+    expect((await findActiveSolveProblems(db, { keyword: "swot" }, "ADMIN")).length).toBe(1);
   });
 
   it("S5: keyword 가 빈 문자열이면 필터를 적용하지 않는다", async () => {
     await seed(); await seed();
-    expect((await findActiveSolveProblems(db, { keyword: "" })).length).toBe(2);
+    expect((await findActiveSolveProblems(db, { keyword: "" }, "ADMIN")).length).toBe(2);
   });
 
   it("S4: tag 는 대소문자를 무시하고 정확히 일치해야 한다", async () => {
     const pid = await seed();
     const [tag] = await db.insert(tags).values({ name: "Alpha" }).returning({ id: tags.id });
     await db.insert(problemTags).values({ problemId: pid, tagId: tag.id });
-    expect((await findActiveSolveProblems(db, { tag: "alpha" })).length).toBe(1);
+    expect((await findActiveSolveProblems(db, { tag: "alpha" }, "ADMIN")).length).toBe(1);
     // 부분 일치가 아니다 — 'Alph' 로는 안 잡힌다.
-    expect((await findActiveSolveProblems(db, { tag: "Alph" })).length).toBe(0);
+    expect((await findActiveSolveProblems(db, { tag: "Alph" }, "ADMIN")).length).toBe(0);
   });
 
   it("S6: tags 는 이름 오름차순이고, 없으면 빈 배열이다", async () => {
@@ -101,7 +101,7 @@ describe("findActiveSolveProblems", () => {
     const rows = await db.insert(tags).values([{ name: "나" }, { name: "가" }]).returning({ id: tags.id });
     await db.insert(problemTags).values(rows.map((t) => ({ problemId: pid, tagId: t.id })));
     await seed({ content: "태그없음" });
-    const list = await findActiveSolveProblems(db, {});
+    const list = await findActiveSolveProblems(db, {}, "ADMIN");
     expect(list.find((r) => r.id === pid)!.tags).toEqual(["가", "나"]);
     expect(list.find((r) => r.content === "태그없음")!.tags).toEqual([]);
   });
@@ -111,19 +111,19 @@ describe("findActiveSolveProblems", () => {
     const rows = await db.insert(tags).values([{ name: "t1" }, { name: "t2" }, { name: "t3" }])
       .returning({ id: tags.id });
     await db.insert(problemTags).values(rows.map((t) => ({ problemId: pid, tagId: t.id })));
-    expect((await findActiveSolveProblems(db, {})).length).toBe(1);
+    expect((await findActiveSolveProblems(db, {}, "ADMIN")).length).toBe(1);
   });
 
   it("S1: 페이지네이션이 없다 — 전부 돌려준다", async () => {
     // 승인된 이탈 ㉰. 나중에 누가 LIMIT 을 '성능 개선'으로 끼워 넣으면 이 테스트가 잡는다.
     for (let i = 0; i < 30; i++) await seed({ content: `q${i}` });
-    expect((await findActiveSolveProblems(db, {})).length).toBe(30);
+    expect((await findActiveSolveProblems(db, {}, "ADMIN")).length).toBe(30);
   });
 
   it("S8: 응답 필드가 정확히 6개이고 정답 관련 필드가 없다", async () => {
     // 정답 비노출은 상세(Q11)만의 문제가 아니다. 목록이 새면 똑같이 망가진다.
     await seed();
-    const row = (await findActiveSolveProblems(db, {}))[0];
+    const row = (await findActiveSolveProblems(db, {}, "ADMIN"))[0];
     expect(Object.keys(row).sort()).toEqual(
       ["content", "departmentName", "id", "sourceNumber", "tags", "type"]);
     for (const leak of ["isCorrect", "explanation", "answerText", "choiceText"]) {
@@ -135,12 +135,12 @@ describe("findActiveSolveProblems", () => {
 describe("findRandomActiveProblems", () => {
   it("P8: count 만큼만 돌려준다", async () => {
     for (let i = 0; i < 5; i++) await seed({ content: `q${i}` });
-    expect((await findRandomActiveProblems(db, { count: 3 })).length).toBe(3);
+    expect((await findRandomActiveProblems(db, { count: 3 , track: "ADMIN" })).length).toBe(3);
   });
 
   it("P6: 있는 문제가 count 보다 적으면 있는 만큼만 — 오류가 아니다", async () => {
     await seed();
-    expect((await findRandomActiveProblems(db, { count: 10 })).length).toBe(1);
+    expect((await findRandomActiveProblems(db, { count: 10 , track: "ADMIN" })).length).toBe(1);
   });
 
   it("P7: departmentId 를 주면 그 부서만", async () => {
@@ -148,12 +148,40 @@ describe("findRandomActiveProblems", () => {
       .values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
     await seed();
     await seed({ departmentId: other.id });
-    const rows = await findRandomActiveProblems(db, { count: 10, departmentId: other.id });
+    const rows = await findRandomActiveProblems(db, { count: 10, departmentId: other.id , track: "ADMIN" });
     expect(rows.map((r) => r.departmentName)).toEqual(["나팀"]);
   });
 
   it("S2 와 같은 규칙: ARCHIVED 는 랜덤에도 안 나온다", async () => {
     await seed({ status: "ARCHIVED" });
-    expect((await findRandomActiveProblems(db, { count: 10 })).length).toBe(0);
+    expect((await findRandomActiveProblems(db, { count: 10 , track: "ADMIN" })).length).toBe(0);
+  });
+});
+
+describe("직군 거르기", () => {
+  it("목록은 고른 직군 문제만 낸다", async () => {
+    await seed({ content: "행정직 문제" });
+    await seed({ content: "기술직 문제", track: "TECH" });
+
+    const admin = await findActiveSolveProblems(db, {}, "ADMIN");
+    expect(admin.map((r) => r.content)).toEqual(["행정직 문제"]);
+
+    const tech = await findActiveSolveProblems(db, {}, "TECH");
+    expect(tech.map((r) => r.content)).toEqual(["기술직 문제"]);
+  });
+
+  it("랜덤도 고른 직군 문제만 낸다", async () => {
+    await seed({ content: "행정직 문제" });
+    await seed({ content: "기술직 문제", track: "TECH" });
+
+    const rows = await findRandomActiveProblems(db, { count: 10, track: "TECH" });
+    expect(rows.map((r) => r.content)).toEqual(["기술직 문제"]);
+  });
+
+  // 부서는 맞는데 직군이 다르면 0건이다 — 거절하지 않고 그냥 안 나온다.
+  it("랜덤에 다른 직군 부서를 지정하면 0건이다", async () => {
+    await seed({ content: "행정직 문제" });
+    const rows = await findRandomActiveProblems(db, { count: 10, departmentId: deptId, track: "TECH" });
+    expect(rows).toEqual([]);
   });
 });

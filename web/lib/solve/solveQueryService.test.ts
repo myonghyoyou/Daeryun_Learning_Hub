@@ -250,7 +250,7 @@ describe("listSolveProblems / randomSolveSet", () => {
   it("목록·랜덤은 findActiveSolveProblems·findRandomActiveProblems 를 그대로 위임한다", async () => {
     await seed({ content: "본문1" });
     await seed({ content: "본문2" });
-    expect((await listSolveProblems(db, {})).length).toBe(2);
-    expect((await randomSolveSet(db, { count: 1 })).length).toBe(1);
+    expect((await listSolveProblems(db, {}, "ADMIN")).length).toBe(2);
+    expect((await randomSolveSet(db, { count: 1, track: "ADMIN" })).length).toBe(1);
   });
 });

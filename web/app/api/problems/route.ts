@@ -9,8 +9,9 @@ export const runtime = "nodejs";
 // 로그인만 확인한다. 부서 스코프도 없다(정답지 S9) — 직원은 전 부서 문제를 본다.
 export async function GET(request: Request): Promise<Response> {
   return handleRoute(async () => {
-    await requireActor();
+    const actor = await requireActor();
     const params = new URL(request.url).searchParams;
-    return listSolveProblems(getDb(), { keyword: params.get("keyword"), tag: params.get("tag") });
+    // 부서 스코프는 여전히 없다(S9). 직군은 그와 별개로 로그인할 때 고른 화면 필터다.
+    return listSolveProblems(getDb(), { keyword: params.get("keyword"), tag: params.get("tag") }, actor.track);
   });
 }

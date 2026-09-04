@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 // SolveController.randomSet(java:27-31) 미러. E1 처럼 역할 제한이 없다.
 export async function GET(request: Request): Promise<Response> {
   return handleRoute(async () => {
-    await requireActor();
+    const actor = await requireActor();
     const params = new URL(request.url).searchParams;
     const raw = params.get("count");
 
@@ -35,6 +35,6 @@ export async function GET(request: Request): Promise<Response> {
     // departmentId 는 비대칭이다 — 선택적 Long 이라 빈 문자열이 그냥 "미지정"이고,
     // 없는 부서 id 는 오류가 아니라 0건이다(정답지 P11, 실측).
     const departmentId = parseNumericParam(params.get("departmentId"), "departmentId");
-    return randomSolveSet(getDb(), { count, departmentId });
+    return randomSolveSet(getDb(), { count, departmentId, track: actor.track });
   });
 }

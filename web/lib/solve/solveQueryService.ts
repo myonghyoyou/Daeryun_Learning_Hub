@@ -4,6 +4,7 @@ import { findDepartmentById } from "../db/departments";
 import { findBlanksByProblemId, findChoicesByProblemId } from "../db/problemParts";
 import { findProblemById } from "../db/problems";
 import { findActiveSolveProblems, findRandomActiveProblems, type SolveListRow } from "../db/solveProblems";
+import type { Track } from "../problem/track";
 import { BizError } from "../http/errors";
 import { ErrorCode } from "../http/errorCode";
 
@@ -28,13 +29,14 @@ export interface SolveDetail {
 export async function listSolveProblems(
   db: DbConn,
   f: { keyword?: string | null; tag?: string | null },
+  track: Track,
 ): Promise<SolveListRow[]> {
-  return findActiveSolveProblems(db, f);
+  return findActiveSolveProblems(db, f, track);
 }
 
 export async function randomSolveSet(
   db: DbConn,
-  i: { count: number; departmentId?: number | null },
+  i: { count: number; departmentId?: number | null; track: Track },
 ): Promise<SolveListRow[]> {
   const MAX_RANDOM_COUNT = 50;
   // SolveServiceImpl.randomSet(java:50-57) 미러 — count 범위 검증이 여기, 서비스에 있다.

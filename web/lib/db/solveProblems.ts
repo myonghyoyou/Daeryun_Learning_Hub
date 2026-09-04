@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { DbConn } from "./client";
 import { departments, problems, problemTags, tags } from "./schema";
+import type { Track } from "../problem/track";
 
 export type SolveListRow = {
   id: number; type: string; content: string;
@@ -26,6 +27,7 @@ function baseSelect(db: DbConn) {
 export async function findActiveSolveProblems(
   db: DbConn,
   filters: { keyword?: string | null; tag?: string | null },
+  track: Track,
 ): Promise<SolveListRow[]> {
   // 빈 문자열**만** 필터가 아니다 — MyBatis `<if test="... != null and ... != ''">` 미러.
   // **공백만 있는 값은 필터로 쓴다**(정답지 S5-1). OGNL 의 `"   " != ''` 는 참이라 Spring 은
@@ -33,7 +35,9 @@ export async function findActiveSolveProblems(
   const keyword = filters.keyword != null && filters.keyword !== "" ? filters.keyword : null;
   const tag = filters.tag != null && filters.tag !== "" ? filters.tag : null;
 
-  const where = [eq(problems.status, "ACTIVE")];
+  // S9 의 "부서 필터를 넣지 마라"(Java 파리티)와 **다른 얘기다.** 저건 부서 필터고 이건
+  // 직군 필터이며, 2026-09 에 들어온 새 업무 규칙이다. 둘을 헷갈리지 말 것.
+  const where = [eq(problems.status, "ACTIVE"), eq(problems.track, track)];
   // 관리자 목록(lib/db/problems.ts)과 같은 이유로 참조지문도 함께 본다.
   if (keyword) {
     where.push(sql`(${problems.content} ILIKE ${`%${keyword}%`}
@@ -55,9 +59,9 @@ export async function findActiveSolveProblems(
 
 export async function findRandomActiveProblems(
   db: DbConn,
-  input: { count: number; departmentId?: number | null },
+  input: { count: number; departmentId?: number | null; track: Track },
 ): Promise<SolveListRow[]> {
-  const where = [eq(problems.status, "ACTIVE")];
+  const where = [eq(problems.status, "ACTIVE"), eq(problems.track, input.track)];
   if (input.departmentId != null) where.push(eq(problems.departmentId, input.departmentId));
   return baseSelect(db).where(and(...where))
     .groupBy(problems.id, departments.name)
