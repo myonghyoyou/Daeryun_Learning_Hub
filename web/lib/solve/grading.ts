@@ -42,6 +42,11 @@ export interface GradeResult {
   // ", " 로 모두 나열한다. FILL_BLANK 는 null — blankResults[i].correctAnswer 가
   // 빈칸별로 이미 담당한다(둘 다 채우면 같은 정보가 두 자리에 흩어진다).
   correctAnswerSummary: string | null;
+  // 정답인 보기의 id(문제 정의 순서). 화면이 보기 목록에서 정답 줄을 표시할 때 쓴다.
+  // correctAnswerSummary 로는 대신할 수 없다 — 정답이 여럿이면 ", " 로 잇는데 보기 본문
+  // 자체에 ", " 가 든 것이 211개라(2026-09-04 실측) 되쪼개면 엉뚱한 데서 갈린다.
+  // 고를 보기가 없는 SHORT_ANSWER·FILL_BLANK 는 null.
+  correctChoiceIds: number[] | null;
 }
 
 export type GradeInput =
@@ -85,6 +90,7 @@ export function grade(input: GradeInput): GradeResult {
         blankResults: null,
         submittedAnswerSummary: selectedChoices.map((c) => c.choiceText ?? "").join(", "),
         correctAnswerSummary,
+        correctChoiceIds: input.choices.filter((c) => c.isCorrect).map((c) => c.id),
       };
     }
     case "SHORT_ANSWER": {
@@ -95,6 +101,7 @@ export function grade(input: GradeInput): GradeResult {
         blankResults: null,
         submittedAnswerSummary: input.submittedText, // T2-1: 원문 그대로
         correctAnswerSummary: input.answers.join(", "),
+        correctChoiceIds: null,
       };
     }
     case "FILL_BLANK": {
@@ -128,6 +135,7 @@ export function grade(input: GradeInput): GradeResult {
         selectedChoices: [],
         blankResults,
         correctAnswerSummary: null,
+        correctChoiceIds: null,
         // T4: 답만 잇는다. 키는 화면에 안 나오는 내부 식별자다.
         // Java describeBlanks(:236) 은 String.trim() 을 쓴다 — JS trim() 을 쓰면 U+00A0 같은
         // 유니코드 공백만 입력한 제출이 "(미입력)" 으로 잘못 갈린다(T4).

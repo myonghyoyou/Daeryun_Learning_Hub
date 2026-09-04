@@ -14,13 +14,19 @@ import { PROBLEM_NOT_FOUND_MESSAGE } from "./solveQueryService";
  * 3개뿐이었다(정답지 G14) — 그러나 이 4번째 키(`correctAnswerSummary`)는 **의도적으로
  * G14 를 벗어나는 이탈**이다: 오답 시 정답을 알려주는 기능은 원본 Spring 시스템에 없었다
  * (docs/qa/2026-08-21-solve-parity-checklist.md G14 를 "승인된 이탈"로 갱신했다).
- * 스프레드로 다른 필드를 더 싣지는 마라 — 이 네 개만 계약이다.
+ *
+ * 다섯 번째 키(`correctChoiceIds`)도 같은 이탈의 연장이다: 객관식에서 정답을 글로 적어
+ * 주는 대신 보기 목록에 표시하기 위한 것으로, 이미 내보내던 정답 텍스트와 같은 사실을
+ * 정확한 형태로 줄 뿐 새로 새는 정보가 없다.
+ *
+ * 스프레드로 다른 필드를 더 싣지는 마라 — 이 다섯 개만 계약이다.
  */
 export interface AttemptResult {
   correct: boolean;
   explanation: string | null;
   blankResults: BlankResult[] | null;
   correctAnswerSummary: string | null;
+  correctChoiceIds: number[] | null;
 }
 
 /**
@@ -131,5 +137,6 @@ export async function submitAttempt(
     explanation: problem.explanation,
     blankResults: result.blankResults,
     correctAnswerSummary: result.correctAnswerSummary,
+    correctChoiceIds: result.correctChoiceIds,
   };
 }

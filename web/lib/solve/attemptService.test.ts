@@ -213,10 +213,16 @@ describe("submitAttempt — 응답", () => {
     expect(r.explanation).toBe("해설 본문");
   });
 
-  it("Step 2-1: AttemptResult 의 키 집합이 정확히 네 개다 — G14 확장 이후", async () => {
+  it("Step 2-1: AttemptResult 의 키 집합이 정확히 다섯 개다 — G14 확장 + 정답 보기 표시", async () => {
     const { problemId } = await seedMcq();
     const r = await submitAttempt(db, problemId, { selectedChoiceIds: [], submittedText: null, blankAnswers: null }, actor);
-    expect(Object.keys(r).sort()).toEqual(["blankResults", "correct", "correctAnswerSummary", "explanation"]);
+    expect(Object.keys(r).sort()).toEqual(["blankResults", "correct", "correctAnswerSummary", "correctChoiceIds", "explanation"]);
+  });
+
+  it("객관식은 정답 보기의 id 를 함께 낸다 — 화면이 보기 목록에 표시한다", async () => {
+    const { problemId, choiceId } = await seedMcq();
+    const r = await submitAttempt(db, problemId, { selectedChoiceIds: [], submittedText: null, blankAnswers: null }, actor);
+    expect(r.correctChoiceIds).toEqual([choiceId]);
   });
 
   it("Step 2-1: blankResults 항목의 키 집합이 BlankAnswerResult.java 의 4필드와 정확히 같다", async () => {

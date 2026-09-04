@@ -293,3 +293,53 @@ describe("correctAnswerSummary \u2014 \uC624\uB2F5 \uC2DC \uC815\uB2F5 \uACF5\uA
     expect(result.correctAnswerSummary).toBe("\uC11C\uC6B8");
   });
 });
+
+/**
+ * 정답을 보기 목록에 표시하려면 화면이 "어느 줄이 정답인지" 를 알아야 한다.
+ *
+ * correctAnswerSummary 로는 못 한다. 정답이 여럿이면 ", " 로 이어 붙이는데 보기 본문
+ * 자체에 ", " 가 든 것이 211개라(2026-09-04 실측) 되쪼개면 엉뚱한 데서 갈린다.
+ * 같은 본문의 보기가 둘인 문제도 있어 본문으로 맞춰 찾는 것도 안전하지 않다.
+ */
+describe("correctChoiceIds — 정답 보기 표시용", () => {
+  it("MCQ_SINGLE: 정답 보기의 id 를 낸다", () => {
+    const r = grade({
+      type: "MCQ_SINGLE",
+      choices: [
+        { id: 7, choiceText: "가", isCorrect: false },
+        { id: 8, choiceText: "나", isCorrect: true },
+      ],
+      selectedChoiceIds: [7],
+    });
+    expect(r.correctChoiceIds).toEqual([8]);
+  });
+
+  it("MCQ_MULTI: 정답이 여럿이면 문제 정의 순서로 모두 낸다", () => {
+    const r = grade({
+      type: "MCQ_MULTI",
+      choices: [
+        { id: 3, choiceText: "다", isCorrect: true },
+        { id: 1, choiceText: "가", isCorrect: false },
+        { id: 2, choiceText: "나", isCorrect: true },
+      ],
+      selectedChoiceIds: [1],
+    });
+    expect(r.correctChoiceIds).toEqual([3, 2]);
+  });
+
+  it("맞혔을 때도 낸다 — 보여줄지는 화면이 정한다", () => {
+    expect(mcq([1]).correctChoiceIds).toEqual([1]);
+  });
+
+  it("주관식과 빈칸 채우기는 null 이다 — 고를 보기가 없다", () => {
+    const short = grade({ type: "SHORT_ANSWER", answers: ["서울"], submittedText: "부산" });
+    expect(short.correctChoiceIds).toBeNull();
+    const blank = grade({
+      type: "FILL_BLANK",
+      blanks: [{ blankKey: "b1", answerText: "서울" }],
+      blankRevealCount: 1,
+      blankAnswers: [{ blankKey: "b1", submittedAnswer: "부산" }],
+    });
+    expect(blank.correctChoiceIds).toBeNull();
+  });
+});
