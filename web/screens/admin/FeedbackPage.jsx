@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
-import FeedbackModal from "@/components/feedback/FeedbackModal.jsx";
+import FeedbackForm from "@/components/feedback/FeedbackForm.jsx";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { listUnsentFeedbacks, retryFeedbacks } from "@/apiClient/feedback.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
@@ -10,7 +10,7 @@ import { resolveErrorMessage } from "@/apiClient/client.js";
 export default function FeedbackPage() {
   const { session } = useSessionStatus();
   const isSuper = session?.role === "SUPER_ADMIN";
-  const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const [unsent, setUnsent] = useState([]);
   const [retrying, setRetrying] = useState(false);
   const [note, setNote] = useState("");
@@ -52,7 +52,7 @@ export default function FeedbackPage() {
       </section>
 
       <Surface className="p-5">
-        <Button onClick={() => setOpen(true)}>의견 보내기</Button>
+        <FeedbackForm sending={sending} setSending={setSending} />
       </Surface>
 
       {isSuper && (
@@ -82,8 +82,6 @@ export default function FeedbackPage() {
           )}
         </Surface>
       )}
-
-      <FeedbackModal open={open} onClose={() => setOpen(false)} />
     </>
   );
 }
