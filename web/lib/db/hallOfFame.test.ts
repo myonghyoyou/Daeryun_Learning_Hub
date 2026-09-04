@@ -48,7 +48,7 @@ describe("findCorrectCountsByUser — ALL", () => {
     await seedAttempt(me, true, "2026-09-01T01:00:00Z");
     await seedAttempt(me, false, "2026-09-01T02:00:00Z");
 
-    const rows = await findCorrectCountsByUser(db, "ALL");
+    const rows = await findCorrectCountsByUser(db, "ALL", "ADMIN");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ userId: me, name: "김하나", departmentName: "기획팀", correctCount: 1 });
   });
@@ -58,7 +58,7 @@ describe("findCorrectCountsByUser — ALL", () => {
     await seedAttempt(me, true, "2026-09-01T01:00:00Z");
     await seedAttempt(me, true, "2026-09-01T02:00:00Z");
 
-    expect((await findCorrectCountsByUser(db, "ALL"))[0].correctCount).toBe(2);
+    expect((await findCorrectCountsByUser(db, "ALL", "ADMIN"))[0].correctCount).toBe(2);
   });
 
   it("서로 다른 문제를 맞히면 합쳐 센다", async () => {
@@ -66,21 +66,21 @@ describe("findCorrectCountsByUser — ALL", () => {
     await seedAttempt(me, true, "2026-09-01T01:00:00Z");
     await seedAttempt(me, true, "2026-09-01T02:00:00Z", otherProblemId);
 
-    expect((await findCorrectCountsByUser(db, "ALL"))[0].correctCount).toBe(2);
+    expect((await findCorrectCountsByUser(db, "ALL", "ADMIN"))[0].correctCount).toBe(2);
   });
 
   it("비활성 계정은 빼놓는다", async () => {
     const gone = await seedUser("emp1", "퇴사자", { status: "INACTIVE" });
     await seedAttempt(gone, true, "2026-09-01T01:00:00Z");
 
-    expect(await findCorrectCountsByUser(db, "ALL")).toEqual([]);
+    expect(await findCorrectCountsByUser(db, "ALL", "ADMIN")).toEqual([]);
   });
 
   it("한 번도 안 맞힌 사람은 아예 나오지 않는다", async () => {
     const me = await seedUser("emp1", "김하나");
     await seedAttempt(me, false, "2026-09-01T01:00:00Z");
 
-    expect(await findCorrectCountsByUser(db, "ALL")).toEqual([]);
+    expect(await findCorrectCountsByUser(db, "ALL", "ADMIN")).toEqual([]);
   });
 
   it("맞힌 개수 내림차순, 같으면 마지막 정답이 이른 사람이 앞이다", async () => {
@@ -92,7 +92,7 @@ describe("findCorrectCountsByUser — ALL", () => {
     await seedAttempt(early, true, "2026-09-01T03:00:00Z");
     await seedAttempt(late, true, "2026-09-01T04:00:00Z");
 
-    expect((await findCorrectCountsByUser(db, "ALL")).map((r) => r.name)).toEqual(["많이", "일찍", "늦게"]);
+    expect((await findCorrectCountsByUser(db, "ALL", "ADMIN")).map((r) => r.name)).toEqual(["많이", "일찍", "늦게"]);
   });
 
   it("개수와 마지막 시각이 모두 같으면 사용자 번호가 작은 쪽이 앞이다", async () => {
@@ -101,7 +101,7 @@ describe("findCorrectCountsByUser — ALL", () => {
     await seedAttempt(first, true, "2026-09-01T01:00:00Z");
     await seedAttempt(second, true, "2026-09-01T01:00:00Z");
 
-    expect((await findCorrectCountsByUser(db, "ALL")).map((r) => r.name)).toEqual(["먼저", "나중"]);
+    expect((await findCorrectCountsByUser(db, "ALL", "ADMIN")).map((r) => r.name)).toEqual(["먼저", "나중"]);
     expect(first).toBeLessThan(second);
   });
 
@@ -111,7 +111,7 @@ describe("findCorrectCountsByUser — ALL", () => {
     await seedAttempt(mine, true, "2026-09-01T01:00:00Z");
     await seedAttempt(yours, true, "2026-09-01T02:00:00Z");
 
-    expect((await findCorrectCountsByUser(db, "ALL")).map((r) => r.departmentName)).toEqual(["기획팀", "영업팀"]);
+    expect((await findCorrectCountsByUser(db, "ALL", "ADMIN")).map((r) => r.departmentName)).toEqual(["기획팀", "영업팀"]);
   });
 });
 
@@ -122,7 +122,7 @@ describe("findCorrectCountsByTeam", () => {
     await seedAttempt(a, true, "2026-09-01T02:00:00Z");
     await seedAttempt(b, true, "2026-09-01T03:00:00Z");
 
-    const rows = await findCorrectCountsByTeam(db, "ALL");
+    const rows = await findCorrectCountsByTeam(db, "ALL", "ADMIN");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ departmentId: planId, departmentName: "기획팀", correctCount: 3 });
   });
@@ -133,7 +133,7 @@ describe("findCorrectCountsByTeam", () => {
     await seedAttempt(live, true, "2026-09-01T01:00:00Z");
     await seedAttempt(gone, true, "2026-09-01T02:00:00Z");
 
-    expect((await findCorrectCountsByTeam(db, "ALL"))[0].correctCount).toBe(1);
+    expect((await findCorrectCountsByTeam(db, "ALL", "ADMIN"))[0].correctCount).toBe(1);
   });
 
   it("합계 내림차순, 같으면 마지막 정답이 이른 팀이 앞이다", async () => {
@@ -142,14 +142,14 @@ describe("findCorrectCountsByTeam", () => {
     await seedAttempt(plan1, true, "2026-09-01T03:00:00Z");
     await seedAttempt(sales1, true, "2026-09-01T01:00:00Z");
 
-    expect((await findCorrectCountsByTeam(db, "ALL")).map((r) => r.departmentName))
+    expect((await findCorrectCountsByTeam(db, "ALL", "ADMIN")).map((r) => r.departmentName))
       .toEqual(["영업팀", "기획팀"]);
   });
 
   it("맞힌 것이 없는 팀은 아예 나오지 않는다", async () => {
     const me = await seedUser("emp1", "가");
     await seedAttempt(me, false, "2026-09-01T01:00:00Z");
-    expect(await findCorrectCountsByTeam(db, "ALL")).toEqual([]);
+    expect(await findCorrectCountsByTeam(db, "ALL", "ADMIN")).toEqual([]);
   });
 });
 
@@ -171,8 +171,8 @@ describe("findCorrectCountsByUser — MONTH", () => {
     await seedAttempt(me, true, new Date(boundary.getTime() - 60_000).toISOString());
     await seedAttempt(me, true, new Date(boundary.getTime() + 60_000).toISOString());
 
-    expect((await findCorrectCountsByUser(db, "MONTH"))[0].correctCount).toBe(1);
-    expect((await findCorrectCountsByUser(db, "ALL"))[0].correctCount).toBe(2);
+    expect((await findCorrectCountsByUser(db, "MONTH", "ADMIN"))[0].correctCount).toBe(1);
+    expect((await findCorrectCountsByUser(db, "ALL", "ADMIN"))[0].correctCount).toBe(2);
   });
 
   it("이번 달에 맞힌 것이 없으면 빈 목록이다", async () => {
@@ -180,7 +180,7 @@ describe("findCorrectCountsByUser — MONTH", () => {
     const boundary = monthBoundaryUtc();
     await seedAttempt(me, true, new Date(boundary.getTime() - 60_000).toISOString());
 
-    expect(await findCorrectCountsByUser(db, "MONTH")).toEqual([]);
+    expect(await findCorrectCountsByUser(db, "MONTH", "ADMIN")).toEqual([]);
   });
 
   /**
@@ -198,9 +198,54 @@ describe("findCorrectCountsByUser — MONTH", () => {
 
     await db.execute(sql`SET TIME ZONE 'America/New_York'`);
     try {
-      expect((await findCorrectCountsByUser(db, "MONTH"))[0].correctCount).toBe(1);
+      expect((await findCorrectCountsByUser(db, "MONTH", "ADMIN"))[0].correctCount).toBe(1);
     } finally {
       await db.execute(sql`SET TIME ZONE 'UTC'`);
     }
+  });
+});
+
+describe("직군 거르기", () => {
+  async function seedTrackProblem(track: "ADMIN" | "TECH", status: "ACTIVE" | "ARCHIVED" = "ACTIVE") {
+    const author = await seedUser(`author-${track}-${status}`, "출제자");
+    const [row] = await db.insert(problems).values({
+      type: "OX", content: track, departmentId: planId, status,
+      createdBy: author, sourceNumber: null, track,
+    }).returning({ id: problems.id });
+    return row.id;
+  }
+
+  it("개인 순위가 직군별로 갈린다", async () => {
+    const me = await seedUser("emp1", "김하나");
+    const adminP = await seedTrackProblem("ADMIN");
+    const techP = await seedTrackProblem("TECH");
+    await seedAttempt(me, true, "2026-09-01T01:00:00Z", adminP);
+    await seedAttempt(me, true, "2026-09-01T02:00:00Z", techP);
+    await seedAttempt(me, true, "2026-09-01T03:00:00Z", techP);
+
+    const admin = await findCorrectCountsByUser(db, "ALL", "ADMIN");
+    expect(admin.map((r) => r.correctCount)).toEqual([1]);
+
+    const tech = await findCorrectCountsByUser(db, "ALL", "TECH");
+    expect(tech.map((r) => r.correctCount)).toEqual([2]);
+  });
+
+  it("팀 순위도 갈린다 — 개인 것을 묶은 게 아니라 자체 쿼리다", async () => {
+    const me = await seedUser("emp2", "이두리");
+    const techP = await seedTrackProblem("TECH");
+    await seedAttempt(me, true, "2026-09-01T01:00:00Z", techP);
+
+    expect(await findCorrectCountsByTeam(db, "ALL", "ADMIN")).toEqual([]);
+    const tech = await findCorrectCountsByTeam(db, "ALL", "TECH");
+    expect(tech.map((r) => r.correctCount)).toEqual([1]);
+  });
+
+  // 조인을 더하면서 p.status 조건을 붙이면 여기서 잡힌다.
+  it("보관된 문제의 정답도 계속 센다", async () => {
+    const me = await seedUser("emp3", "박세찬");
+    const archived = await seedTrackProblem("ADMIN", "ARCHIVED");
+    await seedAttempt(me, true, "2026-09-01T01:00:00Z", archived);
+    const rows = await findCorrectCountsByUser(db, "ALL", "ADMIN");
+    expect(rows.map((r) => r.correctCount)).toEqual([1]);
   });
 });

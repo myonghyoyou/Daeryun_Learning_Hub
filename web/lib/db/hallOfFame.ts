@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { DbConn } from "./client";
 import { executeRows } from "./raw";
+import type { Track } from "../problem/track";
 
 export type Period = "MONTH" | "ALL";
 
@@ -34,8 +35,13 @@ const MONTH_START = sql`((date_trunc('month', now() AT TIME ZONE 'Asia/Seoul')
  * 집계값에 ::int 를 붙이는 이유는 postgres.js 가 COUNT 를 문자열로 주기 때문이다
  * (lib/db/stats.ts:36 의 같은 주석).
  */
-export async function findCorrectCountsByUser(db: DbConn, period: Period): Promise<HallOfFameRow[]> {
+export async function findCorrectCountsByUser(
+  db: DbConn, period: Period, track: Track,
+): Promise<HallOfFameRow[]> {
   const periodFilter = period === "MONTH" ? sql`AND a.submitted_at >= ${MONTH_START}` : sql``;
+  // p.status = 'ACTIVE' 를 **넣지 마라.** 지금 동작은 보관된 문제의 정답도 세는 것이고,
+  // 조인을 더하는 김에 붙이면 과거 점수가 조용히 바뀐다.
+  // attempts.problem_id 는 NOT NULL FK 라 이너조인이 행을 늘리거나 줄이지 않는다.
   return executeRows<HallOfFameRow>(db, sql`
     SELECT u.id::int AS "userId", u.name, d.name AS "departmentName",
            count(*)::int AS "correctCount",
@@ -43,7 +49,8 @@ export async function findCorrectCountsByUser(db: DbConn, period: Period): Promi
     FROM attempts a
     JOIN users u ON u.id = a.user_id
     JOIN departments d ON d.id = u.department_id
-    WHERE a.is_correct = true AND u.status = 'ACTIVE' ${periodFilter}
+    JOIN problems p ON p.id = a.problem_id
+    WHERE a.is_correct = true AND u.status = 'ACTIVE' AND p.track = ${track} ${periodFilter}
     GROUP BY u.id, u.name, d.name
     ORDER BY count(*) DESC, max(a.submitted_at) ASC, u.id ASC
   `);
@@ -62,8 +69,16 @@ export type TeamRow = {
  *
  * 부서 상태는 보지 않는다. 부서가 비활성이 되었다고 그 팀이 쌓은 기록이 사라지면 안 된다.
  */
-export async function findCorrectCountsByTeam(db: DbConn, period: Period): Promise<TeamRow[]> {
+export async function findCorrectCountsByTeam(
+  db: DbConn, period: Period, track: Track,
+): Promise<TeamRow[]> {
   const periodFilter = period === "MONTH" ? sql`AND a.submitted_at >= ${MONTH_START}` : sql``;
+  // **개인 순위를 묶어 만드는 것이 아니라 자체 쿼리다.** 위쪽만 고치면 팀 순위만 두 직군
+  // 합계로 남는다. 여기도 p.status 조건을 붙이지 마라(위와 같은 이유).
+  //
+  // 묶는 기준은 **푼 사람의 부서**다(d.id = u.department_id). 문제의 부서가 아니다 —
+  // 한 팀에 두 직군이 섞이므로, 영업팀의 기술직 직원이 쌓은 점수는 기술직 순위의 영업팀
+  // 몫으로 간다. 한 팀이 두 직군 순위에 각각 제 몫으로 나오는 것이 맞는 동작이다.
   return executeRows<TeamRow>(db, sql`
     SELECT d.id::int AS "departmentId", d.name AS "departmentName",
            count(*)::int AS "correctCount",
@@ -71,7 +86,8 @@ export async function findCorrectCountsByTeam(db: DbConn, period: Period): Promi
     FROM attempts a
     JOIN users u ON u.id = a.user_id
     JOIN departments d ON d.id = u.department_id
-    WHERE a.is_correct = true AND u.status = 'ACTIVE' ${periodFilter}
+    JOIN problems p ON p.id = a.problem_id
+    WHERE a.is_correct = true AND u.status = 'ACTIVE' AND p.track = ${track} ${periodFilter}
     GROUP BY d.id, d.name
     ORDER BY count(*) DESC, max(a.submitted_at) ASC, d.id ASC
   `);

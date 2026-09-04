@@ -22,8 +22,10 @@ export type HallOfFame = { month: PeriodBoard; allTime: PeriodBoard };
  * 점수가 있다.
  */
 async function buildPeriod(db: DbConn, actor: AuthUser, period: Period): Promise<PeriodBoard> {
-  const peopleRows = await findCorrectCountsByUser(db, period);
-  const teamRows = await findCorrectCountsByTeam(db, period);
+  // 두 직군은 서로 다른 문제를 풀므로 맞힌 개수를 그대로 비교할 수 없다. 푼 문제의 직군으로
+  // 갈라, 같은 문제를 푼 사람끼리만 줄을 세운다.
+  const peopleRows = await findCorrectCountsByUser(db, period, actor.track);
+  const teamRows = await findCorrectCountsByTeam(db, period, actor.track);
   return {
     people: { top: buildTopRows(peopleRows), me: findMyRank(peopleRows, actor.userId) },
     teams: { top: buildTopTeamRows(teamRows), mine: findMyTeamRank(teamRows, actor.departmentId) },
