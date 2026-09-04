@@ -44,6 +44,9 @@ export const problems = pgTable("problems", {
   status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),
   departmentId: bigint("department_id", { mode: "number" }).notNull().references(() => departments.id),
   sourceNumber: integer("source_number"),
+  // 직군. 사람이 아니라 문제에 붙는다 — 한 팀 안에 두 직군이 섞이므로(영업팀) 부서에서
+  // 파생시킬 수 없다. 기본값이 있어 기존 행은 전부 ADMIN 이 된다.
+  track: varchar("track", { length: 20 }).notNull().default("ADMIN"),
   createdBy: bigint("created_by", { mode: "number" }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -51,6 +54,7 @@ export const problems = pgTable("problems", {
   uqDeptSource: unique("uq_problems_department_source_number").on(t.departmentId, t.sourceNumber),
   typeCheck: check("problems_type_check", sql`${t.type} IN ('MCQ_SINGLE', 'MCQ_MULTI', 'OX', 'SHORT_ANSWER', 'FILL_BLANK')`),
   statusCheck: check("problems_status_check", sql`${t.status} IN ('ACTIVE', 'ARCHIVED')`),
+  trackCheck: check("problems_track_check", sql`${t.track} IN ('ADMIN', 'TECH')`),
 }));
 
 export const problemChoices = pgTable("problem_choices", {

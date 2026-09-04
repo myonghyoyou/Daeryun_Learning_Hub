@@ -1,0 +1,2 @@
+ALTER TABLE "problems" ADD COLUMN "track" varchar(20) DEFAULT 'ADMIN' NOT NULL;--> statement-breakpoint
+ALTER TABLE "problems" ADD CONSTRAINT "problems_track_check" CHECK ("problems"."track" IN ('ADMIN', 'TECH'));

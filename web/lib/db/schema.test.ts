@@ -38,3 +38,39 @@ describe("schema round-trip", () => {
     ).rejects.toMatchObject({ code: "23505" });
   });
 });
+
+describe("problems.track", () => {
+  async function makeOwner() {
+    const [dept] = await db.insert(departments)
+      .values({ name: "직군부서", code: "TRK" }).returning();
+    const [admin] = await db.insert(users).values({
+      employeeNo: "trk-admin", name: "관리자", email: "trk@x.local", passwordHash: "h",
+      departmentId: dept.id, role: "SUPER_ADMIN",
+    }).returning();
+    return { departmentId: dept.id, createdBy: admin.id };
+  }
+
+  it("안 넘기면 행정직으로 들어간다", async () => {
+    const owner = await makeOwner();
+    const [row] = await db.insert(problems)
+      .values({ type: "OX", content: "본문", ...owner })
+      .returning({ track: problems.track });
+    expect(row.track).toBe("ADMIN");
+  });
+
+  it("기술직으로 넣으면 그대로 저장된다", async () => {
+    const owner = await makeOwner();
+    const [row] = await db.insert(problems)
+      .values({ type: "OX", content: "본문", track: "TECH", ...owner })
+      .returning({ track: problems.track });
+    expect(row.track).toBe("TECH");
+  });
+
+  // 두 값 밖은 CHECK 제약이 막는다 — 애플리케이션 검증이 없어도 DB 가 지키는지 본다.
+  it("두 값 밖은 DB 가 거절한다", async () => {
+    const owner = await makeOwner();
+    await expect(db.insert(problems).values({
+      type: "OX", content: "본문", track: "SALES", ...owner,
+    })).rejects.toThrow();
+  });
+});
