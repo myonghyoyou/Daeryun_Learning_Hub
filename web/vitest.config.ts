@@ -3,11 +3,15 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": resolve(__dirname, ".") },
-    // `server-only` 패키지는 "react-server" 조건이 없으면 무조건 throw 한다(클라이언트로
-    // 오인해). Next 빌드에서는 이 조건이 자동으로 잡히지만 vitest(순수 node)는 아니라서
-    // 여기서 직접 지정해 준다 — 실제 서버 코드 테스트가 이 이유로 막히면 안 된다.
-    conditions: ["react-server"],
+    alias: {
+      "@": resolve(__dirname, "."),
+      // `server-only` 는 "react-server" export 조건이 없으면 무조건 throw 한다(클라이언트로
+      // 오인해서). 그 조건을 global 로 켜면 react/react-dom 의 react-server 전용 빌드까지
+      // 걸려 useState 같은 클라이언트 훅이 없는 버전으로 바뀐다 — 이 저장소엔 아직 그런
+      // 테스트가 없어 안 터질 뿐이다. 대신 `server-only` 패키지 하나만 그 무해한
+      // empty.js 로 직접 alias 해서, 다른 패키지의 조건부 resolve 는 건드리지 않는다.
+      "server-only": resolve(__dirname, "node_modules/server-only/empty.js"),
+    },
   },
   test: {
     environment: "node",
