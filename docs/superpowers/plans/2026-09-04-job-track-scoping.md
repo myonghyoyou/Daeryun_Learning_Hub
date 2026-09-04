@@ -40,6 +40,22 @@ Postgres 를 띄우는 통합 테스트), jose(JWT), React 19 + JSX 화면.
 목적은 그대로 달성되고 — 라우트가 `track` 을 안 넘기면 컴파일이 실패한다 — 관계없는 테스트
 52줄을 건드리지 않는다. 대량 기계 편집 자체가 사고가 나는 자리다.
 
+## 작업 순서 — 번호대로 하지 마라
+
+Task 10(로그인 토글)만 **맨 끝으로 뺀다.**
+
+```
+1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 11 → 12 → 10
+```
+
+토글을 켜기 전까지 모두가 기본값 `ADMIN` 이므로 앱은 **오늘과 똑같이 동작한다.** 그동안
+거르는 코드와 관리자 화면을 다 넣고(1~9, 11), 기술직 500문항을 적재한 뒤(12), 마지막에
+토글을 연다(10).
+
+번호대로 10을 먼저 하면 **기술직 문제가 하나도 없는 상태에서 기술직을 고를 수 있게 된다** —
+문제 목록·팀 대항·부서 드롭다운·명예의 전당이 전부 빈 화면이다. Task 12 는 Task 11(관리자
+직군 선택)이 있어야 올릴 수 있으므로 12 를 10 보다 앞에 두는 것이 가능하다.
+
 ## 파일 구조
 
 | 파일 | 책임 | 상태 |
@@ -165,32 +181,48 @@ Expected: `drizzle/` 아래에 새 `.sql` 파일이 하나 생긴다. 열어서 
 
 - [ ] **Step 7: 컬럼 동작 테스트를 쓴다**
 
-`web/lib/db/schema.test.ts` 끝에 붙인다. 이 파일의 기존 `beforeEach`/헬퍼가 만들어 두는
-부서·사용자 변수 이름을 그대로 쓴다 — 파일을 먼저 읽고 이름을 맞출 것.
+`web/lib/db/schema.test.ts` 끝에 붙인다. **이 파일에는 `deptId`·`userId` 같은 모듈 변수가
+없다** — 모듈 수준에는 `db` 하나뿐이고 테스트마다 부서·사용자를 인라인으로 만든다
+(`:27-30` 의 기존 테스트와 같은 모양). 아래 헬퍼를 `describe` 안에 같이 넣는다.
 
 ```ts
 describe("problems.track", () => {
+  async function makeOwner() {
+    const [dept] = await db.insert(departments)
+      .values({ name: "직군부서", code: "TRK" }).returning();
+    const [admin] = await db.insert(users).values({
+      employeeNo: "trk-admin", name: "관리자", email: "trk@example.com", passwordHash: "x",
+      departmentId: dept.id, role: "SUPER_ADMIN",
+    }).returning();
+    return { departmentId: dept.id, createdBy: admin.id };
+  }
+
   it("안 넘기면 행정직으로 들어간다", async () => {
-    const [row] = await db.insert(problems).values({
-      type: "OX", content: "본문", departmentId: deptId, createdBy: userId,
-    }).returning({ track: problems.track });
+    const owner = await makeOwner();
+    const [row] = await db.insert(problems)
+      .values({ type: "OX", content: "본문", ...owner })
+      .returning({ track: problems.track });
     expect(row.track).toBe("ADMIN");
   });
 
   it("기술직으로 넣으면 그대로 저장된다", async () => {
-    const [row] = await db.insert(problems).values({
-      type: "OX", content: "본문", departmentId: deptId, createdBy: userId, track: "TECH",
-    }).returning({ track: problems.track });
+    const owner = await makeOwner();
+    const [row] = await db.insert(problems)
+      .values({ type: "OX", content: "본문", track: "TECH", ...owner })
+      .returning({ track: problems.track });
     expect(row.track).toBe("TECH");
   });
 
   it("두 값 밖은 DB 가 거절한다", async () => {
+    const owner = await makeOwner();
     await expect(db.insert(problems).values({
-      type: "OX", content: "본문", departmentId: deptId, createdBy: userId, track: "SALES",
+      type: "OX", content: "본문", track: "SALES", ...owner,
     })).rejects.toThrow();
   });
 });
 ```
+
+`users` insert 의 필수 열(`email` 등)은 같은 파일 `:28-33` 의 기존 테스트를 보고 맞춘다.
 
 - [ ] **Step 8: 테스트를 돌린다**
 
@@ -213,35 +245,48 @@ git commit -m "[ADD] 문제에 직군(track) 컬럼"
 **Files:**
 - Modify: `web/lib/auth/types.ts`
 - Modify: `web/lib/auth/jwt.ts:24-37` (`verifySession`)
+- Modify: `web/lib/auth/authService.ts:52` (`login()` 이 AuthUser 를 만드는 자리)
 - Modify: `web/app/api/auth/login/route.ts`
-- Test: `web/lib/auth/jwt.test.ts` (기존 파일에 추가)
+- Modify: **테스트 픽스처 60곳** (Step 8 — 이 계획에서 가장 큰 단계다)
+- Test: `web/lib/auth/jwt.test.ts` (기존 파일 수정 + 추가)
 
 **Interfaces:**
 - Consumes: `Track`, `DEFAULT_TRACK`, `parseTrack` (Task 1)
 - Produces: `AuthUser.track: Track` — Task 3~8 이 `actor.track` 으로 읽는다
 
+> **이 작업의 크기를 미리 알고 시작하라.** `AuthUser` 에 필수 필드를 더하면 저장소 전체에서
+> **타입 오류 62개**가 난다(실측). 그중 **생산 코드는 2곳뿐**이고(`jwt.ts:27`,
+> `authService.ts:52` — 둘 다 아래 단계에 있다) 나머지 **60곳은 테스트 픽스처**다.
+>
+> 60곳은 전부 `track: "ADMIN"` 한 줄을 더하는 기계적 편집이고, 그 값은 기존 동작과 같다
+> (지금 사용자는 전부 행정직이다). 컴파일러가 빠짐없이 짚어 주므로 누락은 생기지 않는다.
+> 다만 **2~5분짜리 단계가 아니다.** Step 8 을 따로 떼어 두었으니 거기서 한 번에 끝내라.
+
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
 
-`web/lib/auth/jwt.test.ts` 에 추가한다. 이 파일이 이미 쓰는 `SESSION_JWT_SECRET` 설정
-방식을 그대로 따를 것(파일 앞부분을 먼저 읽는다).
+`web/lib/auth/jwt.test.ts` 에 추가한다. 이 파일의 기존 픽스처 이름은 **`user`** 다
+(`baseUser` 가 아니다, `:5-7`). `SESSION_JWT_SECRET` 은 이미 `beforeAll` 이 넣어 준다.
 
 ```ts
 describe("세션의 직군", () => {
   it("서명하고 복원하면 직군이 남아 있다", async () => {
-    const user = { ...baseUser, track: "TECH" as const };
-    const restored = await verifySession(await signSession(user));
+    const restored = await verifySession(await signSession({ ...user, track: "TECH" }));
     expect(restored?.track).toBe("TECH");
   });
 
   // 배포 전에 발급된 토큰에는 track 이 없다. 강제 로그아웃 없이 넘어가야 한다.
   it("직군이 없는 옛 토큰은 행정직으로 읽는다", async () => {
-    const { track, ...withoutTrack } = { ...baseUser, track: "TECH" as const };
-    const token = await signSession(withoutTrack as never);
-    const restored = await verifySession(token);
+    const { track: _drop, ...withoutTrack } = { ...user, track: "TECH" as const };
+    const restored = await verifySession(await signSession(withoutTrack as never));
     expect(restored?.track).toBe("ADMIN");
   });
 });
 ```
+
+**같은 파일의 기존 테스트 하나도 같이 고쳐야 한다.** `:16` 의
+`expect(await verifySession(token)).toEqual(user)` 는 복원 객체에 `track` 이 붙으면서
+**런타임에 깨진다** — 타입 검사로는 안 걸리는 실패다. 픽스처 `user` 에 `track: "ADMIN"` 을
+넣어 두면 양쪽이 맞는다(Step 8 에서 어차피 넣게 되지만, 이 테스트를 돌리려면 지금 넣어야 한다).
 
 - [ ] **Step 2: 실패를 확인한다**
 
@@ -280,12 +325,26 @@ export interface AuthUser {
 
 파일 위에 `import { parseTrack } from "../problem/track";` 를 더한다.
 
-- [ ] **Step 5: 통과를 확인한다**
+- [ ] **Step 5: `login()` 이 AuthUser 를 만드는 자리를 채운다**
+
+`web/lib/auth/authService.ts:52` 는 DB 행으로 `AuthUser` 를 만든다. 여기가 생산 코드에서
+`track` 이 필요한 **두 곳 중 나머지 하나**다(다른 하나는 Step 4 의 `verifySession`).
+
+```ts
+    mustChangePassword: user.mustChangePassword,
+    // 직군은 자격증명이 아니다 — 로그인 라우트가 토글 값으로 곧바로 덮어쓴다(Step 6).
+    // login() 시그니처에 track 을 끌어들이지 마라. 직군이 인증 정보처럼 보이게 된다.
+    track: DEFAULT_TRACK,
+```
+
+`import { DEFAULT_TRACK } from "../problem/track";` 를 더한다.
+
+- [ ] **Step 6: 통과를 확인한다**
 
 Run: `cd web && pnpm exec vitest run lib/auth/jwt.test.ts`
 Expected: PASS
 
-- [ ] **Step 6: 로그인 라우트가 토글 값을 받게 한다**
+- [ ] **Step 7: 로그인 라우트가 토글 값을 받게 한다**
 
 `web/app/api/auth/login/route.ts` — `login()` 은 자격증명만 받으므로 `track` 은 여기서 붙인다.
 
@@ -302,19 +361,34 @@ Expected: PASS
 
 `import { parseTrack } from "@/lib/problem/track";` 를 더한다.
 
-- [ ] **Step 7: 컴파일러가 가리키는 곳을 전부 고친다**
+- [ ] **Step 8: 테스트 픽스처 60곳을 채운다 — 이 계획에서 가장 큰 단계**
 
-Run: `cd web && pnpm typecheck`
-Expected: `AuthUser` 를 손으로 만들던 자리(주로 `*.test.ts` 의 픽스처)에서 `track` 누락
-오류가 난다. **각 자리에 `track: "ADMIN"` 을 넣는다** — 기존 테스트의 의미를 바꾸지 않는
-값이다. 오류가 0이 될 때까지 반복한다.
+Run: `cd web && pnpm typecheck 2>&1 | grep "error TS" | sed 's/(.*//' | sort | uniq -c | sort -rn`
 
-- [ ] **Step 8: 전체 테스트를 돌린다**
+파일별 개수가 나온다(실측 기준 60곳, `feedbackService.test.ts` 7 · `authService.test.ts` 4 ·
+`statsService.test.ts` 3 …). **한 파일씩** 처리한다.
 
-Run: `cd web && pnpm test`
-Expected: Task 1 이전과 같은 통과/실패 수. 새로 깨진 것이 있으면 Step 7 에서 넣은 값을 의심한다.
+각 오류는 `AuthUser` 모양의 객체 리터럴에 `track` 이 없다는 것이다. **`track: "ADMIN"` 한
+줄을 더한다** — 지금 사용자는 전부 행정직이므로 기존 테스트의 뜻을 바꾸지 않는 값이다.
+`mustChangePassword` 가 있는 줄 옆이 대체로 그 자리다.
 
-- [ ] **Step 9: 커밋**
+주의할 것 두 가지:
+
+- `users` 테이블에 **insert** 하는 객체는 `AuthUser` 가 아니다. 거기에는 넣지 마라
+  (`users` 에는 `track` 컬럼이 없다). 컴파일러가 가리킨 줄만 고친다.
+- 파일 하나를 끝낼 때마다 `pnpm typecheck` 로 남은 개수가 줄어드는지 본다. 늘어나면
+  방금 잘못된 자리에 넣은 것이다.
+
+오류가 0이 될 때까지 반복한다.
+
+- [ ] **Step 9: 전체 테스트를 돌린다**
+
+Run: `cd web && pnpm typecheck && pnpm test`
+Expected: 타입 오류 0. 테스트는 Task 1 이전과 같은 통과/실패 수. 새로 깨진 것이 있으면
+Step 8 에서 `users` insert 에 잘못 넣지 않았는지, 그리고 `jwt.test.ts:16` 의
+`toEqual(user)` 를 Step 1 에서 처리했는지 본다.
+
+- [ ] **Step 10: 커밋**
 
 ```bash
 git add -A
@@ -535,7 +609,7 @@ git add -A && git commit -m "[MOD] 팀 대항을 직군으로 거른다"
 **Files:**
 - Modify: `web/lib/db/departments.ts:10`
 - Modify: `web/app/api/departments/route.ts:19`
-- Test: `web/lib/db/departments.test.ts`(없으면 새로 만든다)
+- Test: `web/lib/db/departments.test.ts` (이미 있는 파일에 추가)
 
 **Interfaces:**
 - Consumes: `Track`
@@ -543,28 +617,48 @@ git add -A && git commit -m "[MOD] 팀 대항을 직군으로 거른다"
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
 
+이 파일에는 모듈 변수가 `db` 하나뿐이고 `problems`·`users` 를 임포트하지 않는다. 아래
+헬퍼를 `describe` 안에 같이 넣고, 상단 임포트에 `problems`, `users`, `insertDepartment`,
+`findDepartmentsWithProblems` 를 더한다.
+
+**부서 이름은 ASCII 로 짓는다** — 이 파일 `:11` 의 기존 주석이 경고한다: 한글 정렬은 DB
+콜레이션(C vs en_US.utf8)에 따라 달라져 플래키하다.
+
 ```ts
 describe("findDepartmentsWithProblems", () => {
-  it("그 직군의 문제가 있는 부서만 낸다", async () => {
-    const [{ id: other }] = await db.insert(departments)
-      .values({ name: "나팀", code: "B", status: "ACTIVE" }).returning({ id: departments.id });
+  async function seedProblem(departmentCode: string, over: Record<string, unknown> = {}) {
+    const dept = await insertDepartment(db, { name: `dept-${departmentCode}`, code: departmentCode });
+    const [owner] = await db.insert(users).values({
+      employeeNo: `emp-${departmentCode}`, name: "관리자", email: `${departmentCode}@example.com`,
+      passwordHash: "x", departmentId: dept.id, role: "SUPER_ADMIN",
+    }).returning();
     await db.insert(problems).values({
-      type: "OX", content: "행정직", departmentId: deptId, createdBy: userId, track: "ADMIN",
+      type: "OX", content: "본문", departmentId: dept.id, createdBy: owner.id, ...over,
     });
-    await db.insert(problems).values({
-      type: "OX", content: "기술직", departmentId: other, createdBy: userId, track: "TECH",
-    });
+    return dept;
+  }
 
-    expect((await findDepartmentsWithProblems(db, "ADMIN")).map((d) => d.name)).toEqual(["가팀"]);
-    expect((await findDepartmentsWithProblems(db, "TECH")).map((d) => d.name)).toEqual(["나팀"]);
+  it("그 직군의 문제가 있는 부서만 낸다", async () => {
+    await seedProblem("A1", { track: "ADMIN" });
+    await seedProblem("T1", { track: "TECH" });
+
+    expect((await findDepartmentsWithProblems(db, "ADMIN")).map((d) => d.code)).toEqual(["A1"]);
+    expect((await findDepartmentsWithProblems(db, "TECH")).map((d) => d.code)).toEqual(["T1"]);
   });
 
   it("보관된 문제만 있는 부서는 빠진다", async () => {
-    await db.insert(problems).values({
-      type: "OX", content: "보관", departmentId: deptId, createdBy: userId,
-      track: "ADMIN", status: "ARCHIVED",
-    });
+    await seedProblem("A2", { track: "ADMIN", status: "ARCHIVED" });
     expect(await findDepartmentsWithProblems(db, "ADMIN")).toEqual([]);
+  });
+
+  // 한 부서에 두 직군이 섞여도 각 직군에서 한 번씩만 나와야 한다(selectDistinct 확인).
+  it("한 부서에 문제가 여러 개여도 한 번만 나온다", async () => {
+    const dept = await seedProblem("M1", { track: "ADMIN" });
+    const [owner] = await db.select().from(users);
+    await db.insert(problems).values({
+      type: "OX", content: "둘째", departmentId: dept.id, createdBy: owner.id, track: "ADMIN",
+    });
+    expect((await findDepartmentsWithProblems(db, "ADMIN")).map((d) => d.code)).toEqual(["M1"]);
   });
 });
 ```
@@ -576,8 +670,12 @@ Expected: FAIL — 함수가 없다
 
 - [ ] **Step 3: DAO 를 더한다**
 
-`web/lib/db/departments.ts` 에 넣는다. `findActiveDepartments` 는 관리자 경로가 계속 쓰므로
-**지우지 않는다.**
+`web/lib/db/departments.ts` 에 넣는다.
+
+> **`findActiveDepartments` 는 이 작업 뒤 호출부가 없어진다.** 유일한 호출부가 지금 바꾸는
+> `app/api/departments/route.ts:20` 이다(관리자 화면은 `lib/admin/departmentService` 의
+> `listDepartments` 를 쓴다 — 다른 함수다). **같이 지운다.** 남겨 두면 다음 사람이 "활성
+> 부서 목록"이 필요할 때 직군을 안 거르는 쪽을 집어 든다.
 
 ```ts
 /**
@@ -784,15 +882,18 @@ git add -A && git commit -m "[MOD] 명예의 전당을 직군별로 나눈다"
 ### Task 8: 쓰기 경로에 직군 필수화
 
 **Files:**
-- Modify: `web/lib/problem/problemService.ts:147`
+- Modify: `web/lib/db/problems.ts:10-12` (`ProblemPatch` 에 `track` 허용)
+- Modify: `web/lib/problem/problemService.ts:147` (`createProblem`) · `:188` (`updateProblem`)
 - Modify: `web/lib/problem/problemExcel.ts:259`
 - Modify: `web/app/api/admin/problems/route.ts:22`
+- Modify: `web/app/api/admin/problems/[id]/route.ts:28`
 - Modify: `web/app/api/admin/problems/excel-upload/route.ts:74`
 - Test: `web/lib/problem/problemService.test.ts` · `web/lib/problem/problemExcel.test.ts`
 
 **Interfaces:**
 - Produces:
   - `createProblem(conn, input, requestedDepartmentId, track, actor)`
+  - `updateProblem(conn, id, input, track, actor)`
   - `uploadProblemsExcel(db, file, requestedDepartmentId, track, actor)`
 
 **이 작업이 이 계획의 핵심 안전장치다.** 두 함수에 `track` 을 **필수 위치 인자**로 넣으면,
@@ -841,6 +942,56 @@ export async function createProblem(
 
 `insertProblem(tx, { ... })` 호출에 `track,` 을 더한다.
 
+- [ ] **Step 3-1: 수정 경로도 직군을 바꿀 수 있게 한다**
+
+잘못된 직군으로 등록한 문제를 화면에서 고칠 수 있어야 한다. 부서에는 전용 이동 기능이
+따로 있지만(`lib/problem/departmentMove.ts`) 직군에는 없으므로, 수정 화면이 유일한 통로다.
+
+`lib/db/problems.ts:10-12` 의 `ProblemPatch` 에 `"track"` 을 더한다.
+
+```ts
+export type ProblemPatch = Partial<
+  Pick<NewProblem, "content" | "imageUrl" | "referenceText" | "explanation"
+    | "blankRevealCount" | "sourceNumber" | "track">
+>;
+```
+
+`problemService.ts:188` 의 `updateProblem` 에 `track` 인자를 넣고 패치에 싣는다.
+
+```ts
+export async function updateProblem(
+  conn: DbConn, id: number, input: ProblemCreateInput, track: Track, actor: AuthUser,
+): Promise<void> {
+```
+
+```ts
+      await updateProblemRow(tx, id, {
+        content: req.content!,
+        imageUrl: req.imageUrl ?? null,
+        referenceText: req.referenceText ?? null,
+        explanation: req.explanation ?? null,
+        blankRevealCount: blankRevealCountToStore(req),
+        sourceNumber: req.sourceNumber ?? null,
+        track,
+      });
+```
+
+`:206` 의 주석("type·status·departmentId·createdBy 는 이 경로에서 바뀌지 않는다")은
+그대로 맞다 — `track` 은 이제 **일부러** 바뀌는 값이므로 그 목록에 넣지 말고, 대신 한 줄을
+덧붙인다: `track 은 수정 화면에서 고칠 수 있다 — 잘못 등록한 직군을 되돌릴 유일한 통로다.`
+
+테스트를 하나 더한다.
+
+```ts
+it("수정으로 직군을 바꿀 수 있다", async () => {
+  await createProblem(db, validOxInput(), deptId, "ADMIN", superAdmin);
+  const [before] = await db.select().from(problems);
+  await updateProblem(db, before.id, validOxInput(), "TECH", superAdmin);
+  const [after] = await db.select().from(problems);
+  expect(after.track).toBe("TECH");
+});
+```
+
 - [ ] **Step 4: `uploadProblemsExcel` 을 고친다**
 
 ```ts
@@ -874,6 +1025,17 @@ Expected: PASS
 ```
 
 `app/api/admin/problems/excel-upload/route.ts` 도 같은 자리에서 `track` 을 읽어 넘긴다.
+
+수정 라우트 `app/api/admin/problems/[id]/route.ts:28` 도 같은 방식으로 고친다.
+
+```ts
+    const track = parseTrack(new URL(request.url).searchParams.get("track"));
+    await updateProblem(getDb(), parseNumericParam(id, "id")!, body, track, actor);
+```
+
+> 여기서 `parseTrack` 이 모르는 값을 `ADMIN` 으로 바꾸는 성질에 주의하라. 수정 화면이
+> `track` 을 **안 보내면 그 문제는 행정직으로 덮어써진다.** Task 11 Step 4 에서 수정
+> 화면이 반드시 현재 값을 실어 보내게 해야 하는 이유다.
 
 - [ ] **Step 7: 전체 확인**
 
@@ -1030,7 +1192,8 @@ export function createProblem(payload, departmentId, track) {
 }
 ```
 
-`uploadProblemsExcel(file, departmentId, track)` 도 같은 모양으로 고친다(`:54-59`).
+`uploadProblemsExcel(file, departmentId, track)` 와 `updateProblem(id, payload, track)` 도
+같은 모양으로 고친다(`:54-59`, `:30` 부근).
 
 - [ ] **Step 2: 엑셀 업로드 화면에 직군 선택을 넣는다**
 
@@ -1059,11 +1222,19 @@ const uploadResult = await uploadProblemsExcel(file, departmentId, track);
 
 `selectedDepartmentName` 은 이미 화면이 가진 부서 목록에서 `departmentId` 로 찾는다.
 
-- [ ] **Step 4: 개별 등록 화면에 직군 선택을 넣는다**
+- [ ] **Step 4: 개별 등록·수정 화면에 직군 선택을 넣는다**
 
-`ProblemFormPage.jsx`. 이 화면은 등록과 수정을 같이 쓴다 — **직군 선택은 등록일 때만
-보인다.** 수정 경로는 부서와 마찬가지로 이 화면에서 안 바꾼다(라우트가 `track` 을
-`createProblem` 에만 넘긴다). 저장 호출에 `track` 을 세 번째 인자로 넘긴다.
+`ProblemFormPage.jsx` 는 등록과 수정을 같이 쓴다. **양쪽 모두에서 직군을 고를 수 있어야
+한다** — 잘못 등록한 직군을 되돌릴 유일한 통로다(부서와 달리 전용 이동 기능이 없다).
+
+- 등록: 기본값 `행정직`
+- 수정: **불러온 문제의 현재 직군으로 초기화한다.** 이게 빠지면 저장할 때마다
+  `parseTrack` 이 빈 값을 `ADMIN` 으로 읽어 **기술직 문제가 조용히 행정직으로 바뀐다.**
+  Task 8 Step 6 의 경고와 같은 지점이다.
+
+상세 조회 응답에 `track` 이 없으면 `lib/problem/problemService.ts` 의 `getProblemDetail`
+select 에 컬럼을 더한다. 저장 호출은 `createProblem(payload, departmentId, track)` /
+`updateProblem(id, payload, track)`.
 
 - [ ] **Step 5: 관리자 문제 목록에 직군 열을 더한다**
 
@@ -1086,13 +1257,21 @@ git add -A && git commit -m "[ADD] 관리자 화면 직군 선택"
 
 코드 작업이 아니다. 배포 후 운영에서 사람이 하는 절차다.
 
+- [ ] **Step 0: 기준 숫자를 먼저 적어 둔다**
+
+마이그레이션 **전에** 운영에서 찍어 종이에 적는다. Step 5 의 "전과 같다" 를 판정할 근거다.
+
+```sql
+SELECT count(*) FROM problems WHERE status = 'ACTIVE';
+```
+
 - [ ] **Step 1: 마이그레이션 배포**
 
 Run: `cd web && pnpm migrate:prod`
-확인: 기존 문제가 전부 `track = 'ADMIN'` 인지.
+확인: 기존 문제가 전부 `track = 'ADMIN'` 이고, 합계가 Step 0 의 숫자와 같은지.
 
 ```sql
-SELECT track, count(*) FROM problems GROUP BY track;
+SELECT track, count(*) FROM problems WHERE status = 'ACTIVE' GROUP BY track;
 ```
 
 - [ ] **Step 2: 부서 `기술직` 생성**
@@ -1113,7 +1292,7 @@ Expected: 성공 428 / 실패 0. 결과 화면의 부서·직군 표시를 눈�
 - [ ] **Step 5: 양쪽 직군으로 확인**
 
 - 기술직으로 로그인 → 문제 목록·랜덤·팀 대항에 도시가스사업법 문제만 나온다
-- 행정직으로 로그인 → 마이그레이션 전과 문제 수가 같다
+- 행정직으로 로그인 → 문제 목록 건수가 **Step 0 에서 적어 둔 숫자**와 같다
 - 명예의 전당이 직군별로 갈린다
 
 ---
@@ -1137,6 +1316,7 @@ Expected: 성공 428 / 실패 0. 결과 화면의 부서·직군 표시를 눈�
 | 쓰기 경로 컴파일 강제 | Task 8 (기본값 유지 + 필수 인자로 대체, 상단 참고) |
 | 스냅샷에 track | Task 9 |
 | 관리자 화면 직군 선택, 필터는 없음 | Task 11 |
+| **수정 화면에서 직군 변경**(스펙에 없던 결정, 2026-09-04 확정) | Task 8 Step 3-1 · Task 11 Step 4 |
 | 교정용 시트 손대지 않음 | 어느 작업에도 없음 — 의도한 것 |
 | `getSolveDetail`·`submitAttempt` 검사 없음 | 어느 작업에도 없음 — 의도한 것 |
 | 적재 순서 | Task 12 |
