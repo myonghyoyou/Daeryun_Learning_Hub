@@ -53,8 +53,8 @@ export type RunView = {
  * 이 목록은 화면을 열 때마다 불린다.
  */
 export async function listTeams(db: DbConn, actor: AuthUser): Promise<TeamListItem[]> {
-  const counts = await findTeamCounts(db);
-  const wrongByDept = await countWrongByDepartment(db, actor.userId);
+  const counts = await findTeamCounts(db, actor.track);
+  const wrongByDept = await countWrongByDepartment(db, actor.userId, actor.track);
   const finishedDeptIds = await findFinishedDepartmentIds(db, actor.userId);
   const activeRuns = await findActiveRunsByUser(db, actor.userId);
 
@@ -87,8 +87,8 @@ export async function startRun(
   if (active) return toRunView(db, active);
 
   const problemIds = mode === "WRONG"
-    ? await findWrongProblemIds(db, actor.userId, departmentId)
-    : await findTeamProblemIds(db, departmentId);
+    ? await findWrongProblemIds(db, actor.userId, departmentId, actor.track)
+    : await findTeamProblemIds(db, departmentId, actor.track);
 
   if (problemIds.length === 0) {
     throw new BizError(ErrorCode.INPUT_VALUE_INVALID, NO_PROBLEMS_MESSAGE);

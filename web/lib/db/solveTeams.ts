@@ -2,6 +2,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import type { DbConn } from "./client";
 import { departments, problems, problemTags, tags } from "./schema";
 import type { SolveListRow } from "./solveProblems";
+import type { Track } from "../problem/track";
 
 /**
  * 팀 단위 풀이가 쓰는 조회. 문제 줄 세우기 규칙이 사는 유일한 곳이다.
@@ -28,25 +29,29 @@ export type TeamCountRow = { departmentId: number; departmentName: string; total
  * 랜덤 풀기(`lib/db/solveProblems.ts` findRandomActiveProblems)는 부서 상태를 보지 않아
  * 그 문제를 계속 내므로, 두 화면이 갈린다는 것을 알고 있어야 한다.
  */
-export async function findTeamCounts(db: DbConn): Promise<TeamCountRow[]> {
+export async function findTeamCounts(db: DbConn, track: Track): Promise<TeamCountRow[]> {
+  // 세는 식과 거르는 식이 **같아야 한다.** FILTER 만 고치고 HAVING 을 두면, 다른 직군
+  // 문제만 있는 팀이 totalCount = 0 인 채로 목록에 남는다.
   const rows = await db.execute(sql`
     SELECT d.id::int AS "departmentId", d.name AS "departmentName",
-           count(p.id) FILTER (WHERE p.status = 'ACTIVE')::int AS "totalCount"
+           count(p.id) FILTER (WHERE p.status = 'ACTIVE' AND p.track = ${track})::int AS "totalCount"
     FROM departments d
     LEFT JOIN problems p ON p.department_id = d.id
     WHERE d.status = 'ACTIVE'
     GROUP BY d.id, d.name
-    HAVING count(p.id) FILTER (WHERE p.status = 'ACTIVE') > 0
+    HAVING count(p.id) FILTER (WHERE p.status = 'ACTIVE' AND p.track = ${track}) > 0
     ORDER BY d.id
   `);
   return rows as unknown as TeamCountRow[];
 }
 
-export async function findTeamProblemIds(db: DbConn, departmentId: number): Promise<number[]> {
+export async function findTeamProblemIds(
+  db: DbConn, departmentId: number, track: Track,
+): Promise<number[]> {
   const rows = await db.execute(sql`
     SELECT p.id::int AS id
     FROM problems p
-    WHERE p.department_id = ${departmentId} AND p.status = 'ACTIVE'
+    WHERE p.department_id = ${departmentId} AND p.status = 'ACTIVE' AND p.track = ${track}
     ORDER BY p.source_number ASC NULLS LAST, p.id ASC
   `);
   return (rows as unknown as { id: number }[]).map((r) => r.id);
@@ -59,7 +64,7 @@ export async function findTeamProblemIds(db: DbConn, departmentId: number): Prom
  * 나중 것으로 본다 — submitted_at 만으로 정렬하면 순서가 흔들려 답이 오락가락한다.
  */
 export async function findWrongProblemIds(
-  db: DbConn, userId: number, departmentId: number,
+  db: DbConn, userId: number, departmentId: number, track: Track,
 ): Promise<number[]> {
   const rows = await db.execute(sql`
     SELECT p.id::int AS id
@@ -71,7 +76,8 @@ export async function findWrongProblemIds(
       ORDER BY a.submitted_at DESC, a.id DESC
       LIMIT 1
     ) last ON TRUE
-    WHERE p.department_id = ${departmentId} AND p.status = 'ACTIVE' AND last.is_correct = false
+    WHERE p.department_id = ${departmentId} AND p.status = 'ACTIVE' AND p.track = ${track}
+      AND last.is_correct = false
     ORDER BY p.source_number ASC NULLS LAST, p.id ASC
   `);
   return (rows as unknown as { id: number }[]).map((r) => r.id);
@@ -79,7 +85,7 @@ export async function findWrongProblemIds(
 
 /** 팀 목록의 "틀린 문제 N개" 표시용. 부서마다 한 번에 센다(부서 수만큼 질의하지 않는다). */
 export async function countWrongByDepartment(
-  db: DbConn, userId: number,
+  db: DbConn, userId: number, track: Track,
 ): Promise<Map<number, number>> {
   const rows = await db.execute(sql`
     SELECT p.department_id::int AS "departmentId", count(*)::int AS "wrongCount"
@@ -91,7 +97,7 @@ export async function countWrongByDepartment(
       ORDER BY a.submitted_at DESC, a.id DESC
       LIMIT 1
     ) last ON TRUE
-    WHERE p.status = 'ACTIVE' AND last.is_correct = false
+    WHERE p.status = 'ACTIVE' AND p.track = ${track} AND last.is_correct = false
     GROUP BY p.department_id
   `);
   const out = new Map<number, number>();
