@@ -6,6 +6,7 @@ import { listDepartments } from "@/apiClient/departments.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { previewContent } from "@/utils/problemPreview.js";
+import PreviewText from "@/components/ui/PreviewText.jsx";
 import { problemStatusLabel, problemTypeLabel, PROBLEM_STATUS_OPTIONS } from "@/utils/problemLabels.js";
 import { formatAccuracyRate, isReviewNeeded, REVIEW_ACCURACY_THRESHOLD, REVIEW_MIN_ATTEMPTS } from "@/utils/statsFormat.js";
 import { PAGE_SIZE } from "@/utils/pagination.js";
@@ -141,7 +142,7 @@ export default function StatsListPage() {
                   href={`/admin/stats/${item.problemId}`}
                   className="rounded-sm text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
                 >
-                  {previewContent(item.content)}
+                  <PreviewText text={item.content} />
                 </Link>
               </TableCell>
               <TableCell>{item.departmentName}</TableCell>

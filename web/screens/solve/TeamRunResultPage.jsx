@@ -6,7 +6,7 @@ import Surface from "@/components/ui/Surface.jsx";
 import Button from "@/components/ui/Button.jsx";
 import { getLatestRun, getRun, listTeams, startTeamRun } from "@/apiClient/teamRuns.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
-import { previewContent } from "@/utils/problemPreview.js";
+import PreviewText from "@/components/ui/PreviewText.jsx";
 
 /**
  * 바퀴 결과. 전체 바퀴든 복습 바퀴든 같은 화면, 같은 버튼 두 개다.
@@ -92,7 +92,7 @@ export default function TeamRunResultPage() {
                 <span className="mr-2 text-body-small text-ink-muted">
                   {p.sourceNumber === null ? "번호 없음" : `${p.sourceNumber}번`}
                 </span>
-                {previewContent(p.content)}
+                <PreviewText text={p.content} />
               </li>
             ))}
           </ul>

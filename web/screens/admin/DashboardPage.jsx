@@ -7,6 +7,7 @@ import { listDepartments } from "@/apiClient/departments.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
 import { useSessionStatus } from "@/hooks/useSessionStatus.js";
 import { previewContent } from "@/utils/problemPreview.js";
+import PreviewText from "@/components/ui/PreviewText.jsx";
 import { formatAccuracyRate, REVIEW_ACCURACY_THRESHOLD, REVIEW_MIN_ATTEMPTS } from "@/utils/statsFormat.js";
 import { buttonClass } from "@/utils/buttonClass.js";
 import { problemStatusLabel } from "@/utils/problemLabels.js";
@@ -151,7 +152,7 @@ export default function DashboardPage() {
                         className="min-w-0 flex-1 truncate rounded-sm text-body text-action-secondary-text hover:underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-aqua"
                         title={previewContent(item.content)}
                       >
-                        {previewContent(item.content)}
+                        <PreviewText text={item.content} />
                       </Link>
                       <span className="shrink-0 text-body-small tabular-nums text-danger-text">
                         {formatAccuracyRate(item.accuracyRate)} · {item.totalAttempts}건
@@ -179,7 +180,7 @@ export default function DashboardPage() {
                         className="min-w-0 flex-1 truncate text-body-small text-ink-default"
                         title={previewContent(problem.content)}
                       >
-                        {previewContent(problem.content)}
+                        <PreviewText text={problem.content} />
                       </span>
                       <StatusBadge status={problem.status} label={problemStatusLabel(problem.status)} />
                     </li>

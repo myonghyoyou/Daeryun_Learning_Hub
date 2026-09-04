@@ -10,7 +10,7 @@ import {
   isFinished,
   problemById,
 } from "@/utils/solveSession.js";
-import { previewContent } from "@/utils/problemPreview.js";
+import PreviewText from "@/components/ui/PreviewText.jsx";
 import { buttonClass } from "@/utils/buttonClass.js";
 
 /**
@@ -89,7 +89,7 @@ export default function RandomResultPage() {
               >
                 <span className="shrink-0 text-body-small font-medium text-ink-muted">{index + 1}</span>
                 <span className="line-clamp-2 flex-1 text-body-small text-ink-strong">
-                  {previewContent(problem?.content) || "(불러올 수 없는 문제)"}
+                  {problem?.content ? <PreviewText text={problem.content} /> : "(불러올 수 없는 문제)"}
                 </span>
                 <SourceBadge item={problem} />
                 <span

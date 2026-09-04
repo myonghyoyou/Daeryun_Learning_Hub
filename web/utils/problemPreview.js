@@ -1,3 +1,5 @@
+import { splitAnswerBlanks } from "./answerBlank.js";
+
 /**
  * 문제 본문을 "읽기 전용으로 보여주는" 화면(목록·이력·결과 요약)에서 쓸 표시용 변환.
  *
@@ -15,4 +17,18 @@ const BLANK_PLACEHOLDER = "____";
 export function previewContent(content) {
   if (!content) return "";
   return content.replace(BLANK_MARKER_PATTERN, BLANK_PLACEHOLDER);
+}
+
+/**
+ * 같은 본문을 "그릴 수 있는" 조각으로 나눈다. previewContent 가 글자만 돌려주는 데 반해
+ * 이쪽은 빈 괄호 `( )` 자리를 따로 표시해, 목록에서도 풀이 화면과 같은 모양으로 그릴 수 있게 한다.
+ *
+ * previewContent 를 지우지 않는 이유는 title 속성(툴팁)이 글자만 받기 때문이다.
+ * 두 함수가 같은 치환 규칙을 쓰도록 여기서 previewContent 를 먼저 부른다.
+ *
+ * 마커를 먼저 밑줄로 바꾸고 나서 괄호를 나눈다. 실제 데이터에서 마커와 빈 괄호가 한 본문에
+ * 함께 나오는 문제는 0건이지만(2026-09-04 실측), 순서를 정해 두면 나중에 섞여도 결과가 흔들리지 않는다.
+ */
+export function previewSegments(content) {
+  return splitAnswerBlanks(previewContent(content));
 }

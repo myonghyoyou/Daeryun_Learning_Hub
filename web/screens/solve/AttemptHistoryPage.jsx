@@ -10,7 +10,7 @@ import Collapsible from "@/components/ui/Collapsible.jsx";
 import SourceBadge from "@/components/ui/SourceBadge.jsx";
 import { myAttemptHistory } from "@/apiClient/solve.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
-import { previewContent } from "@/utils/problemPreview.js";
+import PreviewText from "@/components/ui/PreviewText.jsx";
 import { buttonClass } from "@/utils/buttonClass.js";
 
 const COLUMNS = [
@@ -92,7 +92,7 @@ export default function AttemptHistoryPage() {
                   <TableCell className="max-w-[320px]">
                     <div className="flex flex-col items-start gap-1">
                       <SourceBadge item={item} />
-                      <span className="line-clamp-1 text-ink-strong">{previewContent(item.problemContent)}</span>
+                      <span className="line-clamp-1 text-ink-strong"><PreviewText text={item.problemContent} /></span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -115,7 +115,7 @@ export default function AttemptHistoryPage() {
             {history.map((item, index) => (
               <li key={index}>
                 <Surface className="p-4">
-                  <p className="line-clamp-2 text-body text-ink-strong">{previewContent(item.problemContent)}</p>
+                  <p className="line-clamp-2 text-body text-ink-strong"><PreviewText text={item.problemContent} /></p>
                   <div className="mt-2 flex items-center gap-2">
                     <SourceBadge item={item} />
                     <ResultText correct={item.correct} />

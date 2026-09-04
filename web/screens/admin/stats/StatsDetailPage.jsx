@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { getProblemStatDetail } from "@/apiClient/stats.js";
 import { resolveErrorMessage } from "@/apiClient/client.js";
-import { previewContent } from "@/utils/problemPreview.js";
+import PreviewText from "@/components/ui/PreviewText.jsx";
 import { problemStatusLabel, problemTypeLabel } from "@/utils/problemLabels.js";
 import { formatAccuracyRate } from "@/utils/statsFormat.js";
 import Surface from "@/components/ui/Surface.jsx";
@@ -102,7 +102,7 @@ export default function StatsDetailPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-page-title font-extrabold tracking-title text-ink-strong">
-            {previewContent(summary.content)}
+            <PreviewText text={summary.content} />
           </h1>
           <p className="mt-1 flex items-center gap-2 text-body-small text-ink-muted">
             {problemTypeLabel(summary.type)}
