@@ -25,7 +25,7 @@ async function seedEmployee(role: AuthUser["role"] = "EMPLOYEE") {
     employeeNo: "emp01", name: "직원", email: "emp@x.local", passwordHash: "h", departmentId: d.id, role,
   }).returning();
   const employee = {
-    userId: u.id, employeeNo: "emp01", name: "직원", role, departmentId: d.id, mustChangePassword: false,
+    userId: u.id, employeeNo: "emp01", name: "직원", role, departmentId: d.id, mustChangePassword: false, track: "ADMIN",
   } satisfies AuthUser;
   state.currentUser = employee;
   return employee;

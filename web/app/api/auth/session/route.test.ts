@@ -41,7 +41,7 @@ describe("GET /api/auth/session", () => {
   });
   it("returns the logged-in shape with department name", async () => {
     const { u, dept } = await seedUser();
-    state.currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: false } satisfies AuthUser;
+    state.currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: false, track: "ADMIN" } satisfies AuthUser;
     const { GET } = await import("./route");
     const data = (await (await GET()).json()).data;
     expect(data.isLoggedIn).toBe(true);
@@ -52,7 +52,7 @@ describe("GET /api/auth/session", () => {
 describe("POST /api/auth/change-password", () => {
   it("changes password and re-issues the cookie", async () => {
     const { u, dept } = await seedUser(true);
-    state.currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true } satisfies AuthUser;
+    state.currentUser = { userId: u.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true, track: "ADMIN" } satisfies AuthUser;
     const { POST } = await import("../change-password/route");
     const res = await POST(new Request("http://localhost/api/auth/change-password", { method: "POST", body: JSON.stringify({ newPassword: "brandnew123" }), headers: { "content-type": "application/json" } }));
     expect(res.status).toBe(200);

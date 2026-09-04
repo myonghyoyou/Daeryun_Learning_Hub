@@ -8,7 +8,7 @@ import type { AuthUser } from "./lib/auth/types";
 // NextResponse)을 실제 NextRequest 로 태워 검증한다. gate.test.ts 는 로직을, 이 파일은 배선을 덮는다.
 
 const employee: AuthUser = {
-  userId: 1, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: 10, mustChangePassword: false,
+  userId: 1, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: 10, mustChangePassword: false, track: "ADMIN",
 };
 
 beforeAll(() => {

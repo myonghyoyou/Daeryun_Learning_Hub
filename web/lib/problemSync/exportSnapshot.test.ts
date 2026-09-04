@@ -34,12 +34,12 @@ function rowsFixture(): ExportRows {
       {
         id: 501, type: "MCQ_SINGLE", content: "본문1", imageUrl: null, referenceText: null,
         explanation: "해설", blankRevealCount: null, status: "ACTIVE", departmentCode: "DEV",
-        sourceNumber: 3, createdAt: "2026-08-01 00:00:00", updatedAt: "2026-08-02 00:00:00",
+        sourceNumber: 3, track: "ADMIN" as const, createdAt: "2026-08-01 00:00:00", updatedAt: "2026-08-02 00:00:00",
       },
       {
         id: 502, type: "SHORT_ANSWER", content: "본문2", imageUrl: null, referenceText: null,
         explanation: null, blankRevealCount: null, status: "ARCHIVED", departmentCode: "DEV",
-        sourceNumber: 4, createdAt: "2026-08-03 00:00:00", updatedAt: "2026-08-04 00:00:00",
+        sourceNumber: 4, track: "ADMIN" as const, createdAt: "2026-08-03 00:00:00", updatedAt: "2026-08-04 00:00:00",
       },
     ],
     choices: [

@@ -28,8 +28,8 @@ beforeEach(async () => {
     employeeNo: "emp2", name: "다른직원", email: "e2@b.c", passwordHash: "x",
     departmentId: planId, role: "EMPLOYEE", status: "ACTIVE", mustChangePassword: false,
   }).returning({ id: users.id });
-  actor = { userId: me.id, employeeNo: "emp", name: "직원", role: "EMPLOYEE", departmentId: planId, mustChangePassword: false };
-  other = { userId: you.id, employeeNo: "emp2", name: "다른직원", role: "EMPLOYEE", departmentId: planId, mustChangePassword: false };
+  actor = { userId: me.id, employeeNo: "emp", name: "직원", role: "EMPLOYEE", departmentId: planId, mustChangePassword: false, track: "ADMIN" };
+  other = { userId: you.id, employeeNo: "emp2", name: "다른직원", role: "EMPLOYEE", departmentId: planId, mustChangePassword: false, track: "ADMIN" };
 });
 
 async function seedProblem(sourceNumber: number, over: Partial<typeof problems.$inferInsert> = {}) {

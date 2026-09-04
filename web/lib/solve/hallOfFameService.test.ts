@@ -41,7 +41,7 @@ beforeEach(async () => {
   const me = await seedUser("emp1", "김하나");
   actor = {
     userId: me, employeeNo: "emp1", name: "김하나", role: "EMPLOYEE",
-    departmentId: planId, mustChangePassword: false,
+    departmentId: planId, mustChangePassword: false, track: "ADMIN",
   };
 });
 

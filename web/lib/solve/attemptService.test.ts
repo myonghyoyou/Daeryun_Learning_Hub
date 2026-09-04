@@ -24,7 +24,7 @@ beforeEach(async () => {
   const [u] = await db.insert(users).values({
     employeeNo: "emp01", name: "직원", email: "emp@x.local", passwordHash: "h", departmentId: d.id, role: "EMPLOYEE",
   }).returning();
-  actor = { userId: u.id, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId: d.id, mustChangePassword: false };
+  actor = { userId: u.id, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId: d.id, mustChangePassword: false, track: "ADMIN" };
 });
 
 async function seedProblem(over: Partial<typeof problems.$inferInsert> = {}) {

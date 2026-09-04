@@ -74,7 +74,7 @@ beforeEach(async () => {
   }).returning();
   actor = {
     userId: user.id, employeeNo: "admin", name: "admin", role: "SUPER_ADMIN",
-    departmentId: dept.id, mustChangePassword: false,
+    departmentId: dept.id, mustChangePassword: false, track: "ADMIN",
   };
 });
 

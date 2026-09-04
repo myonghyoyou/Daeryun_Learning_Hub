@@ -36,7 +36,7 @@ async function seedProblem(over: Partial<typeof problems.$inferInsert> = {}) {
 function asMe() {
   state.currentUser = {
     userId: meId, employeeNo: "me", name: "나", role: "EMPLOYEE",
-    departmentId: deptId, mustChangePassword: false,
+    departmentId: deptId, mustChangePassword: false, track: "ADMIN",
   } satisfies AuthUser;
 }
 

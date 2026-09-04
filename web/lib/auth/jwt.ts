@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { parseTrack } from "../problem/track";
 import type { AuthUser } from "./types";
 
 // 쿠키 이름·수명은 여기(Edge-safe, jose 만 의존)에 둔다. middleware 가 next/headers 를 끌어오지
@@ -31,6 +32,9 @@ export async function verifySession(token: string): Promise<AuthUser | null> {
       role: payload.role as AuthUser["role"],
       departmentId: payload.departmentId as number,
       mustChangePassword: payload.mustChangePassword as boolean,
+      // signSession 은 스프레드지만 여기는 열거식이다. 이 줄을 빠뜨리면 track 이 조용히
+      // 사라지고, middleware.ts 가 매 요청 재서명하므로 다음 요청에 ADMIN 으로 굳는다.
+      track: parseTrack(payload.track),
     };
   } catch {
     return null;

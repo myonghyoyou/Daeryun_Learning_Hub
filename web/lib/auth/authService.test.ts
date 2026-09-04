@@ -76,7 +76,7 @@ describe("sessionStatus", () => {
   });
   it("returns the logged-in shape with a fresh department name", async () => {
     const { user, dept } = await seedUser();
-    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: false };
+    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: false, track: "ADMIN" };
     expect(await sessionStatus(db, authUser)).toEqual({
       isLoggedIn: true, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE",
       departmentId: dept.id, departmentName: "개발팀", mustChangePassword: false,
@@ -87,7 +87,7 @@ describe("sessionStatus", () => {
 describe("changePassword", () => {
   it("rejects a short password with 1000", async () => {
     const { user, dept } = await seedUser();
-    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true };
+    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true, track: "ADMIN" };
     expect(await code(() => changePassword(db, authUser, "short7!"))).toBe(1000);
   });
   it("rejects when there is no session user with 980", async () => {
@@ -95,12 +95,12 @@ describe("changePassword", () => {
   });
   it("rejects reusing the current password with 1000", async () => {
     const { user, dept } = await seedUser({ password: "password1" });
-    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true };
+    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true, track: "ADMIN" };
     expect(await code(() => changePassword(db, authUser, "password1"))).toBe(1000);
   });
   it("changes the password, clears mustChangePassword, returns updated authUser", async () => {
     const { user, dept } = await seedUser({ password: "password1", mustChange: true });
-    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true };
+    const authUser: AuthUser = { userId: user.id, employeeNo: "1001", name: "홍길동", role: "EMPLOYEE", departmentId: dept.id, mustChangePassword: true, track: "ADMIN" };
     const updated = await changePassword(db, authUser, "brandnew123");
     expect(updated.mustChangePassword).toBe(false);
     const [after] = await db.select().from(users).where(eq(users.id, user.id));

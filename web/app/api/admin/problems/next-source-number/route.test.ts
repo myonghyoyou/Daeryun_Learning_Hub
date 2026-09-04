@@ -23,7 +23,7 @@ async function seedAdmin(role: AuthUser["role"] = "SUPER_ADMIN") {
   }).returning();
   actorId = u.id;
   state.currentUser = {
-    userId: u.id, employeeNo: "admin", name: "관리자", role, departmentId: deptA, mustChangePassword: false,
+    userId: u.id, employeeNo: "admin", name: "관리자", role, departmentId: deptA, mustChangePassword: false, track: "ADMIN",
   } satisfies AuthUser;
 }
 

@@ -17,7 +17,7 @@ beforeEach(async () => {
   await truncateAll();
   [hq] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
   [admin] = await db.insert(users).values({ employeeNo: "admin", name: "총괄", email: "admin@x.local", passwordHash: "h", departmentId: hq.id, role: "SUPER_ADMIN" }).returning();
-  actor = { userId: admin.id, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: hq.id, mustChangePassword: false };
+  actor = { userId: admin.id, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: hq.id, mustChangePassword: false, track: "ADMIN" };
 });
 
 describe("generateTempPassword", () => {

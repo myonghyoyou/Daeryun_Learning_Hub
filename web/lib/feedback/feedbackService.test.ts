@@ -8,7 +8,7 @@ vi.mock("./relay", () => ({ sendFeedback: relay.send }));
 const { submitFeedback, retryUnsent } = await import("./feedbackService");
 
 const db = testDb();
-let actor = { userId: 0, employeeNo: "u1", name: "직원", role: "EMPLOYEE" as const, departmentId: 0, mustChangePassword: false };
+let actor = { userId: 0, employeeNo: "u1", name: "직원", role: "EMPLOYEE" as const, departmentId: 0, mustChangePassword: false, track: "ADMIN" as const };
 let problemId = 0;
 
 beforeAll(async () => { await migrateTestDb(); });

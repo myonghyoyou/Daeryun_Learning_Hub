@@ -16,7 +16,7 @@ const db = testDb();
 async function seedAdmin() {
   const [d] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
   const [u] = await db.insert(users).values({ employeeNo: "admin", name: "총괄", email: "admin@x.local", passwordHash: "h", departmentId: d.id, role: "SUPER_ADMIN" }).returning();
-  state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
+  state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: d.id, mustChangePassword: false, track: "ADMIN" } satisfies AuthUser;
 }
 function xlsxFile(): File {
   const wb = XLSX.utils.book_new();
@@ -50,7 +50,7 @@ describe("excel-upload route", () => {
   it("returns 403/990 for a DEPT_ADMIN with no file (role gate precedes the file-absent branch)", async () => {
     const [d] = await db.insert(departments).values({ name: "본사", code: "HQ" }).returning();
     const [u] = await db.insert(users).values({ employeeNo: "dept1", name: "부서장", email: "dept1@x.local", passwordHash: "h", departmentId: d.id, role: "DEPT_ADMIN" }).returning();
-    state.currentUser = { userId: u.id, employeeNo: "dept1", name: "부서장", role: "DEPT_ADMIN", departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
+    state.currentUser = { userId: u.id, employeeNo: "dept1", name: "부서장", role: "DEPT_ADMIN", departmentId: d.id, mustChangePassword: false, track: "ADMIN" } satisfies AuthUser;
     const { POST } = await import("./route");
     const res = await POST(post(new FormData()));
     expect(res.status).toBe(403);

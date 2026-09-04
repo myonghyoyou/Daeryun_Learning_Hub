@@ -17,7 +17,7 @@ async function seedAdmin(role: AuthUser["role"] = "SUPER_ADMIN") {
   const [u] = await db.insert(users).values({
     employeeNo: "admin", name: "총괄", email: "admin@x.local", passwordHash: "h", departmentId: d.id, role,
   }).returning();
-  state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role, departmentId: d.id, mustChangePassword: false } satisfies AuthUser;
+  state.currentUser = { userId: u.id, employeeNo: "admin", name: "총괄", role, departmentId: d.id, mustChangePassword: false, track: "ADMIN" } satisfies AuthUser;
 }
 beforeAll(async () => { await migrateTestDb(); });
 beforeEach(async () => { await truncateAll(); state.currentUser = null; });

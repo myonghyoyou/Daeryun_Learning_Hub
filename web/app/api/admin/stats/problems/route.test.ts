@@ -19,7 +19,7 @@ async function seedActor(role: AuthUser["role"], departmentId: number): Promise<
     employeeNo: `u-${role}-${departmentId}`, name: role, email: `${role}@x.local`, passwordHash: "h",
     departmentId, role,
   }).returning();
-  return { userId: u.id, employeeNo: u.employeeNo, name: role, role, departmentId, mustChangePassword: false };
+  return { userId: u.id, employeeNo: u.employeeNo, name: role, role, departmentId, mustChangePassword: false, track: "ADMIN" };
 }
 
 function getRequest(query = ""): Request {

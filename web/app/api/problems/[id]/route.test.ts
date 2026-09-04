@@ -27,7 +27,7 @@ async function seedEmployee() {
   }).returning();
   userId = u.id;
   state.currentUser = {
-    userId: u.id, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId: d.id, mustChangePassword: false,
+    userId: u.id, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId: d.id, mustChangePassword: false, track: "ADMIN",
   } satisfies AuthUser;
 }
 

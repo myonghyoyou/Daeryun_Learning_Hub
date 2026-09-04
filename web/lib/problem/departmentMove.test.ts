@@ -50,8 +50,8 @@ beforeEach(async () => {
     employeeNo: "dept", name: "부서", email: "d@b.c", passwordHash: "x",
     departmentId: deptA, role: "DEPT_ADMIN", status: "ACTIVE", mustChangePassword: false,
   }).returning({ id: users.id });
-  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false };
-  deptAdminOfA = { userId: deptAdminId, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false };
+  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
+  deptAdminOfA = { userId: deptAdminId, employeeNo: "dept", name: "부서", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
 });
 
 describe("changeProblemDepartment", () => {

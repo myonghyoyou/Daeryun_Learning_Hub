@@ -3,7 +3,7 @@ import { evaluateGate, requireRole } from "./gate";
 import { BizError } from "../http/errors";
 import type { AuthUser } from "./types";
 
-const employee: AuthUser = { userId: 1, employeeNo: "1001", name: "홍", role: "EMPLOYEE", departmentId: 10, mustChangePassword: false };
+const employee: AuthUser = { userId: 1, employeeNo: "1001", name: "홍", role: "EMPLOYEE", departmentId: 10, mustChangePassword: false, track: "ADMIN" };
 const mustChange: AuthUser = { ...employee, mustChangePassword: true };
 
 describe("evaluateGate", () => {

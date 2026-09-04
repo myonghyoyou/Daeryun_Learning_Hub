@@ -25,7 +25,7 @@ async function seedEmployee(count = 5) {
     employeeNo: "emp01", name: "직원", email: "emp@x.local", passwordHash: "h", departmentId: d.id, role: "EMPLOYEE",
   }).returning();
   state.currentUser = {
-    userId: u.id, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId: d.id, mustChangePassword: false,
+    userId: u.id, employeeNo: "emp01", name: "직원", role: "EMPLOYEE", departmentId: d.id, mustChangePassword: false, track: "ADMIN",
   } satisfies AuthUser;
   for (let i = 0; i < count; i += 1) {
     await db.insert(problems).values({

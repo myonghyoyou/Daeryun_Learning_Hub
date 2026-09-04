@@ -4,6 +4,7 @@ import { BizError } from "../http/errors";
 import type { Db } from "../db/client";
 import { findDepartmentById } from "../db/departments";
 import { findByEmployeeNo, incrementFailedLogin, resetFailedLogin, updateLastLoginAt, updatePassword } from "../db/users";
+import { DEFAULT_TRACK } from "../problem/track";
 import type { AuthUser, UserRole } from "./types";
 import type { LoginInput, LoginResult, SessionStatus } from "./authSchemas";
 
@@ -52,6 +53,9 @@ export async function login(db: Db, input: LoginInput): Promise<{ authUser: Auth
   const authUser: AuthUser = {
     userId: user.id, employeeNo: user.employeeNo, name: user.name,
     role: user.role as UserRole, departmentId: user.departmentId, mustChangePassword: user.mustChangePassword,
+    // 직군은 자격증명이 아니다 — 로그인 라우트가 토글 값으로 곧바로 덮어쓴다.
+    // login() 시그니처에 track 을 끌어들이지 마라. 직군이 인증 정보처럼 보이게 된다.
+    track: DEFAULT_TRACK,
   };
   return { authUser, response: { name: user.name, role: user.role as UserRole, mustChangePassword: user.mustChangePassword } };
 }

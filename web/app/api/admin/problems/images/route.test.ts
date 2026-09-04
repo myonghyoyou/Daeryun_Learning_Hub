@@ -41,7 +41,7 @@ async function loginAs(role: AuthUser["role"], departmentId: number, employeeNo:
   const [u] = await db.insert(users).values({
     employeeNo, name: employeeNo, email: `${employeeNo}@x.local`, passwordHash: "h", departmentId, role,
   }).returning();
-  const actor: AuthUser = { userId: u.id, employeeNo, name: employeeNo, role, departmentId, mustChangePassword: false };
+  const actor: AuthUser = { userId: u.id, employeeNo, name: employeeNo, role, departmentId, mustChangePassword: false, track: "ADMIN" };
   state.currentUser = actor;
   return actor;
 }

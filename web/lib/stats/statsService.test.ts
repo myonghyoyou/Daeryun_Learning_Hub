@@ -32,9 +32,9 @@ beforeEach(async () => {
     employeeNo: "dept-b", name: "부서관리자B", email: "c@b.c", passwordHash: "x",
     departmentId: deptB, role: "DEPT_ADMIN", status: "ACTIVE", mustChangePassword: false,
   }).returning({ id: users.id });
-  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false };
-  deptAdmin = { userId: deptAdminId, employeeNo: "dept-a", name: "부서관리자A", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false };
-  deptAdminOfOtherDept = { userId: deptAdminBId, employeeNo: "dept-b", name: "부서관리자B", role: "DEPT_ADMIN", departmentId: deptB, mustChangePassword: false };
+  superAdmin = { userId: superAdminId, employeeNo: "admin", name: "총괄", role: "SUPER_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
+  deptAdmin = { userId: deptAdminId, employeeNo: "dept-a", name: "부서관리자A", role: "DEPT_ADMIN", departmentId: deptA, mustChangePassword: false, track: "ADMIN" };
+  deptAdminOfOtherDept = { userId: deptAdminBId, employeeNo: "dept-b", name: "부서관리자B", role: "DEPT_ADMIN", departmentId: deptB, mustChangePassword: false, track: "ADMIN" };
 });
 
 /** 문제 하나를 만들고 정답/오답 시도를 원하는 만큼 붙인다. lib/db/stats.test.ts 와 같은 헬퍼. */
