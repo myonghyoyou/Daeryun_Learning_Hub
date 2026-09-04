@@ -120,16 +120,17 @@ export default function LoginPage() {
           noValidate
           className="w-full rounded-lg border border-line-default bg-surface-default p-8 shadow-surface"
         >
-          {/* 로고 lockup(디자인 시스템 8.1): 제목과 24px 이상 간격. */}
-          <img src="/logo.png" alt="" className="mx-auto mb-6 h-20 w-auto" />
-          <h1 className="text-center text-page-title font-extrabold tracking-title text-ink-strong">
-            문제 은행 Hub 로그인
-          </h1>
-          <p className="mt-2 text-center text-body-small text-ink-default">
-            사번과 비밀번호를 입력해 주세요.
-          </p>
+          {/*
+            로고만 남기고 제목·안내 문구는 화면에서 뺐다 — 사번/비밀번호 칸과 버튼만으로
+            무엇을 하는 화면인지 충분히 읽힌다.
 
-          <div aria-live="polite" className="mt-6">
+            다만 h1 을 통째로 지우지는 않고 sr-only 로 남긴다. 로고가 alt="" 인 장식 이미지라,
+            제목까지 없애면 화면 낭독기에는 이름 없는 폼 하나만 남는다.
+          */}
+          <img src="/logo.png" alt="" className="mx-auto mb-2 h-20 w-auto" />
+          <h1 className="sr-only">문제 은행 Hub 로그인</h1>
+
+          <div aria-live="polite">
             {banner && (
               <div
                 role="alert"
@@ -230,7 +231,7 @@ export default function LoginPage() {
           </button>
 
           <p className="mt-4 text-center text-caption text-ink-muted">
-            계정 관련 문의는 소속 부서 관리자에게 연락해 주세요.
+            계정 관련 문의는 정보시스템팀 류명효로 연락해 주세요.
           </p>
         </form>
       </div>
