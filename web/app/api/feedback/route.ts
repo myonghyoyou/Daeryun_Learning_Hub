@@ -13,7 +13,12 @@ export async function POST(request: Request): Promise<Response> {
     return submitFeedback(getDb(), actor, {
       body: body.body,
       sourcePath: body.sourcePath,
-      problemId: typeof body.problemId === "number" ? body.problemId : undefined,
+      // `1.5`·`Infinity`·`1e30` 같은 값을 그대로 보내면 저장 전에 DB(bigint)가 예외를
+      // 던져 사용자 원문이 아예 저장되지 않는다 — 정수·양수만 통과시킨다.
+      problemId:
+        typeof body.problemId === "number" && Number.isInteger(body.problemId) && body.problemId > 0
+          ? body.problemId
+          : undefined,
     });
   });
 }

@@ -55,6 +55,9 @@ export default function ProblemSolveCard({ problem, onSubmitted, nextAction = nu
     setSubmittedText("");
     setBlankInputs({});
     setResult(null);
+    // 신고 모달이 열린 채로 카드가 다음 문제로 넘어가면, 그대로 두었을 때 이 문제에 대한
+    // 신고가 다음 문제로 접수될 수 있다 — 문제가 바뀌면 반드시 닫는다.
+    setReportOpen(false);
   }, [problem.id]);
 
   const revealedAnswers = useMemo(() => {

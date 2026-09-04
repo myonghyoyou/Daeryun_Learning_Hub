@@ -52,14 +52,18 @@ export default function FeedbackPage() {
       </section>
 
       <Surface className="p-5">
-        <FeedbackForm sending={sending} setSending={setSending} />
+        {/* onResult: 총괄 관리자 자신의 피드백이 실패해도 새 FAILED 행이 생기므로,
+            성공·실패 상관없이 목록을 새로 고쳐 위 건수가 바로 맞게 한다. */}
+        <FeedbackForm sending={sending} setSending={setSending} onResult={refresh} />
       </Surface>
 
       {isSuper && (
         <Surface className="mt-4 p-5">
           <div className="flex items-center justify-between gap-3">
+            {/* 목록 조회는 최대 100건까지만 가져온다(findUnsentSummary) — 그 이상이면 건수가
+                실제보다 적어 보일 수 있으므로 "최근 100건 중"임을 라벨에 밝힌다. */}
             <p className="text-body text-ink-strong">
-              전달 실패 <span className="font-bold">{unsent.length}</span>건
+              전달 실패 (최근 100건 중) <span className="font-bold">{unsent.length}</span>건
             </p>
             <Button variant="secondary" onClick={handleRetry} loading={retrying} disabled={unsent.length === 0}>
               다시 보내기

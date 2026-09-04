@@ -39,13 +39,19 @@ export async function markFailed(
 }
 
 /**
- * 아직 못 보낸 것. **`FAILED` 가 아니라 `<> 'SENT'` 로 잡는다** — 저장 뒤 전달 중에 서버가
- * 죽으면 그 행은 `PENDING` 으로 남고, `FAILED` 만 보면 영영 못 찾는다.
+ * "아직 못 보낸 것"의 정의. **`FAILED` 가 아니라 `<> 'SENT'` 로 잡는다** — 저장 뒤 전달
+ * 중에 서버가 죽으면 그 행은 `PENDING` 으로 남고, `FAILED` 만 보면 영영 못 찾는다.
+ *
+ * 이 정의는 이 기능의 핵심 불변식이다 — `findUnsent` 와 `findUnsentSummary` 가 각자
+ * 따로 적으면 한쪽만 고쳐지는 사고가 난다. 두 함수는 반드시 이 상수만 쓴다.
  */
+const UNSENT_WHERE = ne(feedbacks.status, "SENT");
+const UNSENT_ORDER_BY = [asc(feedbacks.createdAt), asc(feedbacks.id)] as const;
+
 export async function findUnsent(db: DbConn, limit: number): Promise<FeedbackRow[]> {
   return db.select().from(feedbacks)
-    .where(ne(feedbacks.status, "SENT"))
-    .orderBy(asc(feedbacks.createdAt), asc(feedbacks.id))
+    .where(UNSENT_WHERE)
+    .orderBy(...UNSENT_ORDER_BY)
     .limit(limit);
 }
 
@@ -66,7 +72,7 @@ export async function findUnsentSummary(db: DbConn, limit: number): Promise<Feed
     lastTriedAt: feedbacks.lastTriedAt,
     createdAt: feedbacks.createdAt,
   }).from(feedbacks)
-    .where(ne(feedbacks.status, "SENT"))
-    .orderBy(asc(feedbacks.createdAt), asc(feedbacks.id))
+    .where(UNSENT_WHERE)
+    .orderBy(...UNSENT_ORDER_BY)
     .limit(limit);
 }

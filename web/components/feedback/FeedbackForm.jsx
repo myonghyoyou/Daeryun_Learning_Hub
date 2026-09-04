@@ -16,8 +16,12 @@ const MAX = 1000;
  *
  * onSent 는 성공했을 때만 부른다. 모달은 onClose 를 넘겨 닫게 하고, 관리자 화면처럼 닫을 것이
  * 없는 곳은 넘기지 않는다 — 두 경우 모두 글을 비우고 토스트를 띄우는 것은 똑같다.
+ *
+ * onResult 는 **성공·실패 둘 다** 서버 응답을 받은 뒤 부른다(예외는 제외 — 우리 API 자체가
+ * 안 열린 것이라 새로 생긴 행이 없다). 관리자 화면이 이걸로 실패 목록 건수를 새로 고친다 —
+ * 총괄 관리자 자신의 피드백이 실패해도 화면 상단 건수가 바로 바뀌어야 한다.
  */
-export default function FeedbackForm({ problemId = null, sending, setSending, onSent }) {
+export default function FeedbackForm({ problemId = null, sending, setSending, onSent, onResult }) {
   const pathname = usePathname();
   const [text, setText] = useState("");
   const [message, setMessage] = useState("");
@@ -25,7 +29,7 @@ export default function FeedbackForm({ problemId = null, sending, setSending, on
   /**
    * 성공하면 글을 비우고 토스트로 알린 뒤 onSent 가 있으면 부른다 (모달이면 닫는 동작).
    * 실패하면 **비우지도, onSent 를 부르지도 않는다.** 방금 쓴 글이 사라지는 것이 이 기능에서
-   * 가장 나쁜 일이다.
+   * 가장 나쁜 일이다. onResult 는 성공·실패 상관없이 부른다.
    */
   async function handleSubmit() {
     setSending(true);
@@ -36,9 +40,10 @@ export default function FeedbackForm({ problemId = null, sending, setSending, on
         setMessage("");
         toast.success(r.message);
         onSent?.();
-        return;
+      } else {
+        setMessage(r.message);
       }
-      setMessage(r.message);
+      onResult?.(r);
     } catch (error) {
       setMessage(resolveErrorMessage(error, "지금은 보낼 수 없습니다."));
     } finally {

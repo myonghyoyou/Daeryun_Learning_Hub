@@ -27,6 +27,11 @@ const TYPE_LABEL: Record<string, string> = {
  */
 export function composeFrom(name: string, employeeNo: string): string {
   const tail = `(${employeeNo})`;
+  // 사번 자체가 40자를 채우거나 넘으면(`users.employee_no` 는 varchar(50)) 이름은 물론
+  // 괄호를 넣을 자리도 없다. 이름·괄호를 다 버리고 사번 앞부분만 남긴다 — 닫는 괄호가
+  // 잘려 "(abcdefgh…" 처럼 알아볼 수 없는 모양이 되는 것보다는, 사번이라도 앞부분이
+  // 온전히 읽히는 편이 되묻는 데 낫다.
+  if (tail.length >= FROM_MAX) return employeeNo.slice(0, FROM_MAX);
   const room = FROM_MAX - tail.length;
   return `${name.slice(0, Math.max(room, 0))}${tail}`.slice(0, FROM_MAX);
 }
@@ -45,8 +50,12 @@ export function composeBody(args: {
   problem: { id: number; type: string; sourceNumber: number | null; departmentName: string } | null;
 }): string {
   const { body, sourcePath, problem } = args;
+  // 부서명은 varchar(100) 이라 그대로 넣으면 태그만으로 60자를 넘을 수 있고, 그러면
+  // 사용자 첫 줄이 들어갈 자리가 없어 제목이 태그뿐인 상태가 된다("보드에서 구분이
+  // 안 된다"). 태그 안에서 부서명 쪽을 미리 줄여 첫 줄이 들어갈 최소한의 자리를 남긴다.
+  const DEPT_NAME_MAX = 30;
   const tag = problem
-    ? `[${problem.departmentName} ${problem.sourceNumber === null ? "번호없음" : `${problem.sourceNumber}번`}]`
+    ? `[${problem.departmentName.slice(0, DEPT_NAME_MAX)} ${problem.sourceNumber === null ? "번호없음" : `${problem.sourceNumber}번`}]`
     : sourcePath?.startsWith("/admin")
       ? "[관리자]"
       : "[학습]";

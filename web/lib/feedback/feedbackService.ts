@@ -78,6 +78,10 @@ export async function retryUnsent(
     }
     await markFailed(db, row.id, result.reason);
     if (result.reason === "busy") return { tried, sent, stoppedByLimit: true };
+    // config(비밀·URL 설정 없음)는 이 서버가 살아 있는 동안 다음 행도 똑같이 실패한다.
+    // 멈추지 않으면 남은 모든 행의 attempt_count 만 헛되이 올라간다. 한도 때문에 멈춘
+    // 것이 아니므로 stoppedByLimit 은 false 다.
+    if (result.reason === "config") return { tried, sent, stoppedByLimit: false };
   }
   return { tried, sent, stoppedByLimit: false };
 }

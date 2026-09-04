@@ -91,6 +91,19 @@ describe("POST /api/feedback", () => {
     expect(service.submit.mock.calls[0][2].problemId).toBeUndefined();
   });
 
+  /**
+   * `typeof === "number"` 만으로는 `1.5`·`Infinity` 도 통과한다. 그런 값이 저장 전
+   * `findProblemContext` 의 bigint 조회까지 가면 Postgres 가 예외를 던지고, 저장은
+   * 그 뒤라 사용자 원문이 통째로 사라진다 — 정수·양수만 통과해야 한다.
+   */
+  it("problemId 가 정수가 아니면(1.5) 넘기지 않는다", async () => {
+    state.currentUser = await seedActor("EMPLOYEE", deptA);
+    service.submit.mockResolvedValue({ ok: true, message: "" });
+    const { POST } = await import("./route");
+    await POST(postRequest({ body: "의견", problemId: 1.5 }));
+    expect(service.submit.mock.calls[0][2].problemId).toBeUndefined();
+  });
+
   it("본문이 JSON 이 아니어도 서비스까지 도달한다 — 빈 객체로 읽는다", async () => {
     state.currentUser = await seedActor("EMPLOYEE", deptA);
     service.submit.mockResolvedValue({ ok: false, message: "x" });

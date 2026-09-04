@@ -115,6 +115,27 @@ describe("retryUnsent", () => {
     expect(relay.send).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * config(설정 없음)는 한 행이 그렇다면 다음 행도 똑같이 실패한다 — 계속 돌면
+   * attempt_count 만 헛되이 올라간다. 429 와 달리 한도 때문에 멈춘 것이 아니므로
+   * stoppedByLimit 은 false 여야 한다.
+   */
+  it("config 를 만나면 즉시 멈추고 stoppedByLimit 은 false 다", async () => {
+    await db.insert(feedbacks).values([
+      { userId: actor.userId, body: "1", status: "FAILED", failReason: "down" },
+      { userId: actor.userId, body: "2", status: "FAILED", failReason: "down" },
+      { userId: actor.userId, body: "3", status: "FAILED", failReason: "down" },
+    ]);
+    relay.send
+      .mockResolvedValueOnce({ ok: true, taskId: "T1" })
+      .mockResolvedValueOnce({ ok: false, reason: "config", detail: "URL/SECRET 없음" });
+    const r = await retryUnsent(db, 20);
+    expect(r.tried).toBe(2);
+    expect(r.sent).toBe(1);
+    expect(r.stoppedByLimit).toBe(false);
+    expect(relay.send).toHaveBeenCalledTimes(2);
+  });
+
   it("한 번에 limit 건까지만 시도한다", async () => {
     await db.insert(feedbacks).values(
       Array.from({ length: 5 }, (_, i) => ({ userId: actor.userId, body: `${i}`, status: "FAILED" as const, failReason: "down" as const })),

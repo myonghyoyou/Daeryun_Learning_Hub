@@ -41,14 +41,19 @@ describe("sendFeedback", () => {
     expect(JSON.parse(String(init.body))).toEqual({ body: "본문", from: "직원(u1)" });
   });
 
-  it("400·429·그 밖을 서로 다른 이유로 가른다", async () => {
+  it("400·429·401·그 밖을 서로 다른 이유로 가른다", async () => {
     mockFetch(400, { error: "bad" });
     expect((await sendFeedback({ body: "x", from: "a" })as { reason: string }).reason).toBe("invalid");
     vi.restoreAllMocks();
     mockFetch(429, { error: "limit" });
     expect((await sendFeedback({ body: "x", from: "a" })as { reason: string }).reason).toBe("busy");
     vi.restoreAllMocks();
+    // 401 은 우리 쪽 비밀이 틀렸다는 뜻이다 — "down"(원격 장애)이 아니라 "config"여야
+    // 관리자가 다시 보내기를 눌러 봐야 소용없다는 것을 바로 알 수 있다.
     mockFetch(401, { error: "nope" });
+    expect((await sendFeedback({ body: "x", from: "a" })as { reason: string }).reason).toBe("config");
+    vi.restoreAllMocks();
+    mockFetch(500, { error: "boom" });
     expect((await sendFeedback({ body: "x", from: "a" })as { reason: string }).reason).toBe("down");
   });
 

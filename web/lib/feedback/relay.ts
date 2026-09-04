@@ -30,9 +30,18 @@ export async function sendFeedback(input: { body: string; from: string }): Promi
       cache: "no-store",
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (res.status === 201) return { ok: true, taskId: String(data.taskId ?? "") };
+    if (res.status === 201) {
+      const taskId = String(data.taskId ?? "");
+      // taskId 가 없으면 우리 행과 보드 카드를 잇는 끈이 없어진다 — 성공은 성공이니 SENT 로
+      // 두되, 진단할 수 있게 남긴다.
+      if (!taskId) console.warn("[feedback] 201 인데 taskId 가 없다", data);
+      return { ok: true, taskId };
+    }
     if (res.status === 400) return { ok: false, reason: "invalid", detail: String(data.error ?? "") };
     if (res.status === 429) return { ok: false, reason: "busy", detail: String(data.error ?? "") };
+    // 401 은 "받는 쪽이 죽었다"가 아니라 "우리 비밀이 틀렸다" — config 로 갈라야 관리자가
+    // 엉뚱하게 원격 장애로 읽고 다시 보내기를 누르는 일이 없다.
+    if (res.status === 401) return { ok: false, reason: "config", detail: String(data.error ?? "") };
     return { ok: false, reason: "down", detail: `${res.status} ${data.error ?? ""}` };
   } catch (e) {
     // 시간초과 · DNS · 네트워크 — 부르는 쪽에서는 전부 "지금 안 된다" 하나다.
